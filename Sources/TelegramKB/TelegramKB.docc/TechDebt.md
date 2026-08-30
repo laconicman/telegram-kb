@@ -183,10 +183,16 @@ occurrence of the term in the body, preview title, or preview description we cap
 link-target content beyond the preview, our recall on link-heavy posts is structurally lower
 than it looks.
 
-**Discharge.** Settle the mechanism before Phase 3 decides how much link-target content to
-ingest. Candidates to test: full linked-page text, semantic expansion, and media/document
-metadata our crawler drops. Do not design link ingestion until this is answered — it changes the
-size of the job.
+**Leading hypothesis (author's, and it fits the evidence):** Telegram indexes the *link preview*
+it generated, which is **not guaranteed to hold the target page's full content** — sometimes it
+is only OpenGraph metadata, sometimes more. That would explain a match with no term in the body,
+and it predicts the gap is bounded by whatever Telegram scraped, not by the whole page.
+
+**Discharge.** Settle the mechanism before Phase 3 sizes link ingestion. Candidates: preview
+content beyond what is rendered, full linked-page text, semantic expansion, and media/document
+metadata our crawler drops. **Note this is no longer purely a risk** — fetching link content
+ourselves is now planned work (see <doc:Roadmap>), and doing it well would make us strictly
+better than Telegram here rather than merely matching it.
 
 ## See Also
 

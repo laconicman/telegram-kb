@@ -260,6 +260,26 @@ Phase 3 evidence — in particular, whether `search_live` (which is *not* low-fr
 tolerate the same treatment. It probably cannot, and that asymmetry may split the answer:
 subprocess for writes, something else for live search.
 
+## OPEN — link-content fetching: default or opt-in? *(unanswered)*
+
+The corpus is **95% links**, so fetching link *content* is where the remaining retrieval quality
+lives. Telegram indexes only the preview it generated, which is not guaranteed to hold the target
+page in full. Fetching ourselves is the difference between matching Telegram and beating it.
+
+**Undecided: whether content search is on by default or behind an explicit query option.**
+Arguments both ways, and the answer likely depends on measurements not yet taken:
+
+- **Explicit** keeps result semantics predictable — a user asking for posts *about* X may not
+  want posts merely *linking* to a page mentioning X, and the precision cost could be large on a
+  corpus where a single page can be thousands of words against a 200-character post.
+- **Default** is what makes the tool feel like it knows things, and the whole point is retrieval
+  the user cannot get from Telegram.
+
+**Decide with `evals/golden-queries.md`, after measuring precision cost — not in advance.** The
+cheap intermediate is to store fetched content in a *separate FTS table* so the choice stays a
+query-time decision rather than an ingestion-time one. That much should be settled now, because
+it is a schema decision; the default is not.
+
 ## Login happens in the CLI, never over MCP
 
 **Decision.** `tgkb login` is an interactive CLI subcommand. The MCP server never authenticates;
