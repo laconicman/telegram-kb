@@ -1,0 +1,19 @@
+.build/
+.swiftpm/
+.DS_Store
+*.xcodeproj
+# Crawled corpora are large (10 MB+) and re-derivable via research/crawl_corpus.py.
+research/fixtures/*.jsonl
+research/fixtures/*.html
+# ...except the parser-test fixture, which TD-1's discharge depends on being committed.
+!research/fixtures/swiftui_dev.html
+
+# Scratch build trees from reproduction experiments under reports/repro/.
+# NB: ignore those nested Package.resolved files specifically — not the directory,
+# which holds the experiments' own notes.
+reports/repro/*/.build/
+reports/repro/*/Package.resolved
+
+# The TOP-LEVEL Package.resolved is deliberately NOT ignored: this package ships
+# executables (tgkb, tgkb-mcp), so it is an application, not a library whose consumers
+# re-resolve. Committing the pins is what makes a build reproducible.
