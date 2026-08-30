@@ -194,6 +194,50 @@ metadata our crawler drops. **Note this is no longer purely a risk** — fetchin
 ourselves is now planned work (see <doc:Roadmap>), and doing it well would make us strictly
 better than Telegram here rather than merely matching it.
 
+## TD-12 — Link content will outweigh post text 15–25× and pollute ranking
+
+Extracted link text is estimated at **50–80 MB against 3.38 MB of post bodies**
+(`research/link-content-fetching.md`).
+
+**Cost.** Merged into a single FTS table, link content dominates `bm25()` and nearly every query
+returns the post that *links to* an article about X rather than the post *about* X. This is the
+biggest risk in the link-fetching work — bigger than any fetching difficulty — because it
+degrades results that currently work.
+
+**Discharge.** Keep fetched content in a **separate FTS table** (already the design decision, now
+load-bearing rather than cautious), so opting in stays a query-time choice. Measure precision
+against `evals/golden-queries.md` before deciding the default. Consider weighting or truncating
+extracted text per document.
+
+## TD-13 — The boilerplate classifier must be ported, not vendored
+
+`mrowlinson/jusText-swift` demonstrates that jusText ports cleanly onto SwiftSoup in ~13 KB, but
+it carries **no licence file and no SPDX identifier** — verified: `LICENSE`, `LICENSE.md`,
+`LICENSE.txt` and `COPYING` all 404, and the GitHub API reports no licence. Unlicensed means all
+rights reserved; it **cannot be copied or vendored**.
+
+**Cost.** ~400 lines to write rather than a dependency to add, plus the risk that someone later
+"helpfully" vendors the Swift repo without checking.
+
+**Discharge.** Port from `miso-belica/jusText`, which is **BSD-2-Clause**, actively maintained,
+and ships **101 stoplists including Russian**. Record the provenance in the source header so the
+licence lineage is obvious. Treat the Swift repo as evidence the port is feasible, nothing more.
+`exyte/ReadabilityKit` is archived and depends on the dead `Ji` — not an alternative.
+
+## TD-14 — Link rot and unreachable sources
+
+Measured on a sample: roughly **8% link rot**, **10% bot-walled or paywalled** (Medium, Boosty —
+UA spoofing verified *not* to work, and the tools that would work are evasion), and **7%
+YouTube**, where title and author metadata is the honest ceiling.
+
+**Cost.** ~30% of unique external URLs will never yield useful text. A design that assumes full
+coverage will look broken.
+
+**Discharge.** Graceful degradation to Telegram's existing link preview, which we already store,
+plus an explicit per-link `fetch_status` so the gap is visible rather than silent. **Do not**
+attempt to defeat bot walls. Re-measure the fractions at n≈400 — the current figures come from
+n=40 and are Unverified at that precision.
+
 ## See Also
 
 - <doc:Design>

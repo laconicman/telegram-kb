@@ -260,6 +260,41 @@ Phase 3 evidence — in particular, whether `search_live` (which is *not* low-fr
 tolerate the same treatment. It probably cannot, and that asymmetry may split the answer:
 subprocess for writes, something else for live search.
 
+## Link-content fetching: the stack, and four shortcuts worth more than the crawler
+
+**Decision.** `URLSession` + SwiftSoup + a **ported jusText** boilerplate classifier. No browser
+automation, no `curl-impersonate`, no new binary dependency
+(`research/link-content-fetching.md`, grounded in ~100 live requests).
+
+**The four per-domain shortcuts matter more than any crawler improvement**, and I verified each
+myself rather than taking them on report:
+
+| Route | Measured |
+|---|---|
+| `developer.apple.com/documentation/**` → `tutorials/data/….json` | HTML yields **989** chars of visible text (a JS shell); the JSON yields **148,400**. ~408 URLs. |
+| `developer.apple.com/videos/**` | Full WWDC transcript is **already in plain HTML** — 36,014 chars, no JS. ~195 URLs. |
+| `github.com/o/r` → `raw.githubusercontent.com/o/r/HEAD/README.md` | 545 KB page (30,961 text chars, much of it GitHub chrome) vs a 32 KB clean Markdown README. ~905 URLs. The REST API is unusable at 60 req/hr. |
+| `youtube.com` → oEmbed | Title + author only; the watch page yields ~216 chars. **Metadata is the honest ceiling** for ~611 URLs. |
+
+Those four cover roughly **2,100 of 13,604** external links — and the first two turn Apple's
+documentation from unusable into the best-structured content in the corpus.
+
+**Rejected: headless `WKWebView`.** It genuinely works in a plain CLI with no app bundle
+(verified, 1.9–14.8 s/page), but the domain that motivated it has a JSON API that is ~10× faster
+and cleaner. Documented in the research notes, not adopted.
+
+**Rejected: a faster HTML parser.** SwiftSoup runs 2.9–28.4 ms/page against 0.5–5.6 s fetches —
+parser speed is not a decision input. `Kanna` is alive and ~7 ms faster; `Fuzi` is **dead** (last
+code commit 2020). One real wart to avoid: `select(…).remove()` costs +55 ms on a large page —
+select the subtree instead.
+
+**Extraction — port, don't vendor.** `mrowlinson/jusText-swift` proves the algorithm ports
+cleanly to SwiftSoup in ~13 KB, but it has **no licence file and no SPDX identifier**, so it is
+all-rights-reserved and cannot be copied or vendored. The maintained Python original
+(`miso-belica/jusText`) is **BSD-2-Clause** and ships **101 stoplists including Russian**. Port
+from the BSD original; treat the Swift repo as evidence only. `exyte/ReadabilityKit`, the
+obvious-looking alternative, is **archived** and sits on the equally dead `Ji`.
+
 ## OPEN — link-content fetching: default or opt-in? *(unanswered)*
 
 The corpus is **95% links**, so fetching link *content* is where the remaining retrieval quality
@@ -275,10 +310,13 @@ Arguments both ways, and the answer likely depends on measurements not yet taken
 - **Default** is what makes the tool feel like it knows things, and the whole point is retrieval
   the user cannot get from Telegram.
 
-**Decide with `evals/golden-queries.md`, after measuring precision cost — not in advance.** The
-cheap intermediate is to store fetched content in a *separate FTS table* so the choice stays a
-query-time decision rather than an ingestion-time one. That much should be settled now, because
-it is a schema decision; the default is not.
+**Decide with `evals/golden-queries.md`, after measuring precision cost — not in advance.**
+
+**The separate-FTS-table lean is now confirmed and load-bearing, not merely cautious.** Extracted
+link text is estimated at **50–80 MB against 3.38 MB of post bodies — a 15–25× increase**. Merged
+into one FTS table, link content would dominate `bm25()` and nearly every query would return the
+post that *links to* an article about X instead of the post *about* X. The separate table is what
+keeps that from being irreversible.
 
 ## Login happens in the CLI, never over MCP
 

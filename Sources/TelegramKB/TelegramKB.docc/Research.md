@@ -171,8 +171,25 @@ Every note in `research/`, with what it settles. Read these rather than re-deriv
 | `swiftsoup.md` | Parser choice, performance, the `text()` drops-`<br/>` trap |
 | `prior-art-telegram-mcp.md` | Seven Telegram MCP servers; the gap; what to copy |
 | `xcframework-skill-addendum.md` | Proposed additions to the `xcframework-distribution` skill (for review) |
+| `link-content-fetching.md` | Fetch/parse/extract stack; per-domain shortcuts; what is reachable |
+| `BRIEF-link-content-fetching.md` | The task brief that produced the above (for re-running) |
 
 Reproducible probes live alongside them: `probe.sh`, `crawl_corpus.py`, `lemmatize.swift`.
+
+### Link content — `research/link-content-fetching.md`
+From ~100 live requests; the four shortcuts re-verified independently by me.
+
+- `developer.apple.com/documentation` HTML is a JS shell (**989** text chars); the
+  `tutorials/data/….json` endpoint returns **148,400**. WWDC video pages already carry the full
+  transcript in plain HTML (**36,014** chars).
+- GitHub: `raw.githubusercontent.com/…/HEAD/README.md` beats scraping (32 KB clean vs a 545 KB
+  page); the REST API is unusable at 60 req/hr.
+- **Headless `WKWebView` works in a plain CLI with no app bundle** (1.9–14.8 s/page) — verified
+  but not adopted, since the domain that motivated it has a JSON API.
+- `Fuzi` is dead (2020); `exyte/ReadabilityKit` is archived; `mrowlinson/jusText-swift` is
+  **unlicensed** — port from the BSD-2-Clause Python original instead. `TD-13`.
+- `clck.ru/robots.txt` is `Disallow: /` with `Allow: /$`. Verified.
+- **~60% of unique external URLs yield ≥1,000 chars** on a plain fetch, ~70% with the shortcuts.
 
 ## Unverified
 
@@ -207,6 +224,8 @@ Carried forward deliberately. Do not build on these without probing first.
 - **Whether mean-centering helps or hurts embedding rank quality.** The storage research measured
   raw cosine inverting and centering fixing it; my own probe measured the opposite sign. My mean
   was over 8 sentences — far too few to be representative. Unresolved; settle on the real corpus.
+- **The fetchable fraction (~60/70%) is extrapolated from n=40** and flagged Unverified at that
+  precision. Re-measure at n≈400 before sizing the work.
 - **How Telegram matched two posts we cannot explain** (`TD-11`) — no occurrence of the term in
   the body, preview title, or preview description we captured. Candidates: linked-page content,
   semantic expansion, or media metadata we drop. Load-bearing for how much link-target content

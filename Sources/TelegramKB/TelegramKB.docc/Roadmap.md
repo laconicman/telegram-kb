@@ -37,6 +37,10 @@ Private and colleague channels, Saved Messages.
 - Promote **links** to first-class indexed entities: URL, resolved title/description, every post
   that shared it, aggregate reactions. The corpus is really a link corpus — **95% of posts carry
   a link**, 11,665 unique across 16,789 sharings.
+- **Per-domain shortcuts before any general crawler** — they are worth more. Apple docs via
+  `tutorials/data/….json`, WWDC transcripts straight from HTML, GitHub READMEs via
+  `raw.githubusercontent.com`, YouTube via oEmbed. ~2,100 of 13,604 links, and they convert
+  Apple's documentation from unusable to the best-structured content in the corpus.
 - **Fetch and index link *content*, not just its preview.** Telegram indexes the preview it
   generated, which is not guaranteed to hold the target page in full — sometimes only OpenGraph.
   Fetching the page ourselves is what makes us strictly better than Telegram on a link corpus
