@@ -1,0 +1,189 @@
+[
+  {
+    "name": "upgrade http to https",
+    "input": "http://swiftbysundell.com/articles/",
+    "expected": "https://swiftbysundell.com/articles",
+    "note": "642 corpus URLs are http://"
+  },
+  {
+    "name": "lowercase host",
+    "input": "https://GitHub.com/Apple/swift-argument-parser",
+    "expected": "https://github.com/Apple/swift-argument-parser",
+    "note": "43 corpus URLs have mixed-case hosts; PATH case is preserved"
+  },
+  {
+    "name": "drop www",
+    "input": "https://www.swift.org/blog/future-of-foundation/",
+    "expected": "https://swift.org/blog/future-of-foundation"
+  },
+  {
+    "name": "drop default port https",
+    "input": "https://swift.org:443/blog",
+    "expected": "https://swift.org/blog"
+  },
+  {
+    "name": "drop default port http",
+    "input": "http://swift.org:80/blog",
+    "expected": "https://swift.org/blog",
+    "note": "port dropped before scheme upgrade is irrelevant; both apply"
+  },
+  {
+    "name": "keep non-default port",
+    "input": "https://localhost:8080/x",
+    "expected": "https://localhost:8080/x"
+  },
+  {
+    "name": "strip fragment",
+    "input": "https://habr.com/ru/post/670804/#comments",
+    "expected": "https://habr.com/ru/post/670804",
+    "note": "396 corpus URLs carry a fragment"
+  },
+  {
+    "name": "trailing slash removed",
+    "input": "https://developer.apple.com/documentation/swiftui/",
+    "expected": "https://developer.apple.com/documentation/swiftui",
+    "note": "3721 corpus URLs end in /"
+  },
+  {
+    "name": "root path collapses to empty",
+    "input": "https://swift.org/",
+    "expected": "https://swift.org"
+  },
+  {
+    "name": "bare host stays bare",
+    "input": "https://swift.org",
+    "expected": "https://swift.org"
+  },
+  {
+    "name": "decode &amp; once",
+    "input": "https://habr.com/ru/post/1/?a=1&amp;b=2",
+    "expected": "https://habr.com/ru/post/1?a=1&b=2",
+    "note": "raw hrefs contain &amp;"
+  },
+  {
+    "name": "decode &amp;amp; twice",
+    "input": "https://habr.com/ru/post/1/?utm_source=tg&amp;amp;utm_medium=article",
+    "expected": "https://habr.com/ru/post/1",
+    "note": "412 corpus URLs are double-escaped; both params are tracking and vanish"
+  },
+  {
+    "name": "strip utm_*",
+    "input": "https://habr.com/ru/company/deliveryclub/blog/548792/?utm_source=tg&utm_medium=article&utm_campaign=iosgr",
+    "expected": "https://habr.com/ru/company/deliveryclub/blog/548792"
+  },
+  {
+    "name": "strip ssource (habr)",
+    "input": "https://habr.com/ru/post/670804/?ssource=mwsome",
+    "expected": "https://habr.com/ru/post/670804",
+    "note": "152 occurrences"
+  },
+  {
+    "name": "strip startapp (telegram)",
+    "input": "https://example.org/x?startapp=abc",
+    "expected": "https://example.org/x",
+    "note": "109 occurrences"
+  },
+  {
+    "name": "strip si (youtube share)",
+    "input": "https://youtu.be/dQw4w9WgXcQ?si=AbC123",
+    "expected": "https://youtu.be/dQw4w9WgXcQ"
+  },
+  {
+    "name": "strip s (x/twitter share)",
+    "input": "https://twitter.com/igrekde/status/1173467166907256834?s=20",
+    "expected": "https://twitter.com/igrekde/status/1173467166907256834"
+  },
+  {
+    "name": "strip fbclid",
+    "input": "https://example.org/a?fbclid=XYZ",
+    "expected": "https://example.org/a"
+  },
+  {
+    "name": "KEEP youtube v",
+    "input": "https://www.youtube.com/watch?v=796-dC41Doc",
+    "expected": "https://youtube.com/watch?v=796-dC41Doc",
+    "note": "v occurs 416 times and IS the identity; a denylist protects it, an allowlist would not"
+  },
+  {
+    "name": "KEEP v, strip si",
+    "input": "https://www.youtube.com/watch?v=796-dC41Doc&si=xyz",
+    "expected": "https://youtube.com/watch?v=796-dC41Doc"
+  },
+  {
+    "name": "KEEP id",
+    "input": "https://apps.apple.com/app?id=123456",
+    "expected": "https://apps.apple.com/app?id=123456"
+  },
+  {
+    "name": "KEEP t timestamp",
+    "input": "https://youtu.be/abc?t=90",
+    "expected": "https://youtu.be/abc?t=90",
+    "note": "v1 keeps it: a timestamp is plausibly a different resource"
+  },
+  {
+    "name": "sort query params",
+    "input": "https://example.org/x?b=2&a=1",
+    "expected": "https://example.org/x?a=1&b=2"
+  },
+  {
+    "name": "empty query dropped",
+    "input": "https://example.org/x?",
+    "expected": "https://example.org/x"
+  },
+  {
+    "name": "all params stripped drops ?",
+    "input": "https://example.org/x?utm_source=a",
+    "expected": "https://example.org/x"
+  },
+  {
+    "name": "shortener unchanged (resolution is a separate step)",
+    "input": "https://clck.ru/33ABCD",
+    "expected": "https://clck.ru/33ABCD",
+    "note": "114 corpus links; resolving is step 1 and is not in this contract"
+  },
+  {
+    "name": "telp.cc unchanged",
+    "input": "https://telp.cc/Tdm",
+    "expected": "https://telp.cc/Tdm"
+  },
+  {
+    "name": "not a URL returns null",
+    "input": "not a url",
+    "expected": null,
+    "note": "total function: returned unchanged, marked non-canonical"
+  },
+  {
+    "name": "relative URL returns null",
+    "input": "/ru/post/670804",
+    "expected": null
+  },
+  {
+    "name": "mailto returned unchanged",
+    "input": "mailto:a@b.com",
+    "expected": null,
+    "note": "non-http(s) scheme"
+  },
+  {
+    "name": "whitespace trimmed",
+    "input": "  https://swift.org/blog  ",
+    "expected": "https://swift.org/blog"
+  },
+  {
+    "name": "strip any utm_ prefix (utm_refcode)",
+    "input": "https://avitotech.timepad.ru/event/737788?utm_refcode=2d3382",
+    "expected": "https://avitotech.timepad.ru/event/737788",
+    "note": "6 corpus URLs; an enumerated utm_* list missed this, so the rule is a prefix"
+  },
+  {
+    "name": "strip percent-mangled utm_campaign%3D",
+    "input": "https://github.com/giginet/swift-testing-revolutionary?utm_campaign%3DiOS",
+    "expected": "https://github.com/giginet/swift-testing-revolutionary",
+    "note": "a real corpus URL where = was percent-encoded; only prefix matching catches it"
+  },
+  {
+    "name": "IDN host becomes punycode",
+    "input": "http://%D1%80%D0%B0%D0%B4%D0%BE%D0%BC.%D0%BE%D1%80%D0%B3/",
+    "expected": "https://xn--80aiyhh.xn--c1avg",
+    "note": "CROSS-LANGUAGE HAZARD: Foundation punycodes automatically, Python's urlsplit does not. Two such hosts in the corpus"
+  }
+]

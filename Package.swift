@@ -72,6 +72,12 @@ let package = Package(
         // pass for the wrong reasons as the graph grows. Enforced by Scripts/check-invariants.sh.
         .executableTarget(name: "tgkb-mcp", dependencies: ["TelegramKBMCP", "TelegramKBStore"]),
 
+        // Runs Spec/url-canonical/fixtures.json — the co-owned seam contract with `artanl`.
+        .testTarget(
+            name: "TelegramKBModelTests",
+            dependencies: ["TelegramKBModel"],
+            resources: [.copy("Fixtures/url-canonical-fixtures.json")]
+        ),
         .testTarget(name: "TelegramKBStoreTests", dependencies: ["TelegramKBStore"]),
         .testTarget(name: "TelegramKBIngestTests", dependencies: ["TelegramKBIngest"]),
     ]

@@ -327,6 +327,41 @@ stage — the author's explicit call, recorded as `TD-15` rather than silently a
 *not* deferred, because the ladder makes it unnecessary rather than because it is disallowed:
 **no CAPTCHA solving and no TLS/JA3 fingerprint spoofing at any tier.**
 
+## What Telegram can filter server-side, and what must be ours
+
+Synthesised from this project's probes and the analyzer session's reading of `td_api.tl`. It
+decides which MCP tool parameters can be pushed down and which the store must serve.
+
+| Dimension | Server-side? | Where |
+|---|---|---|
+| **Text query** | Yes, but **caps at ~22 results** and normalises opaquely | Both |
+| **Message type** | **Yes** — `SearchMessagesFilter`, 20 variants | TDLib only |
+| **Has-a-URL** | **Yes** — `searchMessagesFilterUrl` | TDLib only |
+| **Sender** | Yes — `sender_id` | TDLib only |
+| **Date range, per chat** | **No** | **Must be ours** |
+| **Date range, globally** | Yes — but takes a `ChatList`, not a `chat_id` | Not usable per-channel |
+| **Reactions** | **No** — none outside Saved Messages tags (Premium) | **Must be ours** |
+| **Substring / fuzzy** | **No** | **Must be ours** |
+
+Three things follow:
+
+1. **Date and reaction filtering are ours, unavoidably.** `searchChatMessages` has no
+   `min_date`/`max_date`; the global `searchMessages` has both but takes a `ChatList`. So the
+   brief's wanted dimensions — date range, reactions — are exactly the ones no API supplies
+   per-channel. Index them.
+2. **`searchMessagesFilterUrl` is a genuine shortcut for a link corpus**: it enumerates a
+   channel's link-bearing posts **without walking its whole history**. On a 95%-links corpus that
+   is most of the channel, so the saving is smaller than it sounds — but for *incremental* sync
+   it is the right query.
+3. **Combinations are conditionally supported.** `searchChatMessages` accepts `query`,
+   `sender_id`, `filter` and `topic_id` together, but the schema says a combination is supported
+   *"only if it is required for Telegram official application implementation"* — so combinations
+   the official app does not use are untested. **Probe the specific combination before relying
+   on it**, and never let an MCP tool's contract depend on one holding.
+
+Which is the same conclusion the local index already forced, arrived at from the API side: the
+server is an ingestion filter, not a query engine.
+
 ## URLs: store both forms, derive the canonical, rewrite nothing
 
 **Decision.** Every link is stored **twice** — `url_raw` exactly as it appeared in the post, and

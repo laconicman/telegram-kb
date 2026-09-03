@@ -56,5 +56,15 @@ for b in tgkb-mcp tgkb; do
                  || { note "$b free of TelegramKBIngestTDLib symbols" "FAIL ($n)"; fail=1; }
 done
 
+echo "== seam contract =="
+# The spec file is the source of truth; the test target needs its own copy as a resource.
+# Two copies can drift, which is the TD-16 failure class, so police it here rather than hope.
+if diff -q Spec/url-canonical/fixtures.json \
+        Tests/TelegramKBModelTests/Fixtures/url-canonical-fixtures.json >/dev/null 2>&1; then
+  note "spec fixtures == test resource" "OK"
+else
+  note "spec fixtures == test resource" "FAIL (drifted — re-copy from Spec/)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "all invariants hold" || echo "INVARIANT VIOLATION"
 exit $fail

@@ -14,7 +14,7 @@ already collided once.
 
 ---
 
-## S0 — the seam contract *(first; ~half a day; unblocks `artanl`)*
+## S0 — the seam contract ✅ *(done)*
 
 The `url_canonical` spec and its shared fixture list.
 
@@ -25,11 +25,18 @@ The `url_canonical` spec and its shared fixture list.
   links shared across channels.
 - Implement it in `TelegramKBModel`. `artanl` implements the same list independently.
 
-**Done:** the fixture list is committed, this repo's tests pass against it, and `artanl` runs the
-same file. Divergence is a test failure (`TD-16`).
+**Delivered.** `Spec/url-canonical/SPEC.md` (v1) and `Spec/url-canonical/fixtures.json` (34
+cases), implemented in `TelegramKBModel.URLCanonicaliser` and run by
+`TelegramKBModelTests`. Validated against all **11,665** unique corpus URLs: 100% canonicalised,
+zero tracking parameters surviving, idempotent throughout, **1,995 raw forms collapsed (17%)**.
+Both the contract test and the spec/resource drift guard are negative-tested.
 
-**Why first:** it is the only thing blocking another project, it is cheap, and it gets harder the
-moment either store has data.
+**Still outstanding on the other side:** `artanl` must run the same `fixtures.json`. Two cases
+will bite it — **IDN→punycode**, which Foundation does automatically and Python's `urlsplit` does
+not, and the `utm_` **prefix** rule.
+
+*Note: the corpus run found two bugs the 34 hand-written fixtures did not — an enumerated `utm_*`
+list that missed `utm_refcode`, and a spec claim that no IDN host existed when two do.*
 
 ---
 
