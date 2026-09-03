@@ -37,18 +37,15 @@ Private and colleague channels, Saved Messages.
 - Promote **links** to first-class indexed entities: URL, resolved title/description, every post
   that shared it, aggregate reactions. The corpus is really a link corpus — **95% of posts carry
   a link**, 11,665 unique across 16,789 sharings.
-- **Per-domain shortcuts before any general crawler** — they are worth more. Apple docs via
-  `tutorials/data/….json`, WWDC transcripts straight from HTML, GitHub READMEs via
-  `raw.githubusercontent.com`, YouTube via oEmbed. ~2,100 of 13,604 links, and they convert
-  Apple's documentation from unusable to the best-structured content in the corpus.
-- **Fetch and index link *content*, not just its preview.** Telegram indexes the preview it
-  generated, which is not guaranteed to hold the target page in full — sometimes only OpenGraph.
-  Fetching the page ourselves is what makes us strictly better than Telegram on a link corpus
-  rather than merely equal. Exposed as a **dedicated query option**; whether it is on by default
-  is an open question (see <doc:Design>).
-- **Dual search — live and cached, run together.** Query the local index *and* Telegram's own
-  `?q=` concurrently, then merge. The two have complementary failure modes: ours has full recall
-  but a crawl-time snapshot; theirs is current but caps at ~22 results. Neither alone is right.
+- **Store `url_canonical` at ingest** — the co-owned join key with `artanl` (see <doc:Design>).
+  Implemented against a shared fixture list; divergence between the two repos is a test failure.
+- **Store Telegram's link preview for every link**, including links we never fetch: it is the
+  analyzer ladder's tier-4 floor, which is what guarantees no URL yields nothing.
+- **Extend the extractor** to poll questions and forwarded-post attribution — both verified
+  present in the web preview and both currently dropped. ~1.3% of posts each, and a poll question
+  is often a better topic signal than the surrounding post.
+- Article fetching, extraction and tagging are **`artanl`'s**, not ours. We supply URLs and the
+  preview floor; it supplies attributes, joined on `url_canonical`.
 - Cross-channel dedupe of the same link.
 - Reaction count as a ranking signal.
 - `NLTagger` lemmatisation for Russian morphology — **verified to work**; see `TD-4` for the

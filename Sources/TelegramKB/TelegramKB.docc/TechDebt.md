@@ -209,34 +209,63 @@ load-bearing rather than cautious), so opting in stays a query-time choice. Meas
 against `evals/golden-queries.md` before deciding the default. Consider weighting or truncating
 extracted text per document.
 
-## TD-13 — The boilerplate classifier must be ported, not vendored
+## TD-13 — SUPERSEDED: extraction moved to `artanl`
 
-`mrowlinson/jusText-swift` demonstrates that jusText ports cleanly onto SwiftSoup in ~13 KB, but
-it carries **no licence file and no SPDX identifier** — verified: `LICENSE`, `LICENSE.md`,
-`LICENSE.txt` and `COPYING` all 404, and the GitHub API reports no licence. Unlicensed means all
-rights reserved; it **cannot be copied or vendored**.
+Originally: `mrowlinson/jusText-swift` is unlicensed and cannot be vendored, so the boilerplate
+classifier must be ported from the BSD-2-Clause Python original.
 
-**Cost.** ~400 lines to write rather than a dependency to add, plus the risk that someone later
-"helpfully" vendors the Swift repo without checking.
+**No longer this project's debt.** Article extraction now belongs to the analyzer, which is
+Python and uses `trafilatura` — maintained, and it sidesteps the licensing question entirely.
+Kept as a numbered entry so existing references resolve, and because the underlying lesson
+travels: **an unlicensed repository cannot be vendored no matter how convenient it looks**
+(`LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING` all 404; the GitHub API reports no licence).
 
-**Discharge.** Port from `miso-belica/jusText`, which is **BSD-2-Clause**, actively maintained,
-and ships **101 stoplists including Russian**. Record the provenance in the source header so the
-licence lineage is obvious. Treat the Swift repo as evidence the port is feasible, nothing more.
-`exyte/ReadabilityKit` is archived and depends on the dead `Ji` — not an alternative.
+## TD-14 — SUPERSEDED: coverage is the ladder's problem, and it has a floor
 
-## TD-14 — Link rot and unreachable sources
+Originally: ~8% link rot, ~10% bot-walled, ~7% YouTube — roughly 30% of URLs yielding no useful
+text.
 
-Measured on a sample: roughly **8% link rot**, **10% bot-walled or paywalled** (Medium, Boosty —
-UA spoofing verified *not* to work, and the tools that would work are evasion), and **7%
-YouTube**, where title and author metadata is the honest ceiling.
+**Restated correctly.** The analyzer's tier ladder descends to `web.archive.org` for dead links
+and, finally, to **Telegram's own preview metadata — which this project stores.** No URL yields
+nothing. What survives as *our* obligation is narrow and concrete:
 
-**Cost.** ~30% of unique external URLs will never yield useful text. A design that assumes full
-coverage will look broken.
+- Store the preview for **every** link, including ones we expect never to fetch. It is the
+  fallback of record.
+- Store `url_canonical` at ingest so the join key exists from the first crawl.
 
-**Discharge.** Graceful degradation to Telegram's existing link preview, which we already store,
-plus an explicit per-link `fetch_status` so the gap is visible rather than silent. **Do not**
-attempt to defeat bot walls. Re-measure the fractions at n≈400 — the current figures come from
-n=40 and are Unverified at that precision.
+## TD-15 — `robots.txt` compliance is deferred, deliberately
+
+The engine currently plans to fetch without consulting `robots.txt`. This is the author's
+explicit decision, recorded rather than silently assumed: the priority is retrieval quality, and
+restricting scope later is the easy direction — particularly relevant if any of this is ever
+published.
+
+**Cost.** Facts, not judgements: `clck.ru/robots.txt` is `Disallow: /` with `Allow: /$`
+(114 corpus links). Medium's `robots.txt` names `GPTBot`, `ClaudeBot`, `Bytespider` and
+`Applebot-Extended` with `Disallow: /`. `t.me` has **no** `robots.txt` at all (HTTP 404), so
+nothing is expressed there. The exposure is reputational and contractual rather than technical,
+and it scales with distribution — negligible for a private index, material for a published tool.
+
+**Discharge.** Before any public release: add a `robots.txt` check with a per-domain override
+table, and an honest UA carrying a contact URL. **Independently of that, and not deferred:** no
+CAPTCHA solving and no TLS/JA3 fingerprint spoofing at any tier — the tier ladder is what makes
+those unnecessary, which is the strongest argument against them.
+
+## TD-16 — `url_canonical` can silently diverge between two repos
+
+The join key between `telegram-kb` and `artanl` is a **canonicalisation algorithm implemented
+twice, in two languages**. Redirect following, `http`→`https` upgrade (529 corpus URLs),
+`utm_*`/`ssource`/`share`/fragment stripping — each is a place the two can drift.
+
+**Cost.** Divergence does not throw. It produces rows that fail to join, so articles silently
+lose their posts and posts silently lose their attributes. Exactly the silent-recall-loss class
+as `TD-1`.
+
+**Discharge.** One versioned spec plus a **shared fixture list** that both repos run in their own
+test suites, treated as a contract: divergence is a test failure, not a discovery. Seed the
+fixtures from the real corpus — the shortener, interstitial and `http://` cases are already
+enumerable from it.
+
 
 ## See Also
 

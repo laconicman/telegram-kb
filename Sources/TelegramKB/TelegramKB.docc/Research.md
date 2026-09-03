@@ -191,15 +191,29 @@ From ~100 live requests; the four shortcuts re-verified independently by me.
 - `clck.ru/robots.txt` is `Disallow: /` with `Allow: /$`. Verified.
 - **~60% of unique external URLs yield ≥1,000 chars** on a plain fetch, ~70% with the shortcuts.
 
+### The `artanl` seam — synchronised 2026-09-03
+A sibling project (the local-LLM article analyzer) owns article fetching and tagging; this
+project owns Telegram ingestion, the post grain, FTS and search. They join on `url_canonical` —
+one spec implemented twice, with a shared fixture list. See <doc:Design>.
+
+- The analyzer's **fetch tier ladder** bottoms out at **Telegram's own preview metadata, which
+  this project stores** — so no URL ever yields nothing. Our data is its floor.
+- Extraction there is Python + `trafilatura`, which retires `TD-13` for us.
+- `searchMessagesFilterUrl` is a **server-side** "messages containing a URL" filter: a channel's
+  link-bearing posts can be enumerated without walking its whole history.
+- `SearchMessagesFilter`'s 20 variants give a free, deterministic `format` label from TDLib — but
+  web-sparse, per the probe above.
+
 ## Unverified
 
 Carried forward deliberately. Do not build on these without probing first.
 
 - **End-to-end ID reconciliation against a live TDLib client.** `TD-8`; the Phase 2 gate.
-- **Forwarded-message markup.** No forwarded post occurred in the sampled corpus, so the
-  author/sender dimension is unproven for forwarded content — which is how much shared material
-  arrives. Likely the largest remaining unknown on the web-source side.
-- **Document/file, poll, audio and voice markup** — unobserved; only text, photo and video seen.
+- ~~Forwarded markup.~~ **Answered** — present at ~1.3% of posts, carrying origin channel,
+  origin post id *and* the original author's name, so attribution for forwards is *better* than
+  for ordinary posts. Polls likewise present (~1.3%) with question, options and vote count.
+  Document, audio, voice, sticker, location and round video are **absent from 625 sampled
+  posts** — absent from this corpus, not merely unlooked-for.
 - ~~Whether channel owners can explicitly disable the web preview.~~ **Answered** —
   `@iosmmcresources` is a genuine broadcast channel (1,757 subscribers) whose `/s/` still 302s,
   so owners can disable it. "N members" vs "N subscribers" separately distinguishes a group from

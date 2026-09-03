@@ -260,63 +260,91 @@ Phase 3 evidence — in particular, whether `search_live` (which is *not* low-fr
 tolerate the same treatment. It probably cannot, and that asymmetry may split the answer:
 subprocess for writes, something else for live search.
 
-## Link-content fetching: the stack, and four shortcuts worth more than the crawler
+## The `artanl` seam — this project does not fetch or tag articles
 
-**Decision.** `URLSession` + SwiftSoup + a **ported jusText** boilerplate classifier. No browser
-automation, no `curl-impersonate`, no new binary dependency
-(`research/link-content-fetching.md`, grounded in ~100 live requests).
+**Decision, superseding an earlier one.** `telegram-kb` does **not** build its own article
+fetcher or tagger. A sibling project — the local-LLM article analyzer (`artanl`) — owns both.
+The two meet at a single co-owned key.
 
-**The four per-domain shortcuts matter more than any crawler improvement**, and I verified each
-myself rather than taking them on report:
+```
+telegram-kb                       artanl
+(posts, channels, FTS, search)    (articles, attributes, tags)
+        │                               │
+        └────────  url_canonical  ──────┘     ONE spec, versioned, both sides test it
+```
 
-| Route | Measured |
+I previously specified a fetch stack for this repo. That was the wrong scope: the analyzer had
+already designed a better one, in a language with better tools for it, and duplicating it would
+have created two crawlers and two extraction paths over the same URLs.
+
+**What each side owns:**
+
+| `telegram-kb` | `artanl` |
 |---|---|
-| `developer.apple.com/documentation/**` → `tutorials/data/….json` | HTML yields **989** chars of visible text (a JS shell); the JSON yields **148,400**. ~408 URLs. |
-| `developer.apple.com/videos/**` | Full WWDC transcript is **already in plain HTML** — 36,014 chars, no JS. ~195 URLs. |
-| `github.com/o/r` → `raw.githubusercontent.com/o/r/HEAD/README.md` | 545 KB page (30,961 text chars, much of it GitHub chrome) vs a 32 KB clean Markdown README. ~905 URLs. The REST API is unusable at 60 req/hr. |
-| `youtube.com` → oEmbed | Title + author only; the watch page yields ~216 chars. **Metadata is the honest ceiling** for ~611 URLs. |
+| Telegram ingestion — both sources | Article fetching (the tier ladder) |
+| The **post** grain | The **article** grain |
+| FTS, ranking, semantic search | LLM tagging, `format`, `topic`, `complexity` |
+| The MCP tool surface | The controlled vocabulary |
 
-Those four cover roughly **2,100 of 13,604** external links — and the first two turn Apple's
-documentation from unusable into the best-structured content in the corpus.
+**Rules that make this work, taken from the analyzer plan:**
 
-**Rejected: headless `WKWebView`.** It genuinely works in a plain CLI with no app bundle
-(verified, 1.9–14.8 s/page), but the domain that motivated it has a JSON API that is ~10× faster
-and cleaner. Documented in the research notes, not adopted.
+- **Both sides implement the same canonicalisation spec**, against a shared fixture list.
+  Resolve → canonicalise → dedupe. Follow every redirect hop, upgrade `http://`→`https://`
+  (529 corpus URLs), strip `utm_*`/`ssource`/`share`/fragments, store the post-redirect URL as
+  canonical and keep the original. **Divergence is a test failure, not a discovery.**
+- **Grains stay different.** 479 links are shared across more than one channel: many posts, one
+  article. Neither side models the other's grain.
+- **Either side can be broken for a better result.** Neither store exists yet, so migration cost
+  is zero — and this project is 25 lines of placeholder Swift, which is the cheapest moment to
+  take a dependency-shaped decision back.
 
-**Rejected: a faster HTML parser.** SwiftSoup runs 2.9–28.4 ms/page against 0.5–5.6 s fetches —
-parser speed is not a decision input. `Kanna` is alive and ~7 ms faster; `Fuzi` is **dead** (last
-code commit 2020). One real wart to avoid: `select(…).remove()` costs +55 ms on a large page —
-select the subtree instead.
+**Rejected: `telegram-kb` fetching link content itself.** It would duplicate the tier ladder,
+put a crawler in the process that must stay ban-free, and split extraction across two languages.
 
-**Extraction — port, don't vendor.** `mrowlinson/jusText-swift` proves the algorithm ports
-cleanly to SwiftSoup in ~13 KB, but it has **no licence file and no SPDX identifier**, so it is
-all-rights-reserved and cannot be copied or vendored. The maintained Python original
-(`miso-belica/jusText`) is **BSD-2-Clause** and ships **101 stoplists including Russian**. Port
-from the BSD original; treat the Swift repo as evidence only. `exyte/ReadabilityKit`, the
-obvious-looking alternative, is **archived** and sits on the equally dead `Ji`.
+**Rejected: one combined store.** The grains genuinely differ, and the analyzer must work with
+no Telegram at all — which is what "independently valuable" means operationally.
 
-## OPEN — link-content fetching: default or opt-in? *(unanswered)*
+## Coverage: no site is ignored, because the ladder has a floor
 
-The corpus is **95% links**, so fetching link *content* is where the remaining retrieval quality
-lives. Telegram indexes only the preview it generated, which is not guaranteed to hold the target
-page in full. Fetching ourselves is the difference between matching Telegram and beating it.
+The requirement is that **no source is written off**. The analyzer's fetch ladder satisfies it
+structurally rather than by effort: every URL descends tiers until something works, and
 
-**Undecided: whether content search is on by default or behind an explicit query option.**
-Arguments both ways, and the answer likely depends on measurements not yet taken:
+> **Tier 4 is Telegram's own preview metadata — which `telegram-kb` already stores.**
 
-- **Explicit** keeps result semantics predictable — a user asking for posts *about* X may not
-  want posts merely *linking* to a page mentioning X, and the precision cost could be large on a
-  corpus where a single page can be thousands of words against a 200-character post.
-- **Default** is what makes the tool feel like it knows things, and the whole point is retrieval
-  the user cannot get from Telegram.
+So the floor is *this project's* data, and it guarantees that no URL ever yields nothing. That is
+the strongest reason for the seam to run in this direction: our worst case is the analyzer's
+safety net.
 
-**Decide with `evals/golden-queries.md`, after measuring precision cost — not in advance.**
+Two consequences that are ours to honour:
 
-**The separate-FTS-table lean is now confirmed and load-bearing, not merely cautious.** Extracted
-link text is estimated at **50–80 MB against 3.38 MB of post bodies — a 15–25× increase**. Merged
-into one FTS table, link content would dominate `bm25()` and nearly every query would return the
-post that *links to* an article about X instead of the post *about* X. The separate table is what
-keeps that from being irreversible.
+1. **Store the preview even when we will never fetch the page** — it is the fallback of record,
+   not a nicety. Site, title, description and resolved URL, for every link.
+2. **Store `url_canonical` alongside the raw URL at ingest**, so the join key exists from the
+   first crawl rather than being back-filled.
+
+**Note on `robots.txt`:** compliance is deliberately **not** a constraint on the engine at this
+stage — the author's explicit call, recorded as `TD-15` rather than silently assumed. What is
+*not* deferred, because the ladder makes it unnecessary rather than because it is disallowed:
+**no CAPTCHA solving and no TLS/JA3 fingerprint spoofing at any tier.**
+
+## OPEN — should `telegram-kb` store `format` at ingest? *(seam question)*
+
+TDLib's `SearchMessagesFilter` has 20 variants, so a video post is deterministically a video and
+an audio post a podcast — **a free `format` label with no tokens spent and no hallucination
+surface**. The analyzer's inclination is that we should store it and hand it over, making
+`format` an input rather than a task for all but text-plus-link posts.
+
+**My answer: yes, with a caveat the analyzer plan could not have known.** I probed the web
+preview for exactly this: forwarded and poll markup are present, but **document, audio, voice,
+sticker, location and round-video markup are entirely absent from 625 sampled posts**. So the
+signal is TDLib-complete and web-*sparse* — not because the parser misses it, but because this
+corpus does not contain those types.
+
+Practically: store `format` where a source supplies it, mark it `source: tdlib|web|absent`, and
+do not let the analyzer assume the field is populated for web-ingested posts. Also worth taking:
+`searchMessagesFilterUrl` is a **server-side** "messages containing a URL" filter, which lets a
+channel's link-bearing posts be enumerated without walking its whole history — directly useful
+for a link corpus.
 
 ## Login happens in the CLI, never over MCP
 

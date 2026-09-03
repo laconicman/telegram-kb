@@ -343,6 +343,57 @@ Those 18 empty-body posts are a design input: a purely text-driven index silentl
 the corpus. They still carry a date, author, reactions and often a link preview, so they should
 be indexed on those fields rather than skipped.
 
+### Media and message-type markup — the probe the analyzer plan asked for
+
+Sampled 625 posts across the four channels, plus 42 targeted fetches of text-less posts.
+This closes two Unverified items and opens one extraction gap.
+
+| Markup | Frequency | Status |
+|---|---|---|
+| `tgme_widget_message_forwarded_from` | **1.3%** (~96 posts) | **Newly observed** |
+| `tgme_widget_message_poll` | **1.3%** (~96 posts) | **Newly observed** |
+| giveaway | 0.3% | Observed, not characterised |
+| document, audio, voice, sticker, location, round video | **0 / 625** | **Absent from this corpus** |
+
+The last row is the useful negative: these are unobserved *because a link-sharing developer
+channel does not contain them*, not because I failed to look. That is a different claim from the
+one previously in the ledger, and it means the `whisper` branch in the analyzer plan has almost
+no web-side material to work on — the audio corpus, if any, is on the TDLib side.
+
+**Forwarded posts — the biggest previously-open gap, now closed.**
+
+```html
+<div class="tgme_widget_message_forwarded_from accent_color">Forwarded from
+  <a class="tgme_widget_message_forwarded_from_name" href="https://t.me/mobiledevnews/1428">
+    <span>Mobile Developer</span></a>
+  (<span class="tgme_widget_message_forwarded_from_author">Алексей Гладков</span>)
+```
+
+We get **origin channel, origin post id, and the original author's name** — so a forwarded post
+can be attributed to whoever actually wrote it and linked back to the original. The
+"author/sender dimension is unproven for forwarded content" concern is resolved in the good
+direction: attribution is *better* for forwards than for ordinary posts, because the origin is
+explicit rather than inferred from the channel.
+
+**Polls carry indexable text we are currently dropping.** A poll renders its question, its type,
+its vote count and every option:
+
+```
+question: Опрос для iOS-разработчиков. Какой процент кода в вашем приложении написан на SwiftUI
+type:     Anonymous Poll
+votes:    595 votes
+options:  0-20 / 20-40 / 40-60 / 60-80
+```
+
+This explains the 161 "empty body" posts recorded earlier — **most are polls**, and the poll
+question is real, searchable content that the body-only extractor discards. A poll question is
+often a better topic signal than the average post, because it states a subject explicitly.
+
+**Consequence:** the extractor must read three more blocks — `poll_question` (+ options),
+`forwarded_from` (origin channel, post id, author), and the proper `tgme_widget_message_reply`
+wrapper. The reply case was already found the hard way; these two were found by looking, which
+is the cheaper route and the one the ledger should have prompted sooner.
+
 ### Non-finding, recorded to stop it misleading the parser
 
 `message_media_not_supported` occurs 165 times across my fixtures. It is **not** a data
