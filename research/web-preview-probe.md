@@ -174,8 +174,12 @@ Links inside message text are trivially separable by shape:
 - `?before=<id>` — strictly older. `?after=<id>` — strictly newer.
 - **History reaches message id 1.** `?before=20` returned ids 1, 3, 4, 5, 6, 8, 10. There is
   no depth cap.
-- **Post ids are non-contiguous** (deletions, album grouping, service messages) and
-  **page size varies**: I observed 20, 19, 14, 7 and 5 messages per response.
+- **Post ids are non-contiguous** and **page size varies**: I observed 20, 19, 14, 7 and 5
+  messages per response. **A large part of the gap is albums, not deletions** — a media group
+  renders as *one* post occupying several consecutive ids (`@ios_broadcast/581` spans 581–586,
+  587 spans 587–591, 977 spans 977–984, and the trailing ids never appear). **A missing id is
+  therefore not evidence a post was deleted**, and anything inferring deletion from absence is
+  wrong. My earlier wording listed album grouping as one cause among several and understated it.
 
 Therefore: **page by the min/max id actually returned, never by an assumed count or stride.**
 A crawler that decrements by a fixed step will silently skip posts. Terminate on an empty
@@ -342,6 +346,17 @@ than regex, and write fixture-based parser tests.** A brittle-parser defect here
 Those 18 empty-body posts are a design input: a purely text-driven index silently drops 13% of
 the corpus. They still carry a date, author, reactions and often a link preview, so they should
 be indexed on those fields rather than skipped.
+
+### Albums — one post, many ids
+
+`tgme_widget_message_grouped` (with `_wrap` and `_layer` siblings) renders a media group as a
+**single** message wrapper carrying one `data-post` id and several media. The consecutive ids the
+album occupies are absent from the listing entirely.
+
+This matters twice: it is the main explanation for the message-id gap (above), and it means the
+web preview and TDLib **disagree on an album's cardinality** — one post here, *N* messages
+sharing a `media_group_id` there. The ID transform is unaffected; the grain is not. Folded into
+`TD-8`.
 
 ### Media and message-type markup — the probe the analyzer plan asked for
 

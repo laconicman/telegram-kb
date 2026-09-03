@@ -128,8 +128,20 @@ client.
 **Cost.** If wrong, the two sources write duplicate rows instead of reconciling — the failure the
 whole two-source design rests on avoiding.
 
+**A second reconciliation hazard, found later and harder than the first.** The two sources
+disagree on an **album's grain**: the web preview renders a media group as *one* post (verified —
+`@ios_broadcast/581` spans message ids 581–586, 587 spans 587–591, 977 spans 977–984), while
+TDLib returns *N* separate messages sharing a `media_group_id`. The ID transform is correct; the
+*cardinality* is not. A naive reconciler writes N rows against 1 and reads the difference as
+missing data.
+
+Relatedly: **a missing message id is not evidence of deletion.** Albums consume consecutive ids
+that never appear as posts, which is a large part of the 54% id gap in the crawled corpus.
+
 **Discharge.** The first Phase 2 task, before any backfill: fetch one post from a channel already
-crawled from the web and assert the rows reconcile. Keep it as a permanent integration test.
+crawled from the web and assert the rows reconcile — **including an album**, which is the case
+that actually fails. Group TDLib messages by `media_group_id` before writing, take the first id
+as identity. Keep it as a permanent integration test.
 
 ## TD-9 — Semantic retrieval over Russian needs care (partly superseded)
 

@@ -327,6 +327,80 @@ stage — the author's explicit call, recorded as `TD-15` rather than silently a
 *not* deferred, because the ladder makes it unnecessary rather than because it is disallowed:
 **no CAPTCHA solving and no TLS/JA3 fingerprint spoofing at any tier.**
 
+## URLs: store both forms, derive the canonical, rewrite nothing
+
+**Decision.** Every link is stored **twice** — `url_raw` exactly as it appeared in the post, and
+`url_canonical` derived from it. Both are searchable. `find_links` returns `url_canonical` as the
+identity.
+
+The governing principle is that **canonicalisation is derived, never destructive**. What was
+crawled is a fact about the post and cannot be rewritten; the canonical form is an index built on
+top of it. Three consequences that make this more than pedantry:
+
+- **The spec will change.** Canonicalisation is a heuristic — a new tracking parameter, a new
+  shortener, a redirect that starts resolving differently. When it changes, `url_canonical` must
+  be **recomputable from `url_raw` without re-crawling**. If we had stored only the canonical
+  form, every revision would mean a full re-crawl, and older rows could never be brought into
+  line with newer ones.
+- **Both forms are legitimately searchable.** Someone may search for the shortener they actually
+  saw in the channel, or for the destination. Neither is wrong, and the raw form is often what a
+  person remembers.
+- **Divergence becomes debuggable.** With both stored, a join failure against `artanl` shows
+  exactly which side canonicalised differently. With only the canonical stored, the same failure
+  is invisible (`TD-16`).
+
+`url_canonical` is therefore a **derived column with a spec version recorded beside it**, so a
+spec bump is a recompute over `url_raw` rather than a migration that loses information.
+
+**Rejected: storing only the canonical form.** Smaller, and it makes the spec unrevisable.
+**Rejected: canonicalising at query time only.** It would make the join key non-indexable, which
+defeats the seam.
+
+## Post kind is modelled, and it is not one field
+
+**Decision.** A post carries a **`kind`** (what it *is*) plus **orthogonal modifiers** (how it
+arrived). Conflating them into one enum is the mistake to avoid: a forwarded video album that
+replies to something is all four things at once.
+
+```
+kind      : text | photo | album | video | videoNote | audio | voice
+            | document | poll | sticker | location | giveaway | unknown
+modifiers : isForwarded (+ origin channel, origin post id, origin author)
+            replyTo (post id)
+            mediaCount (≥1; >1 means album)
+            formatSource: tdlib | web | absent
+```
+
+`kind` is **free and deterministic** where a source supplies it — TDLib's `SearchMessagesFilter`
+has 20 variants, so a video post *is* a video with no tokens spent and no hallucination surface.
+That is why `artanl` should only infer `format` for text-plus-link posts, where it is genuinely
+ambiguous. Everything else is a lookup.
+
+But the signal is **TDLib-complete and web-sparse**, which is why `formatSource` exists rather
+than a bare enum: of 625 sampled web posts, document, audio, voice, sticker, location and round
+video appear **zero** times, while polls and forwards appear at ~1.3% each. A consumer must be
+able to tell "this is not a document" from "this source cannot say".
+
+### Albums are one post over many message ids — and that breaks two assumptions
+
+Verified in the web preview: `tgme_widget_message_grouped` renders **one** `data-post` id
+containing several media. Measured on `@ios_broadcast`: post 581 spans ids 581–586, post 587
+spans 587–591, post 977 spans 977–984. The trailing ids are absent from the crawl entirely.
+
+Two things I had recorded earlier are wrong or incomplete because of this:
+
+1. **The 54% message-id gap is not mostly deletions.** I listed "deletions, album grouping,
+   service messages" and treated albums as a minor term. An album swallowing 5–8 consecutive ids,
+   occurring regularly, is a large part of that gap. **A missing id is not evidence a post was
+   deleted**, and anything that infers deletion from absence will be wrong.
+2. **The two sources disagree on an album's grain.** The web preview gives one post; TDLib gives
+   *N* messages sharing a `media_group_id`. The ID transform is still correct — but a naive
+   reconciler would create N rows from TDLib against 1 from the web and treat the difference as
+   missing data. Folded into `TD-8`, which is already the Phase 2 gate.
+
+**Decision:** the album's **first message id is the post identity**, `mediaCount` records the
+span, and TDLib ingestion must group by `media_group_id` before writing rather than after.
+
 ## OPEN — should `telegram-kb` store `format` at ingest? *(seam question)*
 
 TDLib's `SearchMessagesFilter` has 20 variants, so a video post is deterministically a video and
