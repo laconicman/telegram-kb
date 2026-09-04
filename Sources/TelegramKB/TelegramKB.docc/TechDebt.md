@@ -279,6 +279,22 @@ fixtures from the real corpus — the shortener, interstitial and `http://` case
 enumerable from it.
 
 
+## TD-17 — Roughly a fifth of URLs will never resolve
+
+Measured on a 50-URL sample: 6 unreachable (`URLError`), 3 × 404, 2 × 403 and 1 × 418 — about
+**18% not resolving cleanly**, consistent with the ~8% link rot plus ~10% bot-walled estimate in
+`research/link-content-fetching.md`.
+
+**Cost.** `url_resolution.resolved_canonical` is NULL for those rows, so `effective_url` falls
+back to `url_canonical`. That is the designed behaviour and correct — but it means a shortener
+that dies before we resolve it can **never** be joined to `artanl`'s row for the same article,
+because neither side can discover the destination. The join silently under-matches.
+
+**Discharge.** Record `http_status` and `resolved_at` so the failure is visible and re-triable
+rather than indistinguishable from "not yet checked". Re-resolve NULLs periodically — some are
+transient. Resolve **early**: every day a shortener stays unresolved is a day it might die, and
+the corpus already reaches back to 2016.
+
 ## See Also
 
 - <doc:Design>

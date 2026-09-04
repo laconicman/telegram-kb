@@ -423,6 +423,46 @@ Both sides join on `effective_url`. Either may populate `url_resolution` — we 
 URL first, we are already doing network I/O, and a `HEAD` is not a fetch. Only the destination of
 the result changed.
 
+## Resolve every URL, not just the shorteners
+
+**Decision.** `url_resolution` is populated for **every** canonical URL, not only the 313
+shortened ones.
+
+**Measured, and the margin is not close.** A 50-URL sample of the 9,770 unique canonical URLs:
+
+| | |
+|---|---|
+| **Cross-host redirects** | **26%** (13/50) |
+| Resolved 200 | 38/50 |
+| Dead or unreachable | 6 `URLError`, 3 × 404 |
+| Bot-walled | 2 × 403, 1 × 418 |
+| Latency | median 0.99 s, mean 1.62 s, p90 3.64 s |
+
+Shorteners are **313 of 11,773 links (2.7%)**. Cross-host redirects are **~26%** — call it 2,500
+URLs. Resolving only shorteners would have missed the large majority of exactly the divergence
+`effective_url` exists to absorb, and missed it *silently*, which is `TD-16`'s failure mode.
+
+**Cost is wall-clock, not effort**, and 1,654 distinct hosts make it parallelisable:
+
+| Concurrency | Wall time for 9,770 URLs |
+|---|---|
+| 1 | 4.4 h |
+| 4 | 1.1 h |
+| 8 | 33 min |
+
+**Bound concurrency per host, not globally.** The top hosts are heavily concentrated — `t.me`
+912, `developer.apple.com` 886, `github.com` 866 — so "at most one request in flight per host,
+up to 8 hosts at once" is both polite and fast. A global cap would either hammer `t.me` or
+crawl the long tail pointlessly slowly.
+
+**This does not need the store**, only the URL list — which already exists as
+`Spec/url-canonical/corpus-canonical.tsv`. So it can run before or alongside `S1`/`S2` rather
+than waiting for them.
+
+**Store the result for every URL, including non-redirects.** "We checked and it did not redirect"
+is different information from "we never checked", exactly as `formatSource` distinguishes absent
+from negative. `resolved_canonical` equal to the input is a fact; a missing row is not.
+
 ## Schema commitments made to `artanl` before the store exists
 
 Their plan notes migration cost is zero until there is data — true now, false the moment `S2`

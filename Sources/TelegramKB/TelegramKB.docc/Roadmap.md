@@ -78,6 +78,14 @@ sibling), reactions incl. paid, link previews, hashtags, views, **poll question 
 **Done:** fixture tests pin **every** field against committed HTML, including one reply, one
 poll, one forwarded post and **one album** (`tgme_widget_message_grouped`). This is `TD-1`'s discharge and the tests are the point of the slice.
 
+### S3.5 — URL resolution *(can start immediately; needs neither S1 nor S2)*
+Populate `url_resolution` for every canonical URL. Input is
+`Spec/url-canonical/corpus-canonical.tsv`, which already exists, so this is unblocked **now**.
+One request in flight per host, up to ~8 hosts concurrently: ~33 min for 9,770 URLs.
+
+**Done:** every canonical URL has a `url_resolution` row — including non-redirects, where
+`resolved_canonical` equals the input. NULLs carry an `http_status` explaining why (`TD-17`).
+
 ### S4 — crawler
 Page by returned ids, never a stride. Polite by default. Per-channel watermarks so a re-run is
 incremental. The four-way channel classifier for `doctor`.
@@ -144,6 +152,7 @@ TDLib lives once MCP needs it — the four options are in <doc:Design>, unanswer
 | Track | Owns | Never touches |
 |---|---|---|
 | A | `TelegramKBModel`, `TelegramKBStore`, migrations | anything else |
+| R | `S3.5` resolution — runs standalone against the golden file, writes JSON until S2 exists | any source target |
 | B | `TelegramKBIngest`, `research/fixtures/` | `TelegramKBMCP`, `Sources/tgkb-mcp` |
 | C | `TelegramKBMCP`, `Sources/tgkb`, `Sources/tgkb-mcp`, `evals/` | `TelegramKBIngest` |
 
