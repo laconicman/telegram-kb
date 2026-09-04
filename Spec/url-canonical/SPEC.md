@@ -8,8 +8,18 @@ Bump `SPEC_VERSION` for any behavioural change and record it beside every stored
 revision is a recompute over `url_raw` rather than a re-crawl.
 
 ```
-SPEC_VERSION = 1
+SPEC_VERSION = 2
 ```
+
+**v2 changes** (2026-09-04, after cross-implementation review):
+- Adds **`effective_url`** — the join key — and the `url_resolution` relation behind it (§ below).
+  `canonicalise` itself is unchanged.
+- **Specifies percent-encoding of non-ASCII paths**, which was previously unstated and where the
+  two implementations diverged. Swift already behaved this way; **the Python side must change**.
+- Adds `time` to the explicitly-not-stripped list (documentation of existing behaviour).
+- Adds seven fixtures, including two that caught real bugs.
+
+Swift output is unchanged by v2, so no recompute is required on that side.
 
 ---
 
@@ -77,14 +87,64 @@ share token; `s` is X/Twitter's.
 
 ### Explicitly NOT stripped
 
-`v`, `id`, `list`, `index`, `t`, `page`, `p`, `q` — and anything else absent from the denylist.
+`v`, `id`, `list`, `index`, `t`, **`time`**, `page`, `p`, `q` — and anything else absent from
+the denylist.
+
+**`time` is Apple's timestamp parameter** (`developer.apple.com/videos/play/wwdc…?time=N`, 23
+corpus URLs) and is the exact same concept as YouTube's `t`. It was previously kept by accident
+rather than by decision; naming it here stops someone later stripping it as obvious tracking
+noise and silently breaking links into WWDC sessions — the best-structured content in the corpus.
 
 **`v` alone occurs 416 times and is YouTube's video identity.** Stripping unknown parameters
 would collapse every YouTube link in the corpus onto `youtube.com/watch`, which is why the rule
-is a denylist and never an allowlist. `t` (a timestamp) and `list` (a playlist) are arguably
-tracking-adjacent, but a link to a timestamp is plausibly a different resource, so v1 keeps them.
+is a denylist and never an allowlist. `t`/`time` (a timestamp) and `list` (a playlist) are
+tracking-adjacent in shape only. **Measured, they are identity-bearing:** six resources in the
+corpus carry more than one distinct timestamp, and the spans are wide — `wwdc2024/10151` is
+linked at 89s, 381s, 550s, 769s and 1180s, and one YouTube live stream at 450s, 1481s, 3848s and
+6651s. Four moments across a 1h51m stream are four different recommendations, not four links to
+one thing. Collapsing them is lossy in a way it never is for a blog post.
+
+`list` is a separate case with **zero** both-ways evidence: a playlist is a different resource
+from the bare video, not a view onto it.
 
 ---
+
+## `effective_url` — the join key (v2)
+
+**Canonicalisation never resolves, and resolution never mutates `url_canonical`.** The join key
+is a third thing, derived from both.
+
+```
+url_canonical  = canonicalise(url_raw)        -- pure, total, offline, stable forever
+url_resolution(url_canonical PK,
+               resolved_canonical NULL,       -- NULL = unresolvable (dead link, timeout, 4xx)
+               http_status, hops, resolved_at, spec_version)
+
+effective_url(u) = COALESCE(url_resolution(u).resolved_canonical, u)
+```
+
+**Both sides join on `effective_url`.** Either may populate `url_resolution` — `telegram-kb` at
+crawl time, `artanl` for URLs that never came from Telegram. Where both hold a row and they
+disagree, that is a **reportable condition**, not a silent miss.
+
+### Why the key is not simply post-resolution
+
+An earlier proposal had `telegram-kb` resolve at ingest and store the resolved form *as*
+`url_canonical`. It is wrong, for three reasons that all point the same way:
+
+1. **Identity must not depend on I/O.** A URL that cannot be resolved would then have no
+   computable key. Dead shorteners are not hypothetical — `bit.ly/3ARSuTJ` returns **404**
+   (verified). Every answer for such a row poisons the key.
+2. **Resolution is time-varying, so the key would be too.** A shortener's target can change, so
+   two crawls of the same post produce two different keys — a silent divergence *inside* one
+   store, which is strictly worse than the cross-repo divergence this contract exists to prevent.
+3. **A pure key is recomputable; a resolved key is not.** The `SPEC_VERSION` guarantee — that a
+   revision is a recompute over `url_raw` rather than a re-crawl — holds only while
+   canonicalisation is total and offline. Folding resolution in would have broken the spec's
+   own central promise.
+
+Resolution notes, non-normative: follow every hop — `clck.ru` goes via an `sba.yandex.ru`
+interstitial. Record `resolved_at`; a resolution is an observation with a timestamp, not a fact.
 
 ## Known limitations, recorded rather than hidden
 
@@ -102,8 +162,14 @@ tracking-adjacent, but a link to a timestamp is plausibly a different resource, 
   `m.facebook.com` (1) stay distinct from their parents, and `youtu.be` (153) stays distinct from
   `youtube.com` (432). Collapsing them needs per-host rewrite rules, which is a different kind of
   thing from normalisation; deliberately out of v1.
-- **No percent-encoding normalisation** beyond what the URL parser performs. The two languages'
-  parsers may differ here, which is exactly what the fixtures exist to detect.
+- **Non-ASCII path characters are percent-encoded** (UTF-8, uppercase hex) — RFC 3986 normal
+  form, and what a browser puts on the wire. **This is where the two implementations actually
+  diverged:** Swift's `URLComponents` encodes automatically, Python's `urlsplit` does not, so the
+  Python side must `quote` the path explicitly. All 56 non-ASCII paths in the corpus already
+  arrive percent-encoded, so no stored value changes — but `artanl` takes URLs from outside the
+  corpus, where it would have split every such URL into two rows.
+- **A trailing dot in the host is preserved** (`swift.org.` stays distinct from `swift.org`),
+  which DNS says is wrong. Zero corpus occurrences; recorded rather than fixed.
 
 ---
 

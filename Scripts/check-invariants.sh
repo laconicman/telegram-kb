@@ -66,5 +66,21 @@ else
   note "spec fixtures == test resource" "FAIL (drifted — re-copy from Spec/)"; fail=1
 fi
 
+# The golden file is self-contained (column 1 is the input), so this needs no corpus.
+# It catches implementation drift that the 42 hand-written fixtures would not — which is
+# exactly how the utm_refcode and IDN bugs were found in the first place.
+if swiftc -O -o "$TMPDIR/check-golden" Sources/TelegramKBModel/URLCanonicaliser.swift \
+        Scripts/GoldenCheck/main.swift 2>/dev/null; then
+  if out=$("$TMPDIR/check-golden" Spec/url-canonical/corpus-canonical.tsv 2>&1); then
+    note "golden corpus file" "OK$(printf '%s' "$out" | grep -oE '[0-9]+ rows' | head -1 | sed 's/^/ (/;s/$/)/')"
+  else
+    printf '%s\n' "$out" | head -20; note "golden corpus file" "FAIL"; fail=1
+  fi
+else
+  swiftc -O -o "$TMPDIR/check-golden" Sources/TelegramKBModel/URLCanonicaliser.swift \
+      Scripts/GoldenCheck/main.swift 2>&1 | head -5
+  note "golden corpus file" "FAIL (compile error)"; fail=1
+fi
+
 [ "$fail" -eq 0 ] && echo "all invariants hold" || echo "INVARIANT VIOLATION"
 exit $fail

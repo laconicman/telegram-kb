@@ -185,5 +185,49 @@
     "input": "http://%D1%80%D0%B0%D0%B4%D0%BE%D0%BC.%D0%BE%D1%80%D0%B3/",
     "expected": "https://xn--80aiyhh.xn--c1avg",
     "note": "CROSS-LANGUAGE HAZARD: Foundation punycodes automatically, Python's urlsplit does not. Two such hosts in the corpus"
+  },
+  {
+    "name": "IPv6 literal keeps brackets",
+    "input": "https://[2606:4700::1]/x",
+    "expected": "https://[2606:4700::1]/x",
+    "note": "found a real bug in the Python implementation — hostname strips brackets and naive netloc rebuild emits an invalid URL"
+  },
+  {
+    "name": "literal non-ASCII path is percent-encoded",
+    "input": "https://habr.com/ru/статья/1",
+    "expected": "https://habr.com/ru/%D1%81%D1%82%D0%B0%D1%82%D1%8C%D1%8F/1",
+    "note": "v2: THE divergence. Swift URLComponents encodes automatically, Python urlsplit does not. 0 corpus URLs arrive this way (all 56 are pre-encoded) but artanl takes outside URLs"
+  },
+  {
+    "name": "host trailing dot preserved",
+    "input": "https://swift.org./blog",
+    "expected": "https://swift.org./blog",
+    "note": "DNS says swift.org. == swift.org; v2 preserves it. 0 corpus occurrences, recorded not fixed"
+  },
+  {
+    "name": "uppercase scheme lowercased, path case kept",
+    "input": "HTTPS://Swift.org/Blog",
+    "expected": "https://swift.org/Blog"
+  },
+  {
+    "name": "duplicate query key sorted by value",
+    "input": "https://example.org/x?a=2&a=1",
+    "expected": "https://example.org/x?a=1&a=2"
+  },
+  {
+    "name": "valueless parameter preserved",
+    "input": "https://example.org/x?flag",
+    "expected": "https://example.org/x?flag"
+  },
+  {
+    "name": "double slash in path preserved",
+    "input": "https://example.org//a//b",
+    "expected": "https://example.org//a//b"
+  },
+  {
+    "name": "KEEP Apple time= timestamp",
+    "input": "https://developer.apple.com/videos/play/wwdc2025/312?time=208",
+    "expected": "https://developer.apple.com/videos/play/wwdc2025/312?time=208",
+    "note": "23 corpus URLs; same concept as YouTube t=. wwdc2024/10151 is linked at five distinct timestamps"
   }
 ]

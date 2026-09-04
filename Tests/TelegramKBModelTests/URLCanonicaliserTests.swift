@@ -29,7 +29,7 @@ struct URLCanonicaliserContractTests {
         #expect(!Self.fixtures.isEmpty, "Spec fixtures failed to load — the contract is not being tested")
     }
 
-    @Test("spec version is recorded", arguments: [1])
+    @Test("spec version is recorded", arguments: [2])
     func specVersion(expected: Int) {
         #expect(URLCanonicaliser.specVersion == expected)
     }

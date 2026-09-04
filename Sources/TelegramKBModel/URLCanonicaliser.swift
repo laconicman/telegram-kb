@@ -13,7 +13,7 @@ public enum URLCanonicaliser {
 
     /// The spec version this implementation satisfies. Store it beside every canonical value so
     /// a spec revision is a recompute over `url_raw` rather than a re-crawl.
-    public static let specVersion = 1
+    public static let specVersion = 2
 
     /// Query parameters removed during canonicalisation.
     ///
@@ -38,7 +38,10 @@ public enum URLCanonicaliser {
     ]
 
     /// Returns the canonical form, or `nil` when `raw` is not an absolute http(s) URL with a
-    /// host. `nil` means "store `url_raw`, mark non-canonical" — it is not an error.
+    /// host.
+    ///
+    /// This never resolves redirects. The join key is `effective_url` — see the spec's v2
+    /// section: identity must not depend on I/O, or an unresolvable URL has no computable key. `nil` means "store `url_raw`, mark non-canonical" — it is not an error.
     public static func canonicalise(_ raw: String) -> String? {
         let decoded = decodingHTMLEntities(raw).trimmingCharacters(in: .whitespacesAndNewlines)
 

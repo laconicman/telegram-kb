@@ -25,15 +25,16 @@ The `url_canonical` spec and its shared fixture list.
   links shared across channels.
 - Implement it in `TelegramKBModel`. `artanl` implements the same list independently.
 
-**Delivered.** `Spec/url-canonical/SPEC.md` (v1) and `Spec/url-canonical/fixtures.json` (34
-cases), implemented in `TelegramKBModel.URLCanonicaliser` and run by
-`TelegramKBModelTests`. Validated against all **11,665** unique corpus URLs: 100% canonicalised,
+**Delivered, now at spec v2 after cross-implementation review.** `Spec/url-canonical/SPEC.md` and `Spec/url-canonical/fixtures.json` (**42** cases) plus
+`corpus-canonical.tsv` (**11,773** rows, self-checking), implemented in
+`TelegramKBModel.URLCanonicaliser` and run by `TelegramKBModelTests`. Validated against all **11,665** unique corpus URLs: 100% canonicalised,
 zero tracking parameters surviving, idempotent throughout, **1,995 raw forms collapsed (17%)**.
 Both the contract test and the spec/resource drift guard are negative-tested.
 
-**Still outstanding on the other side:** `artanl` must run the same `fixtures.json`. Two cases
-will bite it — **IDN→punycode**, which Foundation does automatically and Python's `urlsplit` does
-not, and the `utm_` **prefix** rule.
+**`artanl` passed 34/34 on its first run**, having handled both predicted divergences
+explicitly. v2 then added `effective_url` as the join key, seven fixtures, and the one real
+divergence the review found: **literal non-ASCII paths**, which Swift percent-encodes and Python
+does not.
 
 *Note: the corpus run found two bugs the 34 hand-written fixtures did not — an enumerated `utm_*`
 list that missed `utm_refcode`, and a spec claim that no IDN host existed when two do.*
@@ -53,7 +54,9 @@ say".
 round-trips as **one** post with `mediaCount > 1`.
 
 ### S2 — `TelegramKBStore`
-GRDB schema and migrations. Dual FTS5 — `unicode61` for ranked word search, `trigram` for
+GRDB schema and migrations, **including the six commitments made to `artanl`** (see
+<doc:Design>): the `url_resolution` relation, `spec_version` as a column, an album `group_id`,
+poll text as indexable, preview metadata with `observed_at`, and `formatSource`. Dual FTS5 — `unicode61` for ranked word search, `trigram` for
 substring — plus **ё→е normalisation at index and query time** (`TD-10`). `url_raw` and
 `url_canonical` stored side by side with the spec version (<doc:Design>). Writer sets
 `SQLITE_FCNTL_PERSIST_WAL` (`TD-6`).

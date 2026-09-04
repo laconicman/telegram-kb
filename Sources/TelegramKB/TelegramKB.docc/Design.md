@@ -391,6 +391,57 @@ spec bump is a recompute over `url_raw` rather than a migration that loses infor
 **Rejected: canonicalising at query time only.** It would make the join key non-indexable, which
 defeats the seam.
 
+### The join key is `effective_url`, not `url_canonical` — and resolution never mutates the key
+
+**I proposed resolving at ingest and storing the resolved form *as* `url_canonical`. That was
+wrong**, and `artanl` was right to refuse it. Three reasons, the third of which contradicts this
+very section:
+
+1. **Identity must not depend on I/O.** An unresolvable URL would have no computable key, and
+   dead shorteners are not hypothetical — `bit.ly/3ARSuTJ` returns 404 (verified).
+2. **Resolution is time-varying**, so the key would be too: two crawls of one post could yield
+   two keys. That is a silent divergence *inside* this store — strictly worse than the cross-repo
+   divergence the contract exists to prevent.
+3. **A pure key is recomputable; a resolved key is not.** The guarantee stated two paragraphs
+   above — a spec revision is a recompute over `url_raw` — holds *only* while canonicalisation is
+   total and offline. My own proposal would have broken it.
+
+So resolution is a **timestamped observation**, not a mutation:
+
+```
+url_canonical  = canonicalise(url_raw)     -- pure, total, offline, stable forever
+url_resolution(url_canonical PK, resolved_canonical NULL,
+               http_status, hops, resolved_at, spec_version)
+effective_url(u) = COALESCE(url_resolution(u).resolved_canonical, u)
+```
+
+Both sides join on `effective_url`. Either may populate `url_resolution` — we at crawl time,
+`artanl` for URLs that never came from Telegram. Where both hold a row and disagree, that is a
+**reportable condition rather than a silent miss**, which is the property actually wanted.
+
+`telegram-kb` still does the resolving at ingest, for the reasons originally given: we see the
+URL first, we are already doing network I/O, and a `HEAD` is not a fetch. Only the destination of
+the result changed.
+
+## Schema commitments made to `artanl` before the store exists
+
+Their plan notes migration cost is zero until there is data — true now, false the moment `S2`
+lands. Agreed and recorded here so `S1`/`S2` honour them:
+
+| | |
+|---|---|
+| `url_resolution` relation | As above. The one that mattered. |
+| `spec_version` **as a column** beside every stored canonical | Their point: the spec says record it; making it a column is what makes a recompute a *query*. |
+| A stable **album/group id** on the post row | One post can span six message ids. Anything counting "posts per article" must count the group, not the ids. `first_message_id` is the identity. |
+| **Poll question and options as indexable text** | Free text otherwise discarded, and often a better topic statement than the post around it. |
+| **Preview metadata columns**: `site`, `title`, `description`, resolved URL, `observed_at` | `observed_at` because preview metadata is a snapshot Telegram took, not a live read. |
+| `formatSource: tdlib \| web \| absent` | Kept. Distinguishing "not a document" from "this source cannot say" is the whole value. |
+
+**Tier 4 is a table they read directly, not an MCP tool.** Their fetch path is batch CLI with no
+session in the loop; routing it through MCP would put an agent in the middle of what a `for` loop
+should do. It also keeps `tgkb-mcp` strictly read-only — it answers queries, never writes and
+never fetches.
+
 ## Post kind is modelled, and it is not one field
 
 **Decision.** A post carries a **`kind`** (what it *is*) plus **orthogonal modifiers** (how it
