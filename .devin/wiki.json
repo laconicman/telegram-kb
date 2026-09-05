@@ -1,0 +1,16 @@
+{
+  "repo_notes": [
+    {
+      "content": "SCOPE — what this repository is and is not. telegram-kb is a searchable knowledge base built from Telegram channels and exposed to Claude over MCP. Two directories hold prose that is NOT documentation of this project's API and must not be turned into pages describing it: research/ holds twenty-one investigation notes and reproducible probes, several of which are about third-party behaviour (SwiftPM traits and binary targets, TDLib, GRDB) rather than about this code; reports/ holds outbound artefacts — a Stack Overflow question, a Swift Forums post, an SPM GitHub issue and their repro cases — written to be filed elsewhere. Cover each as a single topic, this project's research and upstream-reporting practice, and do not document the third-party projects they discuss. Spec/url-canonical/SPEC.md and evals/golden-queries.md are working specifications for behaviour, not user documentation.",
+      "author": "maintainer"
+    },
+    {
+      "content": "AUTHORITATIVE SOURCES, in precedence order. The direction documents in the DocC catalogue under Sources/TelegramKB/TelegramKB.docc/ are authoritative and outrank both README.md and any code comment: Design.md records decisions together with the rejected alternatives, Roadmap.md is the Now/Next/Later plan, TechDebt.md is the numbered TD-n register, and Research.md is a Verified/Unverified ledger whose distinction must be preserved — do not present an unverified entry as established. README.md is the entry point and repeats the precedence rule itself. OPEN-QUESTIONS.md, SYNC-artanl.md and SYNC-telegram-kb.md are working coordination files rather than product documentation.",
+      "author": "maintainer"
+    },
+    {
+      "content": "SHAPE AND CONSTRAINTS that any useful page set must convey. The package ships two executables over one SQLite store: tgkb performs ingestion, crawling channels and writing the index, and owns all network access and credentials; tgkb-mcp is a read-only stdio MCP server with no network, no credentials and no ban exposure. That separation is deliberate and load-bearing — Scripts/check-invariants.sh asserts that tgkb-mcp is free of TDLib. The TDLib ingestion path sits behind a SwiftPM trait that is OFF by default, so a plain swift build downloads no binary artefact and only swift build --traits TDLib adds that source. The status is Phase 0, research and scaffold, with no feature code yet, so describe planned capability as planned. Licensing is load-bearing: TDLib is Boost and the other dependencies are MIT, but code must never be vendored from Telegram-iOS or Swiftgram/Telegram-iOS, both GPLv2, which would relicense the project.",
+      "author": "maintainer"
+    }
+  ]
+}
