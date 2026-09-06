@@ -8,8 +8,23 @@ Bump `SPEC_VERSION` for any behavioural change and record it beside every stored
 revision is a recompute over `url_raw` rather than a re-crawl.
 
 ```
-SPEC_VERSION = 2
+SPEC_VERSION = 3
 ```
+
+**v3 changes** (2026-09-06, from the first cross-implementation corpus diff — 11,778 rows,
+which found one bug on each side that 42 fixtures had missed):
+
+- **Decode only well-formed, semicolon-terminated entities.** One rule, two opposite bugs.
+  Ours left `&#33;` undecoded, so a literal `#` survived to parse time, became the fragment
+  delimiter, and step 8 discarded 35 characters of path — silently. Theirs decoded permissively,
+  reading `&sect` inside `&amp;sectionName` and producing `§ionName`. Requiring the semicolon
+  fixes both, and it is the only form two languages can implement identically: "use your
+  platform's entity decoder" is by construction different everywhere.
+- **Percent-decode `%XX` only where it maps to an *unreserved* character** (RFC 3986 §6.2.2.2).
+  §2.2 makes decoding reserved octets a semantic change — `%2F` is not `/` — so a blanket
+  unquote is wrong. Implementations must read `percentEncodedPath`, not `path`: the latter is
+  already decoded and cannot tell the two apart.
+- Seven fixtures added (49 total). **Changed exactly one row in the 11,773-row corpus.**
 
 **v2 changes** (2026-09-04, after cross-implementation review):
 - Adds **`effective_url`** — the join key — and the `url_resolution` relation behind it (§ below).
@@ -65,6 +80,19 @@ continues; the function is **total** — it never throws and never returns nil.
 11. **Remove a trailing `/`** from the path, unless the path is exactly `/`, in which case the
     path becomes empty.
 12. **Drop an empty query** (`?` with nothing after it).
+
+### Entity decoding (step 1, normative)
+
+Decode `&name;`, `&#NNN;` and `&#xHH;` **only when terminated by a semicolon**, repeatedly until
+stable, max 3 passes. Never decode a `&` sequence lacking one. This must happen **before**
+parsing, so that a decoded `#` cannot be mistaken for a fragment delimiter — and equally, an
+undecoded `&#33;` must not be either.
+
+### Percent-encoding (normative)
+
+Decode `%XX` **only** when the octet is RFC 3986 *unreserved*: `ALPHA / DIGIT / "-" / "." / "_" /
+"~"`. Leave every other escape byte-for-byte. Operate on the **percent-encoded** path and query,
+never on the decoded forms.
 
 ### Tracking-parameter denylist
 

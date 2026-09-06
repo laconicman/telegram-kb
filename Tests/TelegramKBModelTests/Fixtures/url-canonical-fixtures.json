@@ -229,5 +229,47 @@
     "input": "https://developer.apple.com/videos/play/wwdc2025/312?time=208",
     "expected": "https://developer.apple.com/videos/play/wwdc2025/312?time=208",
     "note": "23 corpus URLs; same concept as YouTube t=. wwdc2024/10151 is linked at five distinct timestamps"
+  },
+  {
+    "name": "numeric entity decoded before parsing (the # trap)",
+    "input": "http://artsy.github.io/blog/2016/10/10/Help&#33;-I&#39;m-becoming-Post-Junior/",
+    "expected": "https://artsy.github.io/blog/2016/10/10/Help!-I'm-becoming-Post-Junior",
+    "note": "v3. &#33; contains a literal #; leaving it undecoded made it the fragment delimiter and silently dropped 35 chars of path. Found by diffing two implementations over the corpus, not by fixtures"
+  },
+  {
+    "name": "entity WITHOUT a semicolon is left alone",
+    "input": "https://x.org/a?b=1&amp;sectionName=z",
+    "expected": "https://x.org/a?b=1&sectionName=z",
+    "note": "v3. A permissive decoder reads &sect here and yields §ionName — the mirror-image bug on the Python side"
+  },
+  {
+    "name": "double-escaped numeric entity",
+    "input": "https://en.wikipedia.org/wiki/Conway&amp;#39;s_Game",
+    "expected": "https://en.wikipedia.org/wiki/Conway's_Game",
+    "note": "v3. Decoding only &amp; yields Conway& — truncation again, one pass later"
+  },
+  {
+    "name": "genuine hashbang fragment is still stripped",
+    "input": "https://podlodka.io/crew#&#33;/tproduct/203984162",
+    "expected": "https://podlodka.io/crew",
+    "note": "v3. Decoding must not resurrect a real fragment"
+  },
+  {
+    "name": "percent-decode unreserved only",
+    "input": "https://x.org/a%2Db%5Fc%7Ed%2Ee",
+    "expected": "https://x.org/a-b_c~d.e",
+    "note": "v3. RFC 3986 §6.2.2.2 — unreserved octets are equivalent decoded"
+  },
+  {
+    "name": "percent-encoded RESERVED must survive",
+    "input": "https://x.org/a%2Fb",
+    "expected": "https://x.org/a%2Fb",
+    "note": "v3. §2.2 — %2F is not /. Requires URLComponents.percentEncodedPath; the plain .path property returns an already-decoded path and loses the distinction"
+  },
+  {
+    "name": "reserved survives in a query value too",
+    "input": "https://x.org/p?q=a%26b",
+    "expected": "https://x.org/p?q=a%26b",
+    "note": "v3"
   }
 ]

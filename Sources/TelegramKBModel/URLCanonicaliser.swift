@@ -13,7 +13,7 @@ public enum URLCanonicaliser {
 
     /// The spec version this implementation satisfies. Store it beside every canonical value so
     /// a spec revision is a recompute over `url_raw` rather than a re-crawl.
-    public static let specVersion = 2
+    public static let specVersion = 3
 
     /// Query parameters removed during canonicalisation.
     ///
@@ -77,33 +77,108 @@ public enum URLCanonicaliser {
             components.queryItems = kept.isEmpty ? nil : kept
         }
 
+        // RFC 3986 §6.2.2.2 normalisation, applied to path and query values only. Not to the
+        // host (already lowercased/punycoded) and not blindly to the whole string, because a
+        // reserved octet like %2F must survive — decoding it would change what the URL means.
+        // NB: the `percentEncoded*` variants, deliberately. `components.path` returns an
+        // ALREADY-DECODED path, so reading it loses the reserved/unreserved distinction this
+        // rule depends on — `%2F` arrives as `/` and re-encoding cannot tell them apart. Caught
+        // by a test asserting `%2F` survives.
+        components.percentEncodedPath = decodingUnreservedEscapes(components.percentEncodedPath)
+        if let q = components.percentEncodedQuery {
+            components.percentEncodedQuery = decodingUnreservedEscapes(q)
+        }
+
         // Trailing slash: removed, and a bare "/" becomes empty.
-        if components.path.hasSuffix("/") && components.path != "/" {
-            components.path.removeLast()
-        } else if components.path == "/" {
-            components.path = ""
+        if components.percentEncodedPath.hasSuffix("/") && components.percentEncodedPath != "/" {
+            components.percentEncodedPath.removeLast()
+        } else if components.percentEncodedPath == "/" {
+            components.percentEncodedPath = ""
         }
 
         return components.string
     }
 
-    /// Repeatedly decodes HTML entities until stable, at most `maxPasses` times.
+    /// Repeatedly decodes **well-formed, semicolon-terminated** HTML entities until stable.
     ///
-    /// Real corpus hrefs contain `&amp;amp;` (412 occurrences). Without repeated decoding those
-    /// yield query parameters literally named `amp;amp;utm_medium`, which then fail to match the
-    /// tracking denylist and survive into the canonical form.
+    /// The semicolon requirement is the whole rule, and it fixes two opposite bugs found by
+    /// diffing this implementation against `artanl`'s over the corpus — neither of which the 42
+    /// hand-written fixtures caught:
+    ///
+    /// - **Ours:** `&#33;` was not decoded, so a literal `#` survived into parsing, became the
+    ///   fragment delimiter, and step 8 discarded the rest of the path.
+    ///   `…/Help&#33;-I&#39;m-becoming-Post-Junior` silently became `…/Help&` — 35 characters
+    ///   gone, nothing thrown.
+    /// - **Theirs:** a permissive decoder treated `&sect` (a real entity, no semicolon) inside
+    ///   `&amp;sectionName` as one, producing `§ionName`.
+    ///
+    /// Decoding *everything* breaks the second; decoding only `&amp;` breaks the first. Requiring
+    /// a semicolon fixes both, keeps the original `&amp;amp;` collapse working, and is the only
+    /// form two languages can implement identically — "use your platform's entity decoder" is by
+    /// construction different everywhere, which is how we arrived at opposite failures on
+    /// adjacent URLs.
     static func decodingHTMLEntities(_ s: String, maxPasses: Int = 3) -> String {
+        let named: [String: String] = [
+            "amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": "\u{00A0}",
+        ]
         var current = s
         for _ in 0..<maxPasses {
-            let next = current
-                .replacingOccurrences(of: "&amp;", with: "&")
-                .replacingOccurrences(of: "&lt;", with: "<")
-                .replacingOccurrences(of: "&gt;", with: ">")
-                .replacingOccurrences(of: "&quot;", with: "\"")
-                .replacingOccurrences(of: "&#39;", with: "'")
-            if next == current { return current }
-            current = next
+            var out = ""
+            var rest = Substring(current)
+            while let amp = rest.firstIndex(of: "&") {
+                out += rest[rest.startIndex..<amp]
+                let after = rest.index(after: amp)
+                // A well-formed entity is `&…;` with no intervening `&` and a short body.
+                guard let semi = rest[after...].prefix(12).firstIndex(of: ";") else {
+                    out.append("&"); rest = rest[after...]; continue
+                }
+                let body = rest[after..<semi]
+                var replacement: String?
+                if body.hasPrefix("#x") || body.hasPrefix("#X") {
+                    replacement = UInt32(body.dropFirst(2), radix: 16)
+                        .flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                } else if body.hasPrefix("#") {
+                    replacement = UInt32(body.dropFirst())
+                        .flatMap(Unicode.Scalar.init).map { String(Character($0)) }
+                } else {
+                    replacement = named[String(body).lowercased()]
+                }
+                if let replacement, !body.isEmpty, !body.contains("&") {
+                    out += replacement
+                    rest = rest[rest.index(after: semi)...]
+                } else {
+                    out.append("&"); rest = rest[after...]
+                }
+            }
+            out += rest
+            if out == current { return current }
+            current = out
         }
         return current
+    }
+
+    /// Decodes `%XX` escapes **only** where they encode an RFC 3986 *unreserved* character.
+    ///
+    /// RFC 3986 §6.2.2.2 makes this the sanctioned normalisation: percent-encoded unreserved
+    /// octets are equivalent to their decoded form. §2.2 makes decoding *reserved* characters a
+    /// semantic change instead — `%2F` is not `/` — so a blanket `unquote` is wrong, which is
+    /// exactly the disagreement this rule settles.
+    static func decodingUnreservedEscapes(_ s: String) -> String {
+        var out = ""
+        var i = s.startIndex
+        while i < s.endIndex {
+            guard s[i] == "%", let a = s.index(i, offsetBy: 1, limitedBy: s.endIndex),
+                  let b = s.index(i, offsetBy: 2, limitedBy: s.endIndex), b < s.endIndex,
+                  let value = UInt8(s[a...b], radix: 16),
+                  let scalar = Unicode.Scalar(UInt32(value)).map(Character.init),
+                  scalar.isLetter && scalar.isASCII || scalar.isNumber && scalar.isASCII
+                    || "-._~".contains(scalar)
+            else {
+                out.append(s[i]); i = s.index(after: i); continue
+            }
+            out.append(scalar)
+            i = s.index(i, offsetBy: 3)
+        }
+        return out
     }
 }
