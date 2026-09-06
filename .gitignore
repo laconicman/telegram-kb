@@ -17,3 +17,6 @@ reports/repro/*/Package.resolved
 # The TOP-LEVEL Package.resolved is deliberately NOT ignored: this package ships
 # executables (tgkb, tgkb-mcp), so it is an application, not a library whose consumers
 # re-resolve. Committing the pins is what makes a build reproducible.
+
+# S3.5 resolution output — a large derived backfill, regenerable via Scripts/resolve_urls.py.
+research/url-resolution.jsonl
