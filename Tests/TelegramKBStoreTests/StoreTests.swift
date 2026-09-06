@@ -164,3 +164,29 @@ struct StoreTests {
         #expect(throws: Store.StoreError.self) { _ = try Store.openForReading(at: path) }
     }
 }
+
+extension StoreTests {
+    @Test("resolver JSONL imports, and a failed resolution stays joinable to itself")
+    func importResolutions() throws {
+        let (store, _) = try Self.seeded()
+        let jsonl = """
+        {"url_canonical":"https://habr.com/company/avito/blog/358892","final_url":"https://habr.com/ru/companies/avito/articles/358892","http_status":200,"hops":3,"resolved_at":"2026-09-06T01:00:00.000000+00:00"}
+        {"url_canonical":"https://bit.ly/3ARSuTJ","final_url":"https://bit.ly/3ARSuTJ","http_status":404,"hops":0,"resolved_at":"2026-09-06T01:00:00.000000+00:00"}
+        {"url_canonical":"https://medium.com/x","final_url":"https://medium.com/x","http_status":"URLError","hops":0,"resolved_at":"2026-09-06T01:00:00.000000+00:00"}
+        """
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("res-\(UUID().uuidString).jsonl").path
+        try jsonl.write(toFile: path, atomically: true, encoding: .utf8)
+        #expect(try store.importResolutions(fromJSONLAt: path) == 3)
+
+        // Same-host path rewrite: NOT cross-host, and it still changes the key. This is the
+        // case that makes resolution a seam feature rather than a dedupe one.
+        #expect(try store.effectiveURL(forCanonical: "https://habr.com/company/avito/blog/358892")
+                == "https://habr.com/ru/companies/avito/articles/358892")
+
+        // A recorded failure keys on itself — a dead link must not lose its identity.
+        #expect(try store.effectiveURL(forCanonical: "https://bit.ly/3ARSuTJ") == "https://bit.ly/3ARSuTJ")
+        // A transport error is a string, not an HTTP code, and must decode too.
+        #expect(try store.effectiveURL(forCanonical: "https://medium.com/x") == "https://medium.com/x")
+    }
+}

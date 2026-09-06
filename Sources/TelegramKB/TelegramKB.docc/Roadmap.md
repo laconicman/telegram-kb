@@ -69,7 +69,7 @@ opens the file read-only while a writer holds it.
 
 ## Track B — ingestion *(next; blocks C)*
 
-### S3 — `WebPreviewSource` parser
+### S3 — `WebPreviewSource` parser ✅ *(done)*
 SwiftSoup, precise selectors. Must extract: body (`js-message_text`, **not** the reply-quote
 sibling), reactions incl. paid, link previews, hashtags, views, **poll question and options**,
 **forwarded origin channel + post id + author**, reply target, and **album grouping** — one post,
@@ -78,13 +78,16 @@ sibling), reactions incl. paid, link previews, hashtags, views, **poll question 
 **Done:** fixture tests pin **every** field against committed HTML, including one reply, one
 poll, one forwarded post and **one album** (`tgme_widget_message_grouped`). This is `TD-1`'s discharge and the tests are the point of the slice.
 
-### S3.5 — URL resolution *(can start immediately; needs neither S1 nor S2)*
+### S3.5 — URL resolution ✅ *(done)*
 Populate `url_resolution` for every canonical URL. Input is
 `Spec/url-canonical/corpus-canonical.tsv`, which already exists, so this is unblocked **now**.
 One request in flight per host, up to ~8 hosts concurrently: ~33 min for 9,770 URLs.
 
-**Done:** every canonical URL has a `url_resolution` row — including non-redirects, where
-`resolved_canonical` equals the input. NULLs carry an `http_status` explaining why (`TD-17`).
+**Delivered.** All **9,770** resolved via `Scripts/resolve_urls.py`, imported by
+`Store.importResolutions(fromJSONLAt:)`. 49% redirect, 23% cross-host, 19% fail (`TD-17`
+predicted ~18%). **1,630 keys (17%) change** — each a row that would otherwise silently fail to
+join with `artanl` — while only 158 identities merge internally, so this is a **seam feature
+rather than a dedupe one** (<doc:Design>).
 
 ### S4 — crawler
 Page by returned ids, never a stride. Polite by default. Per-channel watermarks so a re-run is

@@ -459,6 +459,31 @@ crawl the long tail pointlessly slowly.
 `Spec/url-canonical/corpus-canonical.tsv`. So it can run before or alongside `S1`/`S2` rather
 than waiting for them.
 
+### Completed — and it is a seam feature, not a dedupe feature
+
+All 9,770 resolved. The measured outcome corrects how I had been framing the value:
+
+| | |
+|---|---|
+| Redirected at all | **4,785 (49%)** |
+| Cross-host | **2,267 (23%)** — vs 313 shorteners, so **7× what shorteners-only would have caught** |
+| Not 2xx/3xx | 1,840 (19%) — `TD-17` predicted ~18% |
+| **Keys changed by resolution** | **1,630 (17%)** |
+| **Identities merged inside our corpus** | **158** |
+
+**Resolution merges almost nothing, and that is not the point.** Only 158 duplicate identities
+collapse, because most redirects are 1:1 — an old URL moves to a new one nobody else linked.
+
+The number that matters is **1,630**: rows whose join key changes. Each is a row that would
+otherwise **fail to join with `artanl`**, because `artanl` fetches the URL, lands on the
+destination, and canonicalises *that*. Without our resolution our key stays the old form and the
+two sides never meet — silently.
+
+The clearest case is Habr's URL migration: `habr.com/company/avito/blog/358892` redirects in three
+hops to `habr.com/ru/companies/avito/articles/358892`. **Same host**, so it is not in the 23%
+cross-host figure at all — and it still changes the key. That is why 49% redirect while only 23%
+are cross-host: the other 26% move within a host, and they matter just as much for the seam.
+
 **Store the result for every URL, including non-redirects.** "We checked and it did not redirect"
 is different information from "we never checked", exactly as `formatSource` distinguishes absent
 from negative. `resolved_canonical` equal to the input is a fact; a missing row is not.

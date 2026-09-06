@@ -189,3 +189,51 @@ public struct Store: Sendable {
         }
     }
 }
+
+// MARK: - S3.5 import
+
+extension Store {
+    /// Imports the standalone resolver's JSONL output (`Scripts/resolve_urls.py`).
+    ///
+    /// The resolver records the *final* URL; canonicalising it here keeps exactly one
+    /// canonicaliser in the system, which is the same reason the script pipes through the Swift
+    /// binary rather than reimplementing the spec in Python.
+    @discardableResult
+    public func importResolutions(fromJSONLAt path: String) throws -> Int {
+        struct Row: Decodable {
+            let url_canonical: String
+            let final_url: String
+            let http_status: JSONValue?
+            let hops: Int
+            let resolved_at: String
+        }
+        enum JSONValue: Decodable {
+            case int(Int), string(String)
+            init(from d: Decoder) throws {
+                let c = try d.singleValueContainer()
+                if let i = try? c.decode(Int.self) { self = .int(i) }
+                else { self = .string((try? c.decode(String.self)) ?? "") }
+            }
+            var text: String { switch self { case .int(let i): "\(i)"; case .string(let s): s } }
+        }
+
+        let text = try String(contentsOfFile: path, encoding: .utf8)
+        let iso = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        var out: [URLResolution] = []
+        for line in text.split(separator: "\n") {
+            guard let row = try? JSONDecoder().decode(Row.self, from: Data(line.utf8)) else { continue }
+            let status = row.http_status?.text
+            // A non-2xx outcome is recorded with resolvedCanonical nil: "we checked and it
+            // failed" is different information from "we never checked", which is an absent row.
+            let succeeded = status?.hasPrefix("2") ?? false
+            out.append(URLResolution(
+                urlCanonical: row.url_canonical,
+                resolvedCanonical: succeeded ? URLCanonicaliser.canonicalise(row.final_url) : nil,
+                httpStatus: status,
+                hops: row.hops,
+                resolvedAt: (try? iso.parse(row.resolved_at)) ?? Date()))
+        }
+        try upsert(resolutions: out)
+        return out.count
+    }
+}
