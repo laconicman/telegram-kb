@@ -9,7 +9,9 @@ Researched 2026-09-06, seeded from the upstreams this repo's owner already vendo
 
 ## Verdict
 
-**Install nothing for scraping. The domain is well covered and almost none of it fits.**
+**Install nothing, in either pass.** The scraping domain is well covered and almost none of it
+fits; the second pass over FTS5, MCP, extraction and archives found one candidate worth
+revisiting later (`wayback-archives`) and nothing worth adopting now.
 
 Two things *are* worth taking: one skill already installed and overlooked, and two operational
 practices from a skill not worth installing.
@@ -58,6 +60,39 @@ concurrency. That was the load-bearing design decision here, derived from the co
 1,654-host distribution with heavy head concentration.
 
 ---
+
+## Second pass — registry search across the other domains (2026-09-06)
+
+`npx skills find` over FTS5, HTML extraction, MCP servers and web archives. Assessed on content,
+not install count — several of these are niche topics where a low count is expected rather than
+damning.
+
+| Candidate | Installs | Verdict |
+|---|---:|---|
+| `github/awesome-copilot@*-mcp-server-generator` | 8–12K | **Reject — no Swift variant** (TS, Python, Rust, Go, PHP). Reputable source, but `mcp-builder` from `anthropics/skills` is already installed, language-agnostic, and inside the trusted set. |
+| `rodydavis/skills@how-to-do-full-text-search-with-sqlite` | 72 | **Reject — below our current state.** Introductory: virtual tables and `MATCH`. No demonstrated coverage of tokenizers, `bm25`, external-content tables or non-English text, and Node-oriented. We already have dual `unicode61`+`trigram`, `bm25`, ё-folding and `NLTagger` lemmas, all measured. |
+| `google-labs-code/stitch-skills@extract-static-html` | 7.3K | **Reject — wrong problem.** Extracting HTML from Stitch designs, not readability/boilerplate removal. |
+| `existential-birds/beagle@sqlite-vec` | 174 | **Defer to Phase 3.** `sqlite-vec` is the chosen vector route; revisit if semantic search is actually built. |
+| **`useosint/skills@wayback-archives`** | 599 | **The one live candidate — surface, do not install yet.** |
+
+### `wayback-archives` — assessed, not adopted
+
+It became relevant only because the bot-walled policy changed from "index the preview and move
+on" to "try a mirror, mark its provenance". It catalogues **free** archive sources — Wayback,
+`archive.today`, Google/Bing caches, country-specific archives — which is exactly the source list
+that policy needs and which I would otherwise assemble by hand.
+
+**Not installing it now**, for three reasons worth stating rather than hand-waving:
+
+1. Its page does not confirm the part that matters — CDX API usage, rate limits, retrieval
+   mechanics. The value claimed is a source *list*, and a list is cheap to verify directly.
+2. 599 installs, unknown author, and an OSINT framing whose ethics posture differs from this
+   project's. We attempt public mirrors and refuse evasion; OSINT tooling does not always draw
+   that line in the same place, and an instruction set executes inside the agent's context.
+3. The owner's practice is manual review before install. This has not had it.
+
+**Revisit when the mirror path is actually built**, and audit the content then rather than
+adopting on topical match.
 
 ## Unverified
 
