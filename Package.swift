@@ -79,6 +79,12 @@ let package = Package(
             resources: [.copy("Fixtures/url-canonical-fixtures.json")]
         ),
         .testTarget(name: "TelegramKBStoreTests", dependencies: ["TelegramKBStore"]),
-        .testTarget(name: "TelegramKBIngestTests", dependencies: ["TelegramKBIngest"]),
+        // Fixture-driven parser tests. TD-1's discharge: the committed HTML IS the contract,
+        // because the failure mode is silent recall loss rather than a crash.
+        .testTarget(
+            name: "TelegramKBIngestTests",
+            dependencies: ["TelegramKBIngest"],
+            resources: [.copy("Fixtures")]
+        ),
     ]
 )

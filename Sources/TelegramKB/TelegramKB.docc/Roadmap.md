@@ -43,7 +43,7 @@ list that missed `utm_refcode`, and a spec claim that no IDN host existed when t
 
 ## Track A — the store *(blocks everything else here)*
 
-### S1 — `TelegramKBModel`
+### S1 — `TelegramKBModel` ✅ *(done)*
 `Channel`, `Post`, `Author`, `Reaction`, `LinkRef`, `Poll`, `Forward`. No I/O. Includes the S0
 canonicaliser and the **`kind` + modifiers** model from <doc:Design> — `kind` (text, photo,
 album, video, audio, voice, document, poll, …), `mediaCount`, `isForwarded` with origin,
@@ -53,7 +53,7 @@ say".
 **Done:** round-trip `Codable` tests; canonicaliser passes the S0 fixtures; an album fixture
 round-trips as **one** post with `mediaCount > 1`.
 
-### S2 — `TelegramKBStore`
+### S2 — `TelegramKBStore` ✅ *(done)*
 GRDB schema and migrations, **including the six commitments made to `artanl`** (see
 <doc:Design>): the `url_resolution` relation, `spec_version` as a column, an album `group_id`,
 poll text as indexable, preview metadata with `observed_at`, and `formatSource`. Dual FTS5 — `unicode61` for ranked word search, `trigram` for
@@ -67,7 +67,7 @@ opens the file read-only while a writer holds it.
 
 ---
 
-## Track B — ingestion *(parallel with C after S2)*
+## Track B — ingestion *(next; blocks C)*
 
 ### S3 — `WebPreviewSource` parser
 SwiftSoup, precise selectors. Must extract: body (`js-message_text`, **not** the reply-quote
@@ -95,7 +95,7 @@ only new posts.
 
 ---
 
-## Track C — retrieval *(parallel with B after S2)*
+## Track C — retrieval *(after B, not alongside it)*
 
 ### S5 — `tgkb query`
 CLI search over the store. Exists before the MCP server because it is how the evals run without
@@ -156,7 +156,12 @@ TDLib lives once MCP needs it — the four options are in <doc:Design>, unanswer
 | B | `TelegramKBIngest`, `research/fixtures/` | `TelegramKBMCP`, `Sources/tgkb-mcp` |
 | C | `TelegramKBMCP`, `Sources/tgkb`, `Sources/tgkb-mcp`, `evals/` | `TelegramKBIngest` |
 
-**A blocks B and C. B and C do not block each other.** The direction docs are shared: edit them
+Track R (resolution) remains genuinely parallel — it needs neither the store nor the parser.
+
+**A blocks B, and B now blocks C.** An earlier draft ran B and C in parallel. That was wrong:
+building the parser and crawler surfaces markup and data cases that should *shape* the query and
+MCP surface, and designing those first would mean designing them against assumptions rather than
+findings. The dependency runs one way — implementation informs interface, not the reverse. The direction docs are shared: edit them
 in small, anchored changes, never by line-index surgery — that has already destroyed content
 here once.
 
