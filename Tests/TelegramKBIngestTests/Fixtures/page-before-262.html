@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Alexander Kraev – Telegram</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta http-equiv="X-UA-Compatible"
+     content="IE=edge" />
+    <meta name="MobileOptimized" content="176" />
+    <meta name="HandheldFriendly" content="True" />
+    
+<meta property="og:title" content="Alexander Kraev">
+<meta property="og:image" content="https://cdn4.telesco.pe/file/iydjPKTVe5N3kgVsK9AA9NZ6HCxrq4aIAXZRy258q9K7vXgaMZ4o5w0avanfjh4FhtHy_UebuS-T5UqH8exO85melM9x9F5ULL2Cbl6ugWDuTmYLk9odzvsI8tKZ-r1wQj037AQ2cYLAucJnT4yp2qVT_SyBheRM9KlFlxlQmibOcsb6w5qiebffsdkKqhUYmeKySzUSl5Y89RpJdl_9Shy6Bp1JW20wmQXpn70ybOtU6oQMzhsaqto_dWAuqGj15e6QYT_5wSG04kHHN_dChf6DpC1iKP9AfcPBK-Rot_tnJ3OzR1wTqqT1rlonHZaZcXgP3liHus0itKYpr8Vj0w.jpg">
+<meta property="og:site_name" content="Telegram">
+<meta property="og:description" content="Tech, Mobile (like SwiftUI, Compose), Code, Thoughts, feel free to reach me: @lexkraev">
+
+<meta property="twitter:title" content="Alexander Kraev">
+<meta property="twitter:image" content="https://cdn4.telesco.pe/file/iydjPKTVe5N3kgVsK9AA9NZ6HCxrq4aIAXZRy258q9K7vXgaMZ4o5w0avanfjh4FhtHy_UebuS-T5UqH8exO85melM9x9F5ULL2Cbl6ugWDuTmYLk9odzvsI8tKZ-r1wQj037AQ2cYLAucJnT4yp2qVT_SyBheRM9KlFlxlQmibOcsb6w5qiebffsdkKqhUYmeKySzUSl5Y89RpJdl_9Shy6Bp1JW20wmQXpn70ybOtU6oQMzhsaqto_dWAuqGj15e6QYT_5wSG04kHHN_dChf6DpC1iKP9AfcPBK-Rot_tnJ3OzR1wTqqT1rlonHZaZcXgP3liHus0itKYpr8Vj0w.jpg">
+<meta property="twitter:site" content="@Telegram">
+
+<meta property="al:ios:app_store_id" content="686449807">
+<meta property="al:ios:app_name" content="Telegram Messenger">
+<meta property="al:ios:url" content="tg://resolve?domain=swiftui_dev">
+
+<meta property="al:android:url" content="tg://resolve?domain=swiftui_dev">
+<meta property="al:android:app_name" content="Telegram">
+<meta property="al:android:package" content="org.telegram.messenger">
+
+<meta name="twitter:card" content="summary">
+<meta name="twitter:site" content="@Telegram">
+<meta name="twitter:description" content="Tech, Mobile (like SwiftUI, Compose), Code, Thoughts, feel free to reach me: @lexkraev
+">
+
+    <link rel="prev" href="/s/swiftui_dev?before=237">
+<link rel="next" href="/s/swiftui_dev?after=260">
+<link rel="canonical" href="/s/swiftui_dev?before=261">
+
+    <script>window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches&&document.documentElement&&document.documentElement.classList&&document.documentElement.classList.add('theme_dark');</script>
+    <link rel="icon" type="image/svg+xml" href="//telegram.org/img/website_icon.svg?4">
+<link rel="apple-touch-icon" sizes="180x180" href="//telegram.org/img/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="//telegram.org/img/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="//telegram.org/img/favicon-16x16.png">
+<link rel="alternate icon" href="//telegram.org/img/favicon.ico" type="image/x-icon" />
+    <link href="//telegram.org/css/font-roboto.css?1" rel="stylesheet" type="text/css">
+    <link href="//telegram.org/css/widget-frame.css?75" rel="stylesheet" media="screen">
+    <link href="//telegram.org/css/telegram-web.css?39" rel="stylesheet" media="screen">
+    <script>TBaseUrl='/';</script>
+    <style>        .user-color-12 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #3391d4 0px, #3391d4 5px, #7dd3f0 5px, #7dd3f0 10px);
+          --user-accent-color: #3391d4;
+          --user-background: #3391d41f;
+        }        .user-color-10 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #27a910 0px, #27a910 5px, #a7dc57 5px, #a7dc57 10px);
+          --user-accent-color: #27a910;
+          --user-background: #27a9101f;
+        }        .user-color-8 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #e0802b 0px, #e0802b 5px, #fac534 5px, #fac534 10px);
+          --user-accent-color: #e0802b;
+          --user-background: #e0802b1f;
+        }        .user-color-7 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #e15052 0px, #e15052 5px, #f9ae63 5px, #f9ae63 10px);
+          --user-accent-color: #e15052;
+          --user-background: #e150521f;
+        }        .user-color-9 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #a05ff3 0px, #a05ff3 5px, #f48fff 5px, #f48fff 10px);
+          --user-accent-color: #a05ff3;
+          --user-background: #a05ff31f;
+        }        .user-color-11 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #27acce 0px, #27acce 5px, #82e8d6 5px, #82e8d6 10px);
+          --user-accent-color: #27acce;
+          --user-background: #27acce1f;
+        }        .user-color-13 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #dd4371 0px, #dd4371 5px, #ffbe9f 5px, #ffbe9f 10px);
+          --user-accent-color: #dd4371;
+          --user-background: #dd43711f;
+        }        .user-color-14 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #247bed 0px, #247bed 5px, #f04856 5px, #f04856 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #247bed;
+          --user-background: #247bed1f;
+        }        .user-color-15 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #d67722 0px, #d67722 5px, #1ea011 5px, #1ea011 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #d67722;
+          --user-background: #d677221f;
+        }        .user-color-16 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #179e42 0px, #179e42 5px, #e84a3f 5px, #e84a3f 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #179e42;
+          --user-background: #179e421f;
+        }        .user-color-17 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #2894af 0px, #2894af 5px, #6fc456 5px, #6fc456 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #2894af;
+          --user-background: #2894af1f;
+        }        .user-color-18 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #0c9ab3 0px, #0c9ab3 5px, #ffad95 5px, #ffad95 10px, #ffe6b5 10px, #ffe6b5 15px);
+          --user-accent-color: #0c9ab3;
+          --user-background: #0c9ab31f;
+        }        .user-color-19 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #7757d6 0px, #7757d6 5px, #f79610 5px, #f79610 10px, #ffde8e 10px, #ffde8e 15px);
+          --user-accent-color: #7757d6;
+          --user-background: #7757d61f;
+        }        .user-color-20 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #1585cf 0px, #1585cf 5px, #f2ab1d 5px, #f2ab1d 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #1585cf;
+          --user-background: #1585cf1f;
+        }        body.dark .user-color-12, html.theme_dark .user-color-12 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #52bfff 0px, #52bfff 5px, #0b5494 5px, #0b5494 10px);
+          --user-accent-color: #52bfff;
+          --user-background: #52bfff1f;
+        }        body.dark .user-color-10, html.theme_dark .user-color-10 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #a7eb6e 0px, #a7eb6e 5px, #167e2d 5px, #167e2d 10px);
+          --user-accent-color: #a7eb6e;
+          --user-background: #a7eb6e1f;
+        }        body.dark .user-color-8, html.theme_dark .user-color-8 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ecb04e 0px, #ecb04e 5px, #c35714 5px, #c35714 10px);
+          --user-accent-color: #ecb04e;
+          --user-background: #ecb04e1f;
+        }        body.dark .user-color-7, html.theme_dark .user-color-7 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ff9380 0px, #ff9380 5px, #992f37 5px, #992f37 10px);
+          --user-accent-color: #ff9380;
+          --user-background: #ff93801f;
+        }        body.dark .user-color-9, html.theme_dark .user-color-9 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #c697ff 0px, #c697ff 5px, #5e31c8 5px, #5e31c8 10px);
+          --user-accent-color: #c697ff;
+          --user-background: #c697ff1f;
+        }        body.dark .user-color-11, html.theme_dark .user-color-11 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #40d8d0 0px, #40d8d0 5px, #045c7f 5px, #045c7f 10px);
+          --user-accent-color: #40d8d0;
+          --user-background: #40d8d01f;
+        }        body.dark .user-color-13, html.theme_dark .user-color-13 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ff86a6 0px, #ff86a6 5px, #8e366e 5px, #8e366e 10px);
+          --user-accent-color: #ff86a6;
+          --user-background: #ff86a61f;
+        }        body.dark .user-color-14, html.theme_dark .user-color-14 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #3fa2fe 0px, #3fa2fe 5px, #e5424f 5px, #e5424f 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #3fa2fe;
+          --user-background: #3fa2fe1f;
+        }        body.dark .user-color-15, html.theme_dark .user-color-15 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #ff905e 0px, #ff905e 5px, #32a527 5px, #32a527 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #ff905e;
+          --user-background: #ff905e1f;
+        }        body.dark .user-color-16, html.theme_dark .user-color-16 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #66d364 0px, #66d364 5px, #d5444f 5px, #d5444f 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #66d364;
+          --user-background: #66d3641f;
+        }        body.dark .user-color-17, html.theme_dark .user-color-17 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #22bce2 0px, #22bce2 5px, #3da240 5px, #3da240 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #22bce2;
+          --user-background: #22bce21f;
+        }        body.dark .user-color-18, html.theme_dark .user-color-18 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #22bce2 0px, #22bce2 5px, #ff9778 5px, #ff9778 10px, #ffda6b 10px, #ffda6b 15px);
+          --user-accent-color: #22bce2;
+          --user-background: #22bce21f;
+        }        body.dark .user-color-19, html.theme_dark .user-color-19 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #9791ff 0px, #9791ff 5px, #f2731d 5px, #f2731d 10px, #ffdb59 10px, #ffdb59 15px);
+          --user-accent-color: #9791ff;
+          --user-background: #9791ff1f;
+        }        body.dark .user-color-20, html.theme_dark .user-color-20 {
+          --user-line-gradient: repeating-linear-gradient(-45deg, #3da6eb 0px, #3da6eb 5px, #eea51d 5px, #eea51d 10px, #ffffff 10px, #ffffff 15px);
+          --user-accent-color: #3da6eb;
+          --user-background: #3da6eb1f;
+        }.user-color-6, .user-color-4, .user-color-2, .user-color-0, .user-color-1, .user-color-3, .user-color-5,   .user-color-default {
+    --user-accent-color: var(--accent-color);
+    --user-accent-background: var(--accent-background);
+    --user-line-gradient: linear-gradient(45deg, var(--accent-color), var(--accent-color));
+  }</style>
+  </head>
+  <body class="widget_frame_base tgme_webpreview emoji_image thin_box_shadow tme_mode no_transitions">
+    <div class="tgme_background_wrap">
+      <canvas id="tgme_background" class="tgme_background" width="50" height="50" data-colors="dbddbb,6ba587,d5d88d,88b884"></canvas>
+      <div class="tgme_background_pattern"></div>
+    </div>
+    <header class="tgme_header search_collapsed">
+  <div class="tgme_container">
+    <div class="tgme_header_search">
+      <form class="tgme_header_search_form" action="/s/swiftui_dev">
+        <svg class="tgme_header_search_form_icon" width="20" height="20" viewBox="0 0 20 20"><g fill="none" stroke="#7D7F81" stroke-width="1.4"><circle cx="9" cy="9" r="6"></circle><path d="M13.5,13.5 L17,17" stroke-linecap="round"></path></g></svg>
+        <input class="tgme_header_search_form_input js-header_search" placeholder="Search" name="q" autocomplete="off" value="" />
+        <a href="/s/swiftui_dev" class="tgme_header_search_form_clear"><svg class="tgme_action_button_icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20"><g class="icon_body" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke="#000000" stroke-width="1.5"><path d="M6 14l8-8m0 8L6 6" stroke-dasharray="0,11.314" stroke-dashoffset="5.657"/><path d="M26 14l8-8m0 8l-8-8" stroke-dasharray="0.371,10.943" stroke-dashoffset="5.842"/><path d="M46 14l8-8m0 8l-8-8" stroke-dasharray="1.982,9.332" stroke-dashoffset="6.647756"/><path d="M66 14l8-8m0 8l-8-8" stroke-dasharray="5.173,6.14" stroke-dashoffset="8.243"/><path d="M86 14l8-8m0 8l-8-8" stroke-dasharray="7.866,3.448" stroke-dashoffset="9.59"/><path d="M106 14l8-8m0 8l-8-8" stroke-dasharray="9.471,1.843" stroke-dashoffset="10.392"/><path d="M126 14l8-8m0 8l-8-8" stroke-dasharray="10.417,0.896" stroke-dashoffset="10.866"/><path d="M146 14l8-8m0 8l-8-8" stroke-dasharray="10.961,0.353" stroke-dashoffset="11.137"/><path d="M166 14l8-8m0 8l-8-8" stroke-dasharray="11.234,0.08" stroke-dashoffset="11.274"/><path d="M186 14l8-8m0 8l-8-8"/></g></svg></a>
+      </form>
+    </div>
+    <div class="tgme_header_right_column">
+      <section class="tgme_right_column">
+        <div class="tgme_channel_info">
+          <div class="tgme_channel_info_header">
+            <i class="tgme_page_photo_image bgcolor4" data-content="AK"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i>
+            <div class="tgme_channel_info_header_title_wrap">
+              <div class="tgme_channel_info_header_title"><span dir="auto">Alexander Kraev</span></div>
+              <div class="tgme_channel_info_header_labels"></div>
+            </div>
+            <div class="tgme_channel_info_header_username"><a href="https://t.me/swiftui_dev">@swiftui_dev</a></div>
+          </div>
+          <div class="tgme_channel_info_counters"><div class="tgme_channel_info_counter"><span class="counter_value">991</span> <span class="counter_type">subscribers</span></div><div class="tgme_channel_info_counter"><span class="counter_value">87</span> <span class="counter_type">photos</span></div><div class="tgme_channel_info_counter"><span class="counter_value">41</span> <span class="counter_type">videos</span></div><div class="tgme_channel_info_counter"><span class="counter_value">1</span> <span class="counter_type">file</span></div><div class="tgme_channel_info_counter"><span class="counter_value">79</span> <span class="counter_type">links</span></div></div>
+          <div class="tgme_channel_info_description">Tech, Mobile (like SwiftUI, Compose), Code, Thoughts, feel free to reach me: <a href="https://t.me/lexkraev" target="_blank">@lexkraev</a></div>
+          <a class="tgme_channel_download_telegram" href="//telegram.org/dl?tme=4b9964de67e39a5bbc_7375030010841534624">
+            <svg class="tgme_channel_download_telegram_icon" width="21px" height="18px" viewBox="0 0 21 18"><g fill="none"><path fill="#ffffff" d="M0.554,7.092 L19.117,0.078 C19.737,-0.156 20.429,0.156 20.663,0.776 C20.745,0.994 20.763,1.23 20.713,1.457 L17.513,16.059 C17.351,16.799 16.62,17.268 15.88,17.105 C15.696,17.065 15.523,16.987 15.37,16.877 L8.997,12.271 C8.614,11.994 8.527,11.458 8.805,11.074 C8.835,11.033 8.869,10.994 8.905,10.958 L15.458,4.661 C15.594,4.53 15.598,4.313 15.467,4.176 C15.354,4.059 15.174,4.037 15.036,4.125 L6.104,9.795 C5.575,10.131 4.922,10.207 4.329,10.002 L0.577,8.704 C0.13,8.55 -0.107,8.061 0.047,7.614 C0.131,7.374 0.316,7.182 0.554,7.092 Z"></path></g></svg>Download Telegram
+          </a>
+          <div class="tgme_footer">
+            <div class="tgme_footer_column">
+              <h5><a href="//telegram.org/faq">About</a></h5>
+            </div>
+            <div class="tgme_footer_column">
+              <h5><a href="//telegram.org/blog">Blog</a></h5>
+            </div>
+            <div class="tgme_footer_column">
+              <h5><a href="//telegram.org/apps">Apps</a></h5>
+            </div>
+            <div class="tgme_footer_column">
+              <h5><a href="//core.telegram.org/">Platform</a></h5>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="tgme_header_info">
+      <a class="tgme_channel_join_telegram" href="//telegram.org/dl?tme=4b9964de67e39a5bbc_7375030010841534624">
+        <svg class="tgme_channel_join_telegram_icon" width="19px" height="16px" viewBox="0 0 19 16"><g fill="none"><path fill="#ffffff" d="M0.465,6.638 L17.511,0.073 C18.078,-0.145 18.714,0.137 18.932,0.704 C19.009,0.903 19.026,1.121 18.981,1.33 L16.042,15.001 C15.896,15.679 15.228,16.111 14.549,15.965 C14.375,15.928 14.211,15.854 14.068,15.748 L8.223,11.443 C7.874,11.185 7.799,10.694 8.057,10.345 C8.082,10.311 8.109,10.279 8.139,10.249 L14.191,4.322 C14.315,4.201 14.317,4.002 14.195,3.878 C14.091,3.771 13.926,3.753 13.8,3.834 L5.602,9.138 C5.112,9.456 4.502,9.528 3.952,9.333 L0.486,8.112 C0.077,7.967 -0.138,7.519 0.007,7.11 C0.083,6.893 0.25,6.721 0.465,6.638 Z"></path></g></svg>Join
+      </a>
+      <a class="tgme_header_link" href="https://t.me/swiftui_dev">
+        <i class="tgme_page_photo_image bgcolor4" data-content="AK"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i>
+        <div class="tgme_header_title_wrap">
+          <div class="tgme_header_title"><span dir="auto">Alexander Kraev</span></div>
+          <div class="tgme_header_labels"></div>
+        </div>
+        <div class="tgme_header_counter">991 subscribers</div>
+      </a>
+    </div>
+  </div>
+</header>
+<main class="tgme_main" data-url="/swiftui_dev">
+  <div class="tgme_container">
+    <section class="tgme_channel_history js-message_history">
+      <div class="tgme_widget_message_centered js-messages_more_wrap"><a href="/s/swiftui_dev?before=237" class="tme_messages_more js-messages_more" data-before="237"></a></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/237" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6IjIzN2ciLCJ0IjoxNzg4Njg2NDE2LCJoIjoiYzQ4MDc4MTcxZWVjNDk1NTkxIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_grouped_wrap js-message_grouped_wrap" data-margin-w="2" data-margin-h="2" style="width:453px;">
+  <div class="tgme_widget_message_grouped js-message_grouped" style="padding-top:135.32%">
+    <div class="tgme_widget_message_grouped_layer js-message_grouped_layer" style="width:453px;height:613px">
+      <a class="tgme_widget_message_photo_wrap grouped_media_wrap blured js-message_photo" style="left:0px;top:0px;width:453px;height:366px;margin-right:0px;margin-bottom:2px;background-image:url('https://cdn4.telesco.pe/file/v6AfTK_G9i-CoAJvzP3Pv-LMVk_5ixsraQWOYgzQYLVxj3IwZB1vmZSm1oG_wWuj0p-pikDw5P5fmL3VTGhmx8JUbGxD3awBF44PXDdJHvG2khp87diPzAgC1PxvEWqcsR8RwzckRh4ryd-gsz7IgXoNHtVjMHEEFTSvyoKt1l3DP3MYTueK72RtkeYvj7AuDZYjIsvE6NTy0HC573yNFXPecl4vwgy7bSYzM8_yYP1yXzC-Gqi8dfImYWFq_O3DmKqJn2I5KiLS4aVwgjVv9PE8QMTgRCXd22RuhBY8arPTOTmf_vmyIRsA-HDGtowbWlynM6dWsFomP_JbXjIehA.jpg')" data-ratio="1.2345679012346" href="https://t.me/swiftui_dev/237?single">
+  <div class="grouped_media_helper" style="left:0;right:0;top:123px;bottom:124px;">
+    <div class="tgme_widget_message_photo grouped_media" style="left:0;right:0;top:-1px;bottom:0px;"></div>
+  </div>
+</a><a class="tgme_widget_message_photo_wrap grouped_media_wrap blured js-message_photo" style="left:0px;top:368px;width:149px;height:121px;margin-right:2px;margin-bottom:2px;background-image:url('https://cdn4.telesco.pe/file/d7-r-4NGzxH4Cd_LSi_ncPfB6Rr2L0hOsynQMVuQvsjd01dZnROzD-_tscQ1BgEIirrr_UQdrrStHgluY5t4WmGjoXSTByjBIRisSE2BggaiGBMFaH2knarDu5KAitoftRZqgTCKajtSDhfgB872do7GYs8NHtSIf-o7lo5h9SDqESg-F7dmmZUMMDNdsOmycxKOy2ufUeTYjniRLmoE79JmcjSyh--Ln8PRJ7vdlnr5TRX3UXlpk9iVp5XFmQTWLFVXtg_tTKf75VSCOfRIsB0jByKt2kjw2y4TGQoTyW4TGKBRp879wmzDjxA7DgNcJudgElSGxcMo8RgaA35bRw.jpg')" data-ratio="1.2345679012346" href="https://t.me/swiftui_dev/238?single">
+  <div class="grouped_media_helper" style="left:0;right:0;top:123px;bottom:124px;">
+    <div class="tgme_widget_message_photo grouped_media" style="top:0;bottom:0;left:-1px;right:0px;"></div>
+  </div>
+</a><a class="tgme_widget_message_photo_wrap grouped_media_wrap blured js-message_photo" style="left:151px;top:368px;width:149px;height:121px;margin-right:2px;margin-bottom:2px;background-image:url('https://cdn4.telesco.pe/file/QmRPGNaxiPVLZlEAlbR7vZlMQbHZjDM1qv1Xu97gwyfeqhAIKeRGhAW8ARziHyAX7ElmDbXCTK5_XHP1bThXBxy_h_-2Zg7iWcjuGxavb-n8pKDpLKKGPe8_zCkK1vQnyA44IEqVQnCtNeGdH_pGDBNIT6eLWNRAY6de3tkILAZ8gBCZ9Ef9qYc3KAE3kuZ7wRsZTzZvFS2JmaKc9q8R-nGP6jyMwuBg0CN6ypaZWyJlSoRZY7c8jv5bT9VuvBkvIxFru2F3ddQu6gO9XrxSeZIM3dZ5tRxHMa--SAyBkkzuMGlU1Xz9OW479lBjJTXWRTIa5CIcvjzBVgKIQ31TZQ.jpg')" data-ratio="1.2345679012346" href="https://t.me/swiftui_dev/239?single">
+  <div class="grouped_media_helper" style="left:0;right:0;top:123px;bottom:124px;">
+    <div class="tgme_widget_message_photo grouped_media" style="top:0;bottom:0;left:-1px;right:0px;"></div>
+  </div>
+</a><a class="tgme_widget_message_photo_wrap grouped_media_wrap blured js-message_photo" style="left:302px;top:368px;width:151px;height:121px;margin-right:0px;margin-bottom:2px;background-image:url('https://cdn4.telesco.pe/file/O2Io-JpOqF_uQznnqQdnY_K3Lv9NYq8kx5yXYQVnxq7r4k0AtwYLLQ9UeDwO2zn7u-4aj2mT7Ydi3TuvHx_lr1tdF8NJ38CZK4PkPQjjoyMe9ty5TbK7fN2nW2u6Nvh3OPiCGNnq0l5qPhET3iiilHaL7Oj2LzyjUPZYoep8W7B-L9dKZ-fNz-5Q2GO4zfH0eDRgxUM5lLQFwvlXw1n2LuQVOmNCrr1b4DWKKbtJU4qH1TyH3PgrD0o1hP5O4QCZHTB0b6ajVbDi4fJs4TCxT3RncNExwnMW-EW76perhmR1VhGV6H6kcLfcCu1tHHmXKkweulApsm58bha5igMqgg.jpg')" data-ratio="1.2345679012346" href="https://t.me/swiftui_dev/240?single">
+  <div class="grouped_media_helper" style="left:0;right:0;top:123px;bottom:124px;">
+    <div class="tgme_widget_message_photo grouped_media" style="left:0;right:0;top:-1px;bottom:-1px;"></div>
+  </div>
+</a><a class="tgme_widget_message_photo_wrap grouped_media_wrap blured js-message_photo" style="left:0px;top:491px;width:150px;height:122px;margin-right:2px;margin-bottom:0px;background-image:url('https://cdn4.telesco.pe/file/l6439MkLYDEZsrsY6TccmTk76DMPWqdv-3YQ6Z-Es0DUw1a8R8aF-maXFgf6rblWi05PjOUc1syl_cc_uf1uBEPB2KsGbCy-gfduxemvampsWd8Iv3AKGk7ZFnBy3ni4Dh6SBR0dqXZ3KPPeIWZGFjIYwnW3Fh3hfHwX7yHblOEcJBo-_wF2MMYHrSWvG2PTzujVtTGHVU9m4Ygx72sTLfb_8gFj_69Vkch4-QDc5unTPBwaBwfw4yfFm6-us41zpp9ICsrVgxm4E9_1dLGoHJPqYRSOObw0YpkYRPhW3O9kBYp7ER83FYFnRJYAznKfRg_h9lNTmApNSyOfAZTpDw.jpg')" data-ratio="1.2345679012346" href="https://t.me/swiftui_dev/241?single">
+  <div class="grouped_media_helper" style="left:0;right:0;top:123px;bottom:124px;">
+    <div class="tgme_widget_message_photo grouped_media" style="top:0;bottom:0;left:-1px;right:0px;"></div>
+  </div>
+</a><a class="tgme_widget_message_photo_wrap grouped_media_wrap blured js-message_photo" style="left:152px;top:491px;width:150px;height:122px;margin-right:2px;margin-bottom:0px;background-image:url('https://cdn4.telesco.pe/file/gH6YoTyBd4rfZJM1xhoLWtvQU2Tp45aJK_41GYhfXkPaWg73zbIg4lZrVPoxKu-GcrIVLxM5B5lqwCExB1Jr3IC9b0KoWR0eYzdP2NHgyezQn1yaavoDGEaEX4_tYGZBbb6KuYuS3AqkP1kSMfCPGgxpra6dNzOK2Ga4ruLu3_jvLK09LLs8WeTqKTo6Tx0-2FS9zUwj0O5qF9dcqGil_H0dHPvSvRy64u_bXp9UxC4IaG170e_hkdOp_KLohf8Ffg74ivY0KetZe1He_Ll2AiZQRmTaFAIBo8Nnwni9T_np-6bmcJgthBkXuiwSGM3_BPhUDIKqLOcRZLD3dSUD0g.jpg')" data-ratio="1.2345679012346" href="https://t.me/swiftui_dev/242?single">
+  <div class="grouped_media_helper" style="left:0;right:0;top:123px;bottom:124px;">
+    <div class="tgme_widget_message_photo grouped_media" style="top:0;bottom:0;left:-1px;right:0px;"></div>
+  </div>
+</a><a class="tgme_widget_message_photo_wrap grouped_media_wrap blured js-message_photo" style="left:304px;top:491px;width:149px;height:122px;margin-right:0px;margin-bottom:0px;background-image:url('https://cdn4.telesco.pe/file/Cj6We3JA9rjf7-8jfvp_zt4IyX75E_v1yDevsxev8-qK12sUe-huf_KhNjs9oPWR6ArlkmXM_SIr3y4dvOuJobVatnZ9Cwl0vZMcFsHZHIU2LnaKBeQGe4UGp2WMMl_bnefks_GW6q9zM2v9gJ7RvEk5z8HnT5x1D29f1OORguUxmRaETJTNQcbOz3tKG6B9n5Ua8JDHI8euaXS1uLe-8q_ifEm8HddOPKQDXv4sr__XK7lfYe1mqsNMTm33kduofDD-kidOeOecMnQ06Sqor3YN2wNifzXaGULxFuAFFPN4M9q4xapVIKuM9oZV51JX3Lc1wtZKyDcchpcpVlgoow.jpg')" data-ratio="1.2345679012346" href="https://t.me/swiftui_dev/243?single">
+  <div class="grouped_media_helper" style="left:0;right:0;top:123px;bottom:124px;">
+    <div class="tgme_widget_message_photo grouped_media" style="top:0;bottom:0;left:-1px;right:-1px;"></div>
+  </div>
+</a>
+    </div>
+  </div>
+</div><div class="tgme_widget_message_text js-message_text" dir="auto"><div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8EB2.png')"><b>🎲</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F97BF.png')"><b>🗿</b></i> SwiftUI Environment values hints<br/><br/><a href="?q=%23groovy">#groovy</a></div></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>35</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.95K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/237"><time datetime="2023-04-01T10:41:15+00:00" class="time">10:41</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/245" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjQ1LCJ0IjoxNzg4Njg2NDE2LCJoIjoiN2FlODRjOWZmZjU3NTFhNWU2In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<a class="tgme_widget_message_video_player js-message_video_player" href="https://t.me/swiftui_dev/245"><i class="tgme_widget_message_video_thumb" style="background-image:url('https://cdn4.telesco.pe/file/LVZg9ObOCK8kGjq9qroxBbn4s5FwBNuHucCwlo92UW_5TdNAAkkB4pGf3L1LqlgwPh3lXLG45GCRxPLfwxhFHeCUKxGWTVdqIIZ0m7wBTI_ZI2HXBm6pnw0vkuV4_Mk-KR01l03ebVM6tmSVOKBpciG5gyX3jGLJUjLNLPZnxQes-aMHWOFQHs6YC32gi0LygvRjyjkAvkZVDrECFa_L4c1oG9wZPa58kZ5e9YBCjTPLo_Xx5lly01v54Jvu_qaL8kTw4wqIonDeeD6q0uq7pXPJj-uGfTMQJJ7LViWEiDQfeY2yh-bwjdyofjzZFCyWftSdt2qBT8sZyDNONEGjEw')"></i>
+
+<div class="tgme_widget_message_video_wrap" style="width:1080px;padding-top:100%">
+  <video src="https://cdn4.telesco.pe/file/bd411ff7fb.mp4?token=AyLyzknlYEIDk-pKzXK52yenvL6XHUSzZ7anxoD6UOi4sTNRUx-KBxYf_Z_kcsUGdg8_VfhXLvlBclrSrgZ_s0lxAeCyBeu5qLQDvyTjc8-zAwVOYdNETBByGHdvrq-i2aKnMFiqfG59t4g0FQBRLSteOonLoNw4BIOvBWK8VG5AEHgoW-Cfz7pJF5X9iJbrx0foh3-GCe51E6-_a8iaCubZqD3hCzhMIJfbsS7YMeCCXTTkFTJJV13L93EFLm2S9VQ7buVgcaeX3_V7nrfTZSJik4EUP65nYryNJMDPdGq9IzP435xpLyDPUSJXMQPw4txkRzcSuQfcMdy2FDmivhrOZpcI2Mivy3lF_znZvZukbXTWEs7L2omfRPt-jGQvIFBlIk6O5qYGY7i9LjnF1jn_4m-qcmM5csQIMqgxsDn6-cXTaQGHUzTWeuI0ObqeSfN0bPKGKE9JJvMj7NymmhulWeuWKwcU_hnq7ZAp9gapoH8ys1_gr5OgkW_WMwSWY6b3am2qP8G2Pllr2XJ7wMQsOUmpIniluK9n289T8BsWEDxwB0oK6DUHRyEd4lZlZk8a8mzKqGt_rxkBqOFWHO8MUTl4MucBiQTzKotd4EMnSHQDLydZG_k7yrE2puISXrKWsffc88IsdvuGs3XuMsj-eFnj0pKq4jIgs9SmWVw" class="tgme_widget_message_video js-message_video" width="100%" height="100%"></video>
+</div>
+<div class="message_video_play js-message_video_play"></div>
+<time class="message_video_duration js-message_video_duration">0:19</time>
+<div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">This media is not supported in your browser</div>
+    <span class="message_media_view_in_telegram">VIEW IN TELEGRAM</span>
+  </div>
+</div></a><div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8EA2.png')"><b>🎢</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F9A81.png')"><b>🚁</b></i> Слайдер изображений с эффектом page view контроллера. <br/><br/>Код <a href="https://boosty.to/lexkraev/posts/4a15893d-7e68-48d6-9a73-e170f3036c22" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">здесь</a>.<br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8C87.png')"><b>🌇</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8EA5.png')"><b>🎥</b></i> Let&#39;s create spectacular image slider with page view controller effect using pure SwiftUI.<br/><br/>Code is <a href="https://boosty.to/lexkraev/posts/4a15893d-7e68-48d6-9a73-e170f3036c22" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">here</a>.<br/><br/><a href="?q=%23tasty">#tasty</a> <a href="?q=%23groovy">#groovy</a><br/><br/><a href="https://t.me/swiftui_dev" target="_blank">@swiftui_dev</a></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>17</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>1</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F92A9.png')"><b>💩</b></i>1</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A1.png')"><b>🤡</b></i>1</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.91K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/245"><time datetime="2023-05-01T11:16:38+00:00" class="time">11:16</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/246" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjQ2LCJ0IjoxNzg4Njg2NDE2LCJoIjoiM2JkOTQwNjNiYzk1ZWI4YTQxIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<a class="tgme_widget_message_photo_wrap 5402086294860973172 1257771229_456246388" href="https://t.me/swiftui_dev/246" style="width:800px;background-image:url('https://cdn4.telesco.pe/file/j7yh3ndPgryDo_gZ4F_Eaapkj4vx7IqvLXIr8_Kp_IeFAA3LIlIBvGRASg1nfDIeifg4mTFBVc5kTzHwvFwHcWXUixSRFXxRYYgEInhtcv9MX3R3bHT3le0eiUkxKDKsxiOGSgafjwchrQ7aTnURRHVnshiTpQFkO1-2bITHQ39pERiqFxMVEQ0XghOL1pJAV_MfxmlR4aK_k4si_-Wk7MvTEnBdIEo1Up1mloSz6JusfNI1OoKtc8znaTMNep9V289MeJVBTNmeh-Yr8y7vHY162f3DY6NkpOUpo9doZB88LTu0nmBRRFHTPM28gnj7mjUW3I4ayYfhcpqrKlnoRQ.jpg')">
+  <div class="tgme_widget_message_photo" style="padding-top:56.25%"></div>
+</a><div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8EAC.png')"><b>🎬</b></i>SwiftUI: List или LazyVStack? Статью можно найти <a href="https://medium.com/@lexkraev/swiftui-list-%D0%B8%D0%BB%D0%B8-lazyvstack-swipeactions-%D0%B4%D0%BB%D1%8F-%D0%BB%D1%8E%D0%B1%D1%8B%D1%85-view-2f04ca68a6d1" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">здесь</a> <br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA581.png')"><b>🥁</b></i>SwiftUI: List or LazyVStack? Find out it <a href="https://medium.com/@lexkraev/swiftui-list-or-lazyvstack-swipeactions-for-any-views-946ac889e159" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">here</a><br/><br/> <a href="?q=%23readthis">#readthis</a></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>9</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>1</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.95K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/246"><time datetime="2023-05-13T11:06:16+00:00" class="time">11:06</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/247" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjQ3LCJ0IjoxNzg4Njg2NDE2LCJoIjoiNDdlZDZiOTgxYmE0MjllMWU4In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto">Nice <a href="https://github.com/AppPear/ChartView" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">swift package</a> with chart views on SUI <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F9388.png')"><b>📈</b></i> <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F938A.png')"><b>📊</b></i><br/><br/><a href="?q=%23swiftpm">#swiftpm</a> <a href="?q=%23getsources">#getsources</a></div><a class="tgme_widget_message_link_preview" href="https://github.com/AppPear/ChartView">
+  
+  <div class="link_preview_site_name accent_color" dir="auto">GitHub</div>
+  
+  <div class="link_preview_title" dir="auto">GitHub - AppPear/ChartView: ChartView made in SwiftUI</div>
+  <div class="link_preview_description" dir="auto">ChartView made in SwiftUI. Contribute to AppPear/ChartView development by creating an account on GitHub.</div>
+</a>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>4</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>1</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.75K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/247"><time datetime="2023-07-17T16:55:41+00:00" class="time">16:55</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/248" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjQ4LCJ0IjoxNzg4Njg2NDE2LCJoIjoiNjk2MjAzMmYzZDkxYjAyNGU0In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+<a class="tgme_widget_message_reply user-color-default" href="https://t.me/swiftui_dev/179" ">
+<div class="tgme_widget_message_author accent_color">
+  <span class="tgme_widget_message_author_name" dir="auto">Alexander Kraev</span>
+</div>
+<div class="tgme_widget_message_text js-message_reply_text" dir="auto">Patched Yandex maps mobile as SwiftPM working on Xcode &gt; 13.3 on M1, however waiting for official release announced last week))  Пропатченная версия Яндекс карт, собранная как SwiftPM, работающая на Xcode старше 13.3 на M1, так или иначе ждём официального…</div>
+</a>
+<div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F97BA.png')"><b>🗺️</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F938D.png')"><b>📍</b></i>Обновил YandexMapsMobile <a href="https://github.com/c-villain/YandexMapsMobile" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">(full</a> и <a href="https://github.com/c-villain/YandexMapsMobileLite" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">lite)</a> с поддержкой SwiftPM до версии 4.3.2<br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F97BA.png')"><b>🗺️</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F938D.png')"><b>📍</b></i>Just updated YandexMapsMobile with SwiftPM to 4.3.2 version <br/><br/><a href="https://github.com/c-villain/YandexMapsMobile" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Full</a> and <a href="https://github.com/c-villain/YandexMapsMobileLite" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">lite</a> versions<br/><br/><a href="?q=%23swiftpm">#swiftpm</a> <a href="?q=%23getsources">#getsources</a></div><a class="tgme_widget_message_link_preview" href="https://github.com/c-villain/YandexMapsMobile">
+  
+  <div class="link_preview_site_name accent_color" dir="auto">GitHub</div>
+  <i class="link_preview_image" style="background-image:url('https://cdn4.telesco.pe/file/VsH19Lb2Q4YeRvDwaP4rWspRBjGrA9qHM18BxClolk2t9NuHaJ80NgjtNWiX3k3Y0B3gmJf8B6lhpExZG8HwtCu18cshGjpO1qIREE5ZEZVUPg6auyY0w3j6ZOdtcU9MEips_y1ngNEhLUCOVSDqGv0B6TH0TmjNxs-aoPYX4PI_1cjDkR9v4RdPZJvyBuum1byfn48ipQBX_dFTtMTeNHnjv55hvu41h7qS2jyqCHMFeaZeocegZRTptQDghpA6yCFKY32ZojAwxZsJrzSjpKCRNGjVp02caSM6gLubR7bQhXllNfMIkOTG6wszRHYsZz6aVbUApvptXCXRjE8GUA.jpg');padding-top:50%"></i>
+  <div class="link_preview_title" dir="auto">GitHub - c-villain/YandexMapsMobile: Yandex Maps Mobile full Swift package</div>
+  <div class="link_preview_description" dir="auto">Yandex Maps Mobile full Swift package. Contribute to c-villain/YandexMapsMobile development by creating an account on GitHub.</div>
+</a>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>3</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4.png')"><b>❤</b></i>1</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.56K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/248"><time datetime="2023-08-14T22:35:55+00:00" class="time">22:35</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/249" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjQ5LCJ0IjoxNzg4Njg2NDE2LCJoIjoiODVkODE3ZTRiODMyMGMzMDJlIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<a class="tgme_widget_message_video_player not_supported js-message_video_player" href="https://t.me/swiftui_dev/249"><i class="tgme_widget_message_video_thumb" style="background-image:url('https://cdn4.telesco.pe/file/k5GpPs9X9k30r68DdyCiqejejgBKbEKbLkYLyHbyXvXu3PNVkjkXkd6JUTlgBcv4jne50K0rMAFTaYOJDMgS0FsxJRFtbypx5EMK3wf0fC63YtvCRX2s3dh9FJSAKa7qq23zXUxuZKg6EQvVnE8M_keQB9WpgooWmi7-MfBRsldXwjnFOsd4WwKLsOBrwYVur2Z_kiZBNiW_4nQpMI2ozkBQvT7ypV2bN_cDWYyrHEZPR4n9u-DI3gb1Mkzgr_BA5T2sSxyJHUS1au1GcTLv9hQz_7AMzyM1ZGjj20rwL5h80MQthqJ9B05-7aS6JbxW9dewoD2wJelHk-LifB048g')"></i>
+
+<div class="tgme_widget_message_video_wrap" style="width:1080px;padding-top:100%">
+  
+</div>
+<div class="message_video_play js-message_video_play"></div>
+<time class="message_video_duration js-message_video_duration">0:33</time>
+<div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">Media is too big</div>
+    <span class="message_media_view_in_telegram">VIEW IN TELEGRAM</span>
+  </div>
+</div></a><div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F96BC.png')"><b>🖼️</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4B3.png')"><b>🤳</b></i> Сториз с 3d переходом между кадрами (поддержка iOS 14+)<br/><br/>За кодом <a href="https://boosty.to/lexkraev/posts/df2070b0-61cc-4637-b462-9454024c4740" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">сюда</a><br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F96BC.png')"><b>🖼️</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4B3.png')"><b>🤳</b></i> Stories on pure SwiftUI (iOS 14+) with 3d-cube animation for transition between scenes and timer for each slide<br/><br/>Code is <a href="https://boosty.to/lexkraev/posts/df2070b0-61cc-4637-b462-9454024c4740" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">here</a><br/><br/><a href="?q=%23tasty">#tasty</a> <a href="?q=%23groovy">#groovy</a><br/><br/><a href="https://t.me/swiftui_dev" target="_blank">@swiftui_dev</a></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>21</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>10</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.62K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/249"><time datetime="2023-09-15T15:49:13+00:00" class="time">15:49</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/250" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjUwLCJ0IjoxNzg4Njg2NDE2LCJoIjoiNjMzNjg3ZGNlZDk0OTBjY2RjIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA689.png')"><b>🦉</b></i> Very nice <a href="https://github.com/VakhoKontridze/VComponents" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">package</a> with the UI Components collection<br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA68D.png')"><b>🦍</b></i> Хорошая <a href="https://github.com/VakhoKontridze/VComponents" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">либа</a> с ui компонентами<br/><br/><a href="?q=%23swiftpm">#swiftpm</a> <a href="?q=%23getsources">#getsources</a></div><a class="tgme_widget_message_link_preview" href="https://github.com/VakhoKontridze/VComponents">
+  
+  <div class="link_preview_site_name accent_color" dir="auto">GitHub</div>
+  <i class="link_preview_image" style="background-image:url('https://cdn4.telesco.pe/file/MBe3L1twpe9InnApgAxOeuKHMIRGRo-_ryOZViySYUGa_dStb5Vw2qGXPYQ4dX2VRMNuo2Wo4a8ipdK4PPDF5-Ze4qh1caZk6_hyNDS-Hg582XFt90SbOmuntmhf0qvVCN9oWWpv5ZXQyMTVCivBw8WeqAnsbjDSFHA5pCkaNk6UhmfAsgFC3sWvbKj2pGiF662Xdw9Cmcmi2Ud5NSaHoFGwXMM9CzQiIzMkg4lQJ2euJg5Cc4s4YYzh2zOnxSpx93SPIWf8SHMwNd1_JNg2fTR5B2A7Att_TUR6FNh1J0D6O93TmlCnJjALoAWwnEf3E8gvAN5u6spPA6C2tlldGQ.jpg');padding-top:50%"></i>
+  <div class="link_preview_title" dir="auto">GitHub - VakhoKontridze/VComponents: SwiftUI collection of UI components</div>
+  <div class="link_preview_description" dir="auto">SwiftUI collection of UI components. Contribute to VakhoKontridze/VComponents development by creating an account on GitHub.</div>
+</a>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>10</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>2</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">1.92K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/250"><time datetime="2023-12-21T10:18:07+00:00" class="time">10:18</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/252" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjUyLCJ0IjoxNzg4Njg2NDE2LCJoIjoiYWZkMWFiOGMwYWU5MzEwOWRhIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29A96.png')"><b>⚖️</b></i> Хорошая либа <a href="https://github.com/microsoft/fluentui-apple" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">FluentUI</a> от Microsoft как пример того, как можно хорошо структурировать дизайн-систему<br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F91B7E2808DE29982.png')"><b>👷‍♂️</b></i> Nice package <a href="https://github.com/microsoft/fluentui-apple/tree/main" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Microsoft&#39;s Fluent UI as</a> example how you can organize your design system<br/><br/><a href="?q=%23swiftpm">#swiftpm</a> <a href="?q=%23howto">#howto</a> <a href="?q=%23getsources">#getsources</a> <a href="?q=%23groovy">#groovy</a></div><a class="tgme_widget_message_link_preview" href="https://github.com/microsoft/fluentui-apple">
+  
+  <div class="link_preview_site_name accent_color" dir="auto">GitHub</div>
+  
+  <div class="link_preview_title" dir="auto">GitHub - microsoft/fluentui-apple: UIKit and AppKit controls for building native Microsoft experiences</div>
+  <div class="link_preview_description" dir="auto">UIKit and AppKit controls for building native Microsoft experiences - microsoft/fluentui-apple</div>
+</a>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>8</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.24K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alex Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/252"><time datetime="2023-12-28T10:17:51+00:00" class="time">10:17</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/254" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjU0LCJ0IjoxNzg4Njg2NDE2LCJoIjoiOGQ5ODYwZTBjMDk0MDUyOGMzIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<a class="tgme_widget_message_video_player js-message_video_player" href="https://t.me/swiftui_dev/254"><i class="tgme_widget_message_video_thumb" style="background-image:url('https://cdn4.telesco.pe/file/sQmfRwFJ1tkKZezMR_o7tUS_FbkN8izAJ1fpzCzDvhkPt5sc6TtuWO9e9JVwczrolUtoVHJ4r4dMtntRtvIT4VRwsIZLeUl2_lWP4x3YkMleDPObflcFNNGW_J6KDoN6ym57elnug8yw6vANUo6Bscf7UlDzpi_Go8chqCbaZYNUiXR5NyzKsfCXH76YcDXpwniMKTGASBpvcEBvJwszVPVOGSYYqArrBL4VsekIFFkeAFOGvlhV5-hUa_nE9QlK-dWxZgKODje5gL_l2C7WuRvt29j-RdFZMfrACk5QhtZuIMd3vmpZuKg4iissKi7ab7zI1_UMvLBYQ0hiXrU_4A')"></i>
+
+<div class="tgme_widget_message_video_wrap" style="width:1080px;padding-top:100%">
+  <video src="https://cdn4.telesco.pe/file/c16451c951.mp4?token=uyNsQ-v6UrHJ5NztzSHpnkKI_LTLiHhPeBcePEN4PVRf1mo_-OpEdvN36Ckpj8nRrElIK0vOa7mW-LrA90blB3P1YUiF9OAB58cEVOustZWCsCjpHR1wTuut4BEHF3VAso5uIpxijm685G1-TJI7y8UWw9XdtpFCWKU1x9Ttrd5fb78LFh2lYjxcHQiIN6gEZkiheRAk96_0VRW8OW8E4rC_AxwYBCgwsu3QMNk2B4biF0DjSrHTjhZq6u6scGom1XsNjKjWgqs-3k4cXdlP8IgQmAh0dVGAS3dq-KPejuTU9rQtY1wo7YxAVdrrxKcEPHU6b7DJGtWNMFQk487uT0jD3I9QKKOclZQEsEQuCM1S_mRShoZ0ctm_bCnYN75ZM5MBK1A5mwEqf8HIDyGOK4Y9Wdui5giGckN2elmT5aeMOVWFUqIhLa4HCzKjfHMVem-gGpuE8ipSeeGJ4IoZACaB6ti8Mu--sb0c3qmCLLRXdrWytcbsABX7tMPiui7Jk8hLXt7jFd_4T9geIOwb6ZFvBdrD7SQ8CFi_37a8F2Pymidz6FcyzAWReetbCtLD7jcVPpAMHPiLFRUy7GLGFIdRPQV9ngl17-VhRuAxCnM6g4s5vpOrCshBej-HMYI336dSt0utHFi44d9FdbNqYxrVK1B9aOH4TLwxXpS2xTw" class="tgme_widget_message_video js-message_video" width="100%" height="100%"></video>
+</div>
+<div class="message_video_play js-message_video_play"></div>
+<time class="message_video_duration js-message_video_duration">0:22</time>
+<div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">This media is not supported in your browser</div>
+    <span class="message_media_view_in_telegram">VIEW IN TELEGRAM</span>
+  </div>
+</div></a><div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F91B7E2808DE29982.png')"><b>👷‍♂️</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F91BB.png')"><b>👻</b></i>Лайфхак для дебага вьюх. Цвет фона меняется при каждой отрисовки вью. Таким образом можно визуально увидеть, насколько часто меняются стэйты.<br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F91BE.png')"><b>👾</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA496.png')"><b>🤖</b></i>View’s debugging life hack. Background color changes every time view’s rendering. So you can visual analize how often you change states for example.<br/><br/><br/><code>public extension Color {<br/>    static var random: Color {<br/>        Color (<br/>            red: .random (in: 0...1.0),<br/>            green: .random (in: 0...1.0),<br/>            blue: .random (in: 0...1.0)<br/>        )<br/>    }<br/>}<br/><br/>public extension View {<br/>    @ViewBuilder<br/>    func randomBackgroundColor() -&gt; some View {<br/>        background(Color.random)<br/>    }<br/>}</code><br/><br/><a href="?q=%23groovy">#groovy</a><br/><br/><a href="https://t.me/swiftui_dev" target="_blank">@swiftui_dev</a></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F94A5.png')"><b>🔥</b></i>11</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>3</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA5B1.png')"><b>🥱</b></i>2</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918E.png')"><b>👎</b></i>1</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">2.54K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alexander Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/254"><time datetime="2024-01-20T12:39:20+00:00" class="time">12:39</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/256" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjU2LCJ0IjoxNzg4Njg2NDE2LCJoIjoiNWEzMGRjNDVhMTRmMDUwZTU4In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<a class="tgme_widget_message_video_player not_supported js-message_video_player" href="https://t.me/swiftui_dev/256"><i class="tgme_widget_message_video_thumb" style="background-image:url('https://cdn4.telesco.pe/file/KatMkx9jTiMIEwa20DN2xHIIuwCZh_Rkr8Nw4A1aKeMOrNrzLDy2uHYYDCD9l_yff3gEARGrwmg92x6s0w07jBQVD4AqD7YyusRsCo7QFpLKFFSl5hMbROqFVvOIhyZNc6IBrE0k9sY3CUKnmdevvzEy_aC8X7GjS_7iwMKuQt5PP9NC6dIEXnGclIq5NnUdf491PELizPQcBGKMOZQB6bos0gauLjc17P-mnq8jVWhzUyw_cbtf0dZYM3WJeVFxlml6C24yH2Ha05LZZ6MRVn0eIlxfZ2_SGqwLzRv9O6Sft8hBEkt61UaUSbJcroUnR5J24xMdxmRL2ZZTChw--Q')"></i>
+
+<div class="tgme_widget_message_video_wrap" style="width:1080px;padding-top:100%">
+  
+</div>
+<div class="message_video_play js-message_video_play"></div>
+<time class="message_video_duration js-message_video_duration">1:30</time>
+<div class="message_media_not_supported_wrap">
+  <div class="message_media_not_supported">
+    <div class="message_media_not_supported_label">Media is too big</div>
+    <span class="message_media_view_in_telegram">VIEW IN TELEGRAM</span>
+  </div>
+</div></a><div class="tgme_widget_message_text js-message_text" dir="auto"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA5B7.png')"><b>🥷</b></i> <i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918B.png')"><b>👋</b></i> <a href="https://boosty.to/lexkraev/posts/ca3f8bdf-d764-44a5-a2e9-1e32d544c02d?share=post_link" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Демо</a> использования одного из быстрорастущих подходов в мобильной разработке - Server-Driven UI, как можно быстро поменять ваше приложение без релиза в стор. <br/><br/>Такой подход все больше и больше набирает популярность в особенности в e-commerce.<br/><br/><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F9696F09F8FBB.png')"><b>🖖🏻</b></i><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A0.png')"><b>🤠</b></i> Server-Driven UI. <br/><br/><a href="https://boosty.to/lexkraev/posts/ca3f8bdf-d764-44a5-a2e9-1e32d544c02d?share=post_link" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">See how to use</a> one of the most efficient and flexible approaches to change your app without releasing in the AppStore.<br/><br/>You can easily tune your views on the server side.<br/><br/>This approach is gaining popularity more and more especially in e-commerce.<br/><br/>Code is <a href="https://boosty.to/lexkraev/posts/ca3f8bdf-d764-44a5-a2e9-1e32d544c02d?share=post_link" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">here.</a><br/><br/><a href="?q=%23tasty">#tasty</a> <a href="?q=%23groovy">#groovy</a><br/><br/><a href="https://t.me/swiftui_dev" target="_blank">@swiftui_dev</a></div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>14</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F8E89.png')"><b>🎉</b></i>5</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA4A9.png')"><b>🤩</b></i>3</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09FA494.png')"><b>🤔</b></i>2</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F92A9.png')"><b>💩</b></i>2</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">1.64K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alexander Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/256"><time datetime="2024-05-11T10:43:30+00:00" class="time">10:43</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/257" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjU3LCJ0IjoxNzg4Njg2NDE2LCJoIjoiMDcwZjY5YzY5OWE1ZTU2YzI0In0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_text js-message_text" dir="auto"><a href="https://medium.com/the-swift-cooperative/the-dark-side-of-unidirectional-architectures-in-swift-e4acf243ff1c" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Отличная статья</a> на тему подводных камней в использовании UDF архитектур. Одним из таких является нарушение принципа <a href="https://htmx.org/essays/locality-of-behaviour/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">LoB</a> (Locality of Behaviour).<br/><br/><a href="https://medium.com/the-swift-cooperative/the-dark-side-of-unidirectional-architectures-in-swift-e4acf243ff1c" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">Nice article</a> about pitfalls (e.g. losing the <a href="https://htmx.org/essays/locality-of-behaviour/" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">locality of behavior)</a> in using Unidirectional architectures in swift.<br/><br/> <a href="?q=%23readthis">#readthis</a></div><a class="tgme_widget_message_link_preview" href="https://medium.com/the-swift-cooperative/the-dark-side-of-unidirectional-architectures-in-swift-e4acf243ff1c">
+  
+  <div class="link_preview_site_name accent_color" dir="auto">Medium</div>
+  <i class="link_preview_image" style="background-image:url('https://cdn4.telesco.pe/file/GKSqQgkl5Mb8ic8vOeKTpaqHiyKfT2WDH1mrQaUt61tRIlqn-jmECGjleF3HNfvL6U_4GZt_P4H4MIW5V4rApngbJcaMdRndHwDXsXA3iewAJ-F6sObnXohqv7tthSiJTrYdsHQFMTY2hl9vCnAcJeqXuD0Tcs87xaWJ1-edzsk1YkM247tTAKHgEiuqJje2aySDg6U9r-wPu3rPXdMZppENMx_NHOOc9KBLLx0kwdSU2Rye6_ZLX-mFXnI_07nJ1tRgaBxjmmrLXFLBOldh252HH78wVt2E9HE0mZZGQfWemhlAHqwd6pMuSucxoK7a4fesDkXSIeZijQHoNv-4bQ.jpg');width:66.625%;padding-top:100%"></i>
+  <div class="link_preview_title" dir="auto">The Dark Side of Unidirectional Architectures in Swift</div>
+  <div class="link_preview_description" dir="auto">The ping-pong problem</div>
+</a>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918C.png')"><b>👌</b></i>5</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/E29DA4E2808DF09F94A5.png')"><b>❤‍🔥</b></i>2</span><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>1</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_views">1.84K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alexander Kraev</span>,&nbsp;edited &nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/257"><time datetime="2024-05-14T15:54:35+00:00" class="time">15:54</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/258" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjU4LCJ0IjoxNzg4Njg2NDE2LCJoIjoiOGVhYjhiYjNhZTBmMTVmYzBhIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_poll js-poll">
+  <div class="tgme_widget_message_poll_question">А какую архитектуру вы используете на текущем проекте?<br/><br/>What’s your current project architecture?</div>
+  <div class="tgme_widget_message_poll_type">Anonymous Poll</div>
+  <a class="tgme_widget_message_poll_options" href="https://t.me/swiftui_dev/258">  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">12%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">UDF (TCA, Redux, MVI, …)</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:17.931%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">68%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">MVx (MVVM, MVC, …)</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:100%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">12%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">Clean Architecture (Clean swift, VIPER, … )</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:17.931%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">7%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">Other</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:10.3448%"></div>
+    </div>
+  </div></a>
+</div>
+<div class="tgme_widget_message_reactions js-message_reactions"><span class="tgme_reaction"><i class="emoji" style="background-image:url('//telegram.org/img/emoji/40/F09F918D.png')"><b>👍</b></i>2</span></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_voters">212</span><span class="copyonly"> voters</span><span class="tgme_widget_message_views">1.51K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alexander Kraev</span>,&nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/258"><time datetime="2024-05-14T16:10:02+00:00" class="time">16:10</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/259" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjU5LCJ0IjoxNzg4Njg2NDE2LCJoIjoiMmYzMzQ1OTc4MDYxMjYxMjJjIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_poll js-poll">
+  <div class="tgme_widget_message_poll_question">Какую архитекутуру вы бы выбрали для нового проекта?<br/><br/>Which architecture would you probably choose for a new project?</div>
+  <div class="tgme_widget_message_poll_type">Anonymous Poll</div>
+  <a class="tgme_widget_message_poll_options" href="https://t.me/swiftui_dev/259">  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">20%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">UDF (TCA, Redux, MVI, …)</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:31.6901%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">62%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">MVx (MVVM, MVC, …)</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:100%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">13%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">Clean Architecture (Clean swift, VIPER, … )</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:20.4225%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">6%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">Other</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:9.8592%"></div>
+    </div>
+  </div></a>
+</div>
+<div class="tgme_widget_message_reactions js-message_reactions"></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_voters">230</span><span class="copyonly"> voters</span><span class="tgme_widget_message_views">1.64K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alexander Kraev</span>,&nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/259"><time datetime="2024-05-14T16:11:28+00:00" class="time">16:11</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="swiftui_dev/260" data-view="eyJjIjotMTQ5MjY2NDc5MywicCI6MjYwLCJ0IjoxNzg4Njg2NDE2LCJoIjoiYTVlNGRiNTY1YTAxMDgwYjRjIn0">
+  <div class="tgme_widget_message_user"><a href="https://t.me/swiftui_dev"><i class="tgme_widget_message_user_photo bgcolor4" data-content="A"><img src="https://cdn4.telesco.pe/file/TRcTt60gEBR9iXZWeUtyj41SD3qv-wo-H8KoiQpgIM63-huqZZmc0Uu59LvZPFpLECWao-eyeDPYK5xry0Wfd2rScFTXN6_6z0bwLceaYPIsv7JhIjrARAMk7ejA5_G918Vtw8OzNgkTzgJi25Rj0GUty_tiVBaftbcknAtQChlcpdVMgRLx7_B0l8H8yk0FtN4quNckj7yWtNzOvkYtD5WomPqEZobJK50rqV9wePShvXDaLmJVI7-kMHoa-uphtsmo8lVjj5LDT7L66IInq2ZmcC3_fUm8EVP6OXlSipuYhtLAJRLP3QPfFeUB5MLoOkuLOz7RJdUFs0pRyY-t4A.jpg"></i></a></div>
+  <div class="tgme_widget_message_bubble">
+    
+        <i class="tgme_widget_message_bubble_tail">
+      <svg class="bubble_icon" width="9px" height="20px" viewBox="0 0 9 20">
+        <g fill="none">
+          <path class="background" fill="#ffffff" d="M8,1 L9,1 L9,20 L8,20 L8,18 C7.807,15.161 7.124,12.233 5.950,9.218 C5.046,6.893 3.504,4.733 1.325,2.738 L1.325,2.738 C0.917,2.365 0.89,1.732 1.263,1.325 C1.452,1.118 1.72,1 2,1 L8,1 Z"></path>
+          <path class="border_1x" fill="#d7e3ec" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0 L9,0 L9,20 L7,20 L7,20 L7.002,18.068 C6.816,15.333 6.156,12.504 5.018,9.58 C4.172,7.406 2.72,5.371 0.649,3.475 C-0.165,2.729 -0.221,1.464 0.525,0.649 C0.904,0.236 1.439,0 2,0 Z"></path>
+          <path class="border_2x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.5 L9,0.5 L9,20 L7.5,20 L7.5,20 L7.501,18.034 C7.312,15.247 6.64,12.369 5.484,9.399 C4.609,7.15 3.112,5.052 0.987,3.106 C0.376,2.547 0.334,1.598 0.894,0.987 C1.178,0.677 1.579,0.5 2,0.5 Z"></path>
+          <path class="border_3x" d="M9,1 L2,1 C1.72,1 1.452,1.118 1.263,1.325 C0.89,1.732 0.917,2.365 1.325,2.738 C3.504,4.733 5.046,6.893 5.95,9.218 C7.124,12.233 7.807,15.161 8,18 L8,20 L9,20 L9,1 Z M2,0.667 L9,0.667 L9,20 L7.667,20 L7.667,20 L7.668,18.023 C7.477,15.218 6.802,12.324 5.64,9.338 C4.755,7.064 3.243,4.946 1.1,2.983 C0.557,2.486 0.52,1.643 1.017,1.1 C1.269,0.824 1.626,0.667 2,0.667 Z"></path>
+        </g>
+      </svg>
+    </i>
+    <div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/swiftui_dev"><span dir="auto">Alexander Kraev</span></a></div>
+
+
+<div class="tgme_widget_message_poll js-poll">
+  <div class="tgme_widget_message_poll_question">Какую бы архитектуру вы точно НЕ выбрали  для нового проекта?<br/><br/>Which architecture would NOT you definitely choose for a new project?</div>
+  <div class="tgme_widget_message_poll_type">Anonymous Poll</div>
+  <a class="tgme_widget_message_poll_options" href="https://t.me/swiftui_dev/260">  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">33%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">UDF (TCA, Redux, MVI, …)</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:76.9231%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">13%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">MVx (MVVM, MVC, …)</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:31.7308%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">42%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">Clean Architecture (Clean swift, VIPER, … )</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:100%"></div>
+    </div>
+  </div>  <div class="tgme_widget_message_poll_option">
+    <div class="tgme_widget_message_poll_option_percent">12%</div>
+    <div class="tgme_widget_message_poll_option_value">
+      <div class="tgme_widget_message_poll_option_text">Other</div>
+      <div class="tgme_widget_message_poll_option_bar accent_bg" style="width:27.8846%"></div>
+    </div>
+  </div></a>
+</div>
+<div class="tgme_widget_message_reactions js-message_reactions"></div><div class="tgme_widget_message_footer compact js-message_footer">
+  
+  <div class="tgme_widget_message_info short js-message_info">
+    <span class="tgme_widget_message_voters">246</span><span class="copyonly"> voters</span><span class="tgme_widget_message_views">1.79K</span><span class="copyonly"> views</span><span class="tgme_widget_message_meta"><span class="tgme_widget_message_from_author" dir="auto">Alexander Kraev</span>,&nbsp;<a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/260"><time datetime="2024-05-14T16:19:15+00:00" class="time">16:19</time></a></span>
+  </div>
+</div>
+  </div>
+  
+</div></div><div class="tgme_widget_message_centered js-messages_more_wrap"><a href="/s/swiftui_dev?after=260" class="tme_messages_more js-messages_more" data-after="260"></a></div>
+    </section>
+  </div>
+</main>
+    <script src="//telegram.org/js/jquery.min.js"></script>
+    <script src="//telegram.org/js/jquery-ui.min.js"></script>
+    <script src="//telegram.org/js/tgwallpaper.min.js?3"></script>
+<script src="//telegram.org/js/tgsticker.js?32"></script>
+
+    <script src="//telegram.org/js/widget-frame.js?68"></script>
+    <script src="//telegram.org/js/telegram-web.js?14"></script>
+    <script>TWeb.init();
+</script>
+    
+  </body>
+</html>
+<!-- page generated in 214.16ms -->

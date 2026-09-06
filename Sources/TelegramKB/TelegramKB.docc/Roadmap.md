@@ -89,7 +89,7 @@ predicted ~18%). **1,630 keys (17%) change** — each a row that would otherwise
 join with `artanl` — while only 158 identities merge internally, so this is a **seam feature
 rather than a dedupe one** (<doc:Design>).
 
-### S4 — crawler
+### S4 — crawler ✅ *(done)*
 Page by returned ids, never a stride. Polite by default. Per-channel watermarks so a re-run is
 incremental. The four-way channel classifier for `doctor`.
 
@@ -98,8 +98,12 @@ and flushes, which is *not* atomic: a kill mid-write can truncate a line. It sur
 deaths by luck (`research/skills-landscape.md`). Handle interruption deliberately rather than
 relying on append-as-you-go.
 
-**Done:** a full channel backfill reproduces the corpus already crawled, and a second run fetches
-only new posts.
+**Delivered.** `WebPreviewSource` pages by returned ids with per-channel watermarks;
+`ChannelClassifier` implements the four-way `doctor` check; `CheckpointStore` writes atomically.
+Nine hermetic tests over committed fixtures, plus an env-gated live suite
+(`TGKB_LIVE=1 swift test --filter LiveCrawl`) that verifies the done-criterion directly: a full
+backfill returns **136 posts spanning ids 1–297**, exactly reproducing the independent Python
+crawl, and a re-run fetches one page.
 
 ---
 
