@@ -244,6 +244,11 @@ nothing. What survives as *our* obligation is narrow and concrete:
 - Store the preview for **every** link, including ones we expect never to fetch. It is the
   fallback of record.
 - Store `url_canonical` at ingest so the join key exists from the first crawl.
+- **Carry `contentProvenance`** on any fetched-content row. Bot-walled sources are now attempted
+  via mirrors and summarisers (<doc:Design>), so the ladder gains a rung between "preview only"
+  and "fetched" — and a summary must be filterable, because it is evidence *about* an article
+  rather than the article. Without the marker a mirror is silently indistinguishable from the
+  original, which is the failure this whole project is built to avoid.
 
 ## TD-15 — `robots.txt` compliance is deferred, deliberately
 
