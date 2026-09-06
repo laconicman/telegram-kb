@@ -93,6 +93,11 @@ rather than a dedupe one** (<doc:Design>).
 Page by returned ids, never a stride. Polite by default. Per-channel watermarks so a re-run is
 incremental. The four-way channel classifier for `doctor`.
 
+**Checkpoint atomically** — write to a temp file, then rename. `Scripts/resolve_urls.py` appends
+and flushes, which is *not* atomic: a kill mid-write can truncate a line. It survived two session
+deaths by luck (`research/skills-landscape.md`). Handle interruption deliberately rather than
+relying on append-as-you-go.
+
 **Done:** a full channel backfill reproduces the corpus already crawled, and a second run fetches
 only new posts.
 
@@ -107,6 +112,10 @@ an MCP client in the loop.
 **Done:** `G1`–`G10` in `evals/golden-queries.md` are runnable and produce numbers.
 
 ### S6 — `tgkb-mcp`
+**Load the `mcp-builder` skill first** — it is from `anthropics/skills`, already installed, and
+covers exactly this. Designing the tool surface from the SDK research alone would skip it
+(`research/skills-landscape.md`).
+
 `search_posts`, `find_links`, `get_post`. Compact records, opaque cursors, a `t.me` link on
 every row, `find_links` keyed on `url_canonical`. Annotations set explicitly — the SDK defaults
 are `destructive: true`, `openWorld: true`. All diagnostics to stderr; fd 1 redirected at

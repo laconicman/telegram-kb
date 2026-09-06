@@ -173,6 +173,7 @@ Every note in `research/`, with what it settles. Read these rather than re-deriv
 | `xcframework-skill-addendum.md` | Proposed additions to the `xcframework-distribution` skill (for review) |
 | `link-content-fetching.md` | Fetch/parse/extract stack; per-domain shortcuts; what is reachable |
 | `BRIEF-link-content-fetching.md` | The task brief that produced the above (for re-running) |
+| `skills-landscape.md` | Agent skills for the non-Swift domains: what exists, why almost none fits |
 
 Reproducible probes live alongside them: `probe.sh`, `crawl_corpus.py`, `lemmatize.swift`.
 
