@@ -423,6 +423,43 @@ Both sides join on `effective_url`. Either may populate `url_resolution` — we 
 URL first, we are already doing network I/O, and a `HEAD` is not a fetch. Only the destination of
 the result changed.
 
+## Bot-walled content: try a mirror, and mark its provenance
+
+**Decision, revised.** The earlier position — "where a site is closed to automated fetch, index
+the preview and move on" — is too passive. For bot-walled sources we **will** attempt mirrors,
+replicant and summariser sites, and store what they yield.
+
+The condition is **provenance, not abstinence**: content obtained from anything other than the
+canonical URL carries an explicit source marker and is never presented as the original. Same
+absent-versus-negative principle already used for `formatSource` and for a failed
+`url_resolution` — a weaker source is fine so long as its weakness is visible.
+
+Medium and Boosty are the live cases (~10% of links; 336 `medium.com` failures observed in the
+resolution run). A `contentProvenance` of `canonical | mirror | summary | previewOnly` belongs on
+the fetched-content row, and retrieval must be able to filter on it — **a summary is evidence
+about an article, not the article.**
+
+**Still rejected: defeating the wall itself.** No CAPTCHA solving, no fingerprint spoofing, no
+stealth automation. Reading a public mirror is a different act from impersonating a browser to
+get past a block, and only the first is on the table.
+
+*Implication for `artanl`: this is a tier between "preview only" and "fetched", and must not be
+conflated with either.*
+
+## Headless browsing: deferred, not discarded
+
+**Decision, revised.** Headless `WKWebView` was rejected on measurement — verified working in a
+plain CLI with no app bundle, but the domain that motivated it (Apple documentation) has a JSON
+API ~10× faster and cleaner.
+
+**That result does not generalise, and the earlier wording implied it did.** There is a
+structured route for Apple docs and GitHub, and for almost nothing else in the 1,654-host tail.
+Where a JS-only host matters and offers no API, headless is the only remaining route, and a
+measurement from the one host that happened to have an API says nothing against it.
+
+Deferred to Phase 3 and decided per-host on evidence, rather than settled now by a
+non-generalising result.
+
 ## Resolve every URL, not just the shorteners
 
 **Decision.** `url_resolution` is populated for **every** canonical URL, not only the 313
@@ -478,6 +515,10 @@ The number that matters is **1,630**: rows whose join key changes. Each is a row
 otherwise **fail to join with `artanl`**, because `artanl` fetches the URL, lands on the
 destination, and canonicalises *that*. Without our resolution our key stays the old form and the
 two sides never meet — silently.
+
+Measured from the other side: `artanl` verified that **917 of the 1,630 key changes (56%) never
+cross a hostname**, so "the host didn't change, so the canonical didn't change" — the obvious
+optimisation — is wrong *a majority of the time*, not merely sometimes.
 
 The clearest case is Habr's URL migration: `habr.com/company/avito/blog/358892` redirects in three
 hops to `habr.com/ru/companies/avito/articles/358892`. **Same host**, so it is not in the 23%
