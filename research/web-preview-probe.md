@@ -347,6 +347,46 @@ Those 18 empty-body posts are a design input: a purely text-driven index silentl
 the corpus. They still carry a date, author, reactions and often a link preview, so they should
 be indexed on those fields rather than skipped.
 
+### A preview-disabled channel exposes the frame and withholds the content
+
+`@iosmmcresources` — a real broadcast channel (1,758 subscribers) whose `/s/` listing 302s — was
+picked to explore the document/file axis. It cannot serve that purpose, and the reason is a
+finding in its own right.
+
+**Single-post embeds still work when the listing is disabled.** `t.me/iosmmcresources/10?embed=1`
+returns HTTP 200 with a real `data-post` block. So "preview disabled" disables *enumeration*, not
+individual posts.
+
+**But the content is withheld.** Measured across 11 posts of that channel versus three posts of
+preview-enabled channels:
+
+| | frame renders | body text | media markup |
+|---|---|---|---|
+| `@iosmmcresources` (disabled) | **11/11** | **0/11** | **0** |
+| `iosgr/3982`, `iosdev/599`, `swiftui_dev/272` (enabled) | 3/3 | present | present |
+
+What *is* exposed on a disabled channel: author, date, views, **reactions**, and
+**forward origin**. What is not: body text and every media form.
+
+Two consequences:
+
+1. **`Channel.Reachability.previewDisabled` is not "nothing reachable"** — post *metadata* is.
+   That is near-useless for text search, so nothing is built on it, but it is not the same as
+   `unresolvable` and the model should not conflate them.
+2. **The document axis cannot be explored from the web at all for this channel.** Its content is
+   genuinely Phase 2 / TDLib.
+
+### Documents, audio and voice are absent from the reachable corpus — now across ~868 blocks
+
+Sweeping a further 123 message blocks across all four preview-enabled channels (on top of the
+earlier 625 and 120): **zero** `document`, `audio`, `voice`, `sticker`, `location` or round-video
+markup. Polls appear (14 in this pass); forwards did not in this particular sample.
+
+So the parser's `document`/`audio`/`voice`/`sticker`/`location` branches are **written but
+untested against real markup**, and will stay that way until TDLib ingestion exists. They are
+speculative code paths, and `Design` records that `formatSource: .web` means "this source cannot
+say" precisely so a consumer never reads their absence as a negative.
+
 ### Albums — one post, many ids
 
 `tgme_widget_message_grouped` (with `_wrap` and `_layer` siblings) renders a media group as a

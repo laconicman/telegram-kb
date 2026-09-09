@@ -213,12 +213,19 @@ Carried forward deliberately. Do not build on these without probing first.
 - ~~Forwarded markup.~~ **Answered** — present at ~1.3% of posts, carrying origin channel,
   origin post id *and* the original author's name, so attribution for forwards is *better* than
   for ordinary posts. Polls likewise present (~1.3%) with question, options and vote count.
-  Document, audio, voice, sticker, location and round video are **absent from 625 sampled
-  posts** — absent from this corpus, not merely unlooked-for.
+  Document, audio, voice, sticker, location and round video are **absent from ~868 sampled
+  message blocks** across all four reachable channels — absent from this corpus, not merely
+  unlooked-for. The parser's branches for those kinds are written but **untested against real
+  markup**, and stay speculative until TDLib.
 - ~~Whether channel owners can explicitly disable the web preview.~~ **Answered** —
   `@iosmmcresources` is a genuine broadcast channel (1,757 subscribers) whose `/s/` still 302s,
   so owners can disable it. "N members" vs "N subscribers" separately distinguishes a group from
   a channel, making the classifier four-way.
+- ~~What a disabled preview withholds.~~ **Answered** — the *frame*, not the content.
+  Single-post embeds still return 200 with author, date, views, reactions and forward origin
+  (11/11), but **no body text (0/11)** and no media, where enabled channels show both. So
+  `previewDisabled` is not `unresolvable` — metadata is reachable — but it cannot serve content.
+  `@iosmmcresources`, chosen for its files, is therefore Phase 2 work.
 - **Where Telegram's actual rate limit is.** Substantially answered in practice: a full backfill
   of four channels — 7,406 posts over ~480 page requests at a 1 s delay — completed with no
   throttling, no 429s, no challenges. Still not a probe *for* the limit, but casual crawling at
