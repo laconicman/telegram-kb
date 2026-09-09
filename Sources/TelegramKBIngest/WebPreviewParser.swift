@@ -72,6 +72,29 @@ public enum WebPreviewParser {
             views: try views(in: message))
     }
 
+    /// The channel's **bare** id, decoded from the `data-view` payload.
+    ///
+    /// `data-view` is base64 JSON — `{"c":-1492664793,"p":268,"t":…,"h":…}` — where `c` is the
+    /// raw channel id (negative there) and `p` the post id. `t` is the *request* time, part of a
+    /// signed view-tracking token, and is not the post's date.
+    ///
+    /// This is what lets a web-crawled channel produce a TDLib `chat_id`
+    /// (`Channel.tdlibChatID`), so the two sources can reconcile (`TD-8`).
+    public static func rawChannelID(html: String) throws -> Int64? {
+        let doc = try SwiftSoup.parse(html)
+        for element in try doc.select("div.tgme_widget_message[data-view]") {
+            let encoded = try element.attr("data-view")
+            let padded = encoded.padding(toLength: ((encoded.count + 3) / 4) * 4,
+                                         withPad: "=", startingAt: 0)
+            guard let data = Data(base64Encoded: padded),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let c = json["c"] as? Int64 ?? (json["c"] as? Int).map(Int64.init)
+            else { continue }
+            return abs(c)
+        }
+        return nil
+    }
+
     // MARK: - Pieces
 
     /// `Date.ISO8601FormatStyle` rather than `ISO8601DateFormatter`: the format style is a

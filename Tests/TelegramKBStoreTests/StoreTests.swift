@@ -190,3 +190,23 @@ extension StoreTests {
         #expect(try store.effectiveURL(forCanonical: "https://medium.com/x") == "https://medium.com/x")
     }
 }
+
+extension StoreTests {
+    /// The channel row must exist before any of its posts.
+    ///
+    /// Not pedantry: `tgkb sync` writes per page so an interrupted crawl loses only a page, and
+    /// that change moved post writes to *before* the channel upsert — which failed with
+    /// `FOREIGN KEY constraint failed` on the first real run. This pins the constraint so the
+    /// ordering cannot silently regress.
+    @Test("posts for an unknown channel are rejected, not silently orphaned")
+    func postsRequireTheirChannel() throws {
+        let path = Self.tempPath()
+        let store = try Store.openForWriting(at: path)   // note: no channel inserted
+        #expect(throws: (any Error).self) {
+            try store.upsert(posts: [Self.post(1, "orphan")])
+        }
+        try store.upsert(channel: Channel(username: "iosgr", rawChannelID: 1))
+        try store.upsert(posts: [Self.post(1, "now fine")])
+        #expect(try store.post(.init(channelUsername: "iosgr", messageID: 1)) != nil)
+    }
+}

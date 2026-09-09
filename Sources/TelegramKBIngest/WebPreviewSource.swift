@@ -34,6 +34,8 @@ public struct WebPreviewSource: Sendable {
         public var posts: [Post]
         public var watermark: Watermark
         public var pagesFetched: Int
+        /// Bare channel id from `data-view`, which yields the TDLib `chat_id` for reconciliation.
+        public var rawChannelID: Int64?
     }
 
     /// Walks a channel's history, newest page first, following `?before=<lowest id on page>`.
@@ -47,6 +49,7 @@ public struct WebPreviewSource: Sendable {
         var cursor: Int?
         var pages = 0
         var exhausted = false
+        var rawChannelID: Int64?
 
         while pages < maxPages {
             var components = URLComponents(string: "https://t.me/s/\(channel)")!
@@ -56,6 +59,9 @@ public struct WebPreviewSource: Sendable {
 
             let posts = try WebPreviewParser.parse(html: result.body)
             guard !posts.isEmpty else { exhausted = true; break }
+            if rawChannelID == nil {
+                rawChannelID = try WebPreviewParser.rawChannelID(html: result.body)
+            }
 
             let ids = posts.map(\.id.messageID)
             let lowest = ids.min()!
@@ -90,6 +96,7 @@ public struct WebPreviewSource: Sendable {
                                  lowestMessageID: all.first?.id.messageID ?? 0,
                                  updatedAt: Date(),
                                  isBackfillComplete: exhausted && since == nil),
-            pagesFetched: pages)
+            pagesFetched: pages,
+            rawChannelID: rawChannelID)
     }
 }

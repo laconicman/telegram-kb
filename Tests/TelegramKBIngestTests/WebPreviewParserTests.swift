@@ -158,3 +158,17 @@ struct WebPreviewParserTests {
                 "web-parsed posts must be marked .web so consumers know kind is sparse here")
     }
 }
+
+extension WebPreviewParserTests {
+    /// The bare channel id is what lets a web-crawled channel produce a TDLib `chat_id`, so the
+    /// two sources can reconcile (`TD-8`).
+    @Test("the bare channel id is decoded from the data-view payload")
+    func rawChannelIDFromDataView() throws {
+        let id = try #require(try WebPreviewParser.rawChannelID(html: try Self.html("swiftui_dev")))
+        #expect(id == 1_492_664_793, "measured from this fixture's data-view during Phase 0")
+
+        // …and it must yield the familiar chat id, arithmetically.
+        let channel = TelegramKBModel.Channel(username: "swiftui_dev", rawChannelID: id)
+        #expect(channel.tdlibChatID == -1_001_492_664_793)
+    }
+}
