@@ -63,8 +63,10 @@ struct Sync: AsyncParsableCommand {
             // key, and writing per page means posts now arrive during the crawl rather than
             // after it. `rawChannelID` is only known once a page has been parsed, so this row is
             // written twice — placeholder first, real id after. The upsert makes that free.
-            try db.upsert(channel: Channel(username: channel, rawChannelID: 0,
-                                           reachability: .webPreview))
+            // Insert-if-absent, NOT upsert: an upsert would overwrite a previously-learned
+            // rawChannelID with the placeholder, and a crawl that then failed would leave the
+            // false identity stored.
+            try db.ensureChannel(username: channel, reachability: .webPreview)
 
             // One source of truth: the channel row, in the same database as the posts.
             //
@@ -77,12 +79,12 @@ struct Sync: AsyncParsableCommand {
             let since = (full || !state.backfillComplete) ? nil : state.highest
 
             let result = try await source.crawl(channel: channel, since: since) { posts, mark in
-                // Per page, so an interrupted crawl loses a page rather than a whole channel.
-                // Progress is deliberately NOT marked complete here — only a finished walk can
-                // claim that.
-                try db.upsert(posts: posts)
-                try db.recordCrawlState(channel: channel, lowest: mark.lowestMessageID,
-                                        highest: mark.highestMessageID, backfillComplete: false)
+                // One transaction per page: posts and the watermark that describes them commit
+                // together, so an interruption cannot leave a mark for posts that were never
+                // written. Progress is deliberately NOT marked complete here — only a finished
+                // walk can claim that.
+                try db.commitPage(posts, channel: channel, lowest: mark.lowestMessageID,
+                                  highest: mark.highestMessageID, backfillComplete: false)
             }
             if let raw = result.rawChannelID {
                 try db.upsert(channel: Channel(username: channel, rawChannelID: raw,

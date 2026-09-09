@@ -288,3 +288,36 @@ extension Store {
         }
     }
 }
+
+extension Store {
+    /// Ensures a channel row exists **without touching an existing one**.
+    ///
+    /// `upsert(channel:)` overwrites `rawChannelID` on conflict, so using it for the
+    /// foreign-key prerequisite before a crawl would replace a known id with the `0` placeholder
+    /// — and a crawl that then failed would leave the false identity stored, pointing TDLib
+    /// reconciliation at a nonexistent chat. Insert-if-absent has no such failure mode.
+    public func ensureChannel(username: String, reachability: Channel.Reachability) throws {
+        try dbPool.write { db in
+            try db.execute(sql: """
+                INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
+                ON CONFLICT(username) DO NOTHING
+                """, arguments: [username, reachability.rawValue])
+        }
+    }
+
+    /// Writes a page of posts and the crawl state it implies **in one transaction**.
+    ///
+    /// Separate writes let an interruption land between them, leaving the watermark describing
+    /// posts that were never committed — extra recrawling at best, and a claim of "one
+    /// transaction scope" that was not true.
+    public func commitPage(_ posts: [Post], channel: String, lowest: Int?, highest: Int?,
+                           backfillComplete: Bool) throws {
+        try dbPool.write { db in
+            for post in posts { try Self.write(post, into: db) }
+            try db.execute(sql: """
+                UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
+                       backfillComplete = ?, lastSyncedAt = ? WHERE username = ?
+                """, arguments: [lowest, highest, backfillComplete, Date(), channel])
+        }
+    }
+}

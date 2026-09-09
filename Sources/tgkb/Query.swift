@@ -27,6 +27,15 @@ struct Query: AsyncParsableCommand {
 
     enum Mode: String, ExpressibleByArgument { case words, substring, both }
 
+    /// `Array.prefix` **traps** on a negative length, so a bad `--limit` would crash rather than
+    /// report. SQLite treats a negative LIMIT as unlimited, so the failure surfaces only later,
+    /// in Swift. Zero stays valid — an empty result set is a legitimate request.
+    func validate() throws {
+        guard limit >= 0 else {
+            throw ValidationError("--limit must be zero or greater (got \(limit)).")
+        }
+    }
+
     func run() async throws {
         let db = try Store.openForReading(at: store.databasePath)
         let query = terms.joined(separator: " ")
