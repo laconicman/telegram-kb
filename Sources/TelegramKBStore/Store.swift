@@ -75,13 +75,19 @@ public struct Store: Sendable {
         }
     }
 
-    public func upsert(posts: [Post]) throws {
+    public func upsert(posts: [Post], policy: WritePolicy = .replace) throws {
         try dbPool.write { db in
-            for post in posts { try Self.write(post, into: db) }
+            for post in posts { try Self.write(post, into: db, policy: policy) }
         }
     }
 
-    static func write(_ post: Post, into db: Database) throws {
+    static func write(_ post: Post, into db: Database, policy: WritePolicy = .replace) throws {
+        if policy == .keepExisting {
+            let exists = try Int.fetchOne(db, sql: """
+                SELECT 1 FROM post WHERE channelUsername = ? AND messageID = ?
+                """, arguments: [post.id.channelUsername, post.id.messageID]) != nil
+            if exists { return }
+        }
         let cu = post.id.channelUsername, mid = post.id.messageID
         try db.execute(sql: """
             INSERT INTO post (channelUsername, messageID, date, kind, formatSource, mediaCount,
@@ -311,13 +317,86 @@ extension Store {
     /// posts that were never committed — extra recrawling at best, and a claim of "one
     /// transaction scope" that was not true.
     public func commitPage(_ posts: [Post], channel: String, lowest: Int?, highest: Int?,
-                           backfillComplete: Bool) throws {
+                           backfillComplete: Bool, policy: WritePolicy = .replace) throws {
         try dbPool.write { db in
-            for post in posts { try Self.write(post, into: db) }
+            for post in posts { try Self.write(post, into: db, policy: policy) }
             try db.execute(sql: """
                 UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
                        backfillComplete = ?, lastSyncedAt = ? WHERE username = ?
                 """, arguments: [lowest, highest, backfillComplete, Date(), channel])
+        }
+    }
+}
+
+extension Store {
+    /// How to treat a post that is already stored.
+    public enum WritePolicy: Sendable {
+        /// Keep whatever was cached. An edited post is *not* refreshed.
+        ///
+        /// Chosen because a citation should keep saying what it said when it was indexed, and
+        /// because an edit is usually a correction to a link rather than a change of meaning.
+        /// The cost, stated plainly: a post captured mid-edit stays wrong until `--full`.
+        case keepExisting
+        /// Overwrite. What `--full` uses, so a deliberate re-crawl actually refreshes.
+        case replace
+    }
+
+    /// Integrity of a channel's id coverage.
+    ///
+    /// **Message ids are a dense sequence; posts are not dense within it.** An album occupies
+    /// several consecutive ids while rendering as one post, so most absences are explained by
+    /// `mediaCount` rather than by anything missing. What remains after accounting for album
+    /// spans is deletions, service messages — or a page we failed to fetch, which is the only
+    /// one worth alarming about.
+    public struct Integrity: Sendable {
+        public var lowest: Int
+        public var highest: Int
+        public var posts: Int
+        /// Ids accounted for by a post or by an album's span.
+        public var covered: Int
+        /// Ids in range explained by nothing. Expected to be non-zero — deletions are normal.
+        public var unexplained: Int
+        /// The longest run of consecutive unexplained ids. A long run is the signal that a
+        /// *page* was missed, as opposed to scattered deletions.
+        public var longestGap: Int
+        public var longestGapStart: Int?
+        public var backfillComplete: Bool
+    }
+
+    public func integrity(forChannel username: String) throws -> Integrity? {
+        try dbPool.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT messageID, mediaCount FROM post WHERE channelUsername = ? ORDER BY messageID
+                """, arguments: [username])
+            guard let first = rows.first else { return nil }
+            let state = try Row.fetchOne(db,
+                sql: "SELECT backfillComplete FROM channel WHERE username = ?", arguments: [username])
+
+            var covered = Set<Int>()
+            for r in rows {
+                let id: Int = r["messageID"], span: Int = r["mediaCount"] ?? 1
+                for i in id..<(id + max(1, span)) { covered.insert(i) }
+            }
+            let lo: Int = first["messageID"], hi = rows.last!["messageID"] as Int
+            var longest = 0, longestStart: Int?, run = 0, runStart = 0
+            for i in lo...hi {
+                if covered.contains(i) { run = 0; continue }
+                if run == 0 { runStart = i }
+                run += 1
+                if run > longest { longest = run; longestStart = runStart }
+            }
+            return Integrity(lowest: lo, highest: hi, posts: rows.count,
+                             covered: covered.count, unexplained: (hi - lo + 1) - covered.count,
+                             longestGap: longest, longestGapStart: longestStart,
+                             backfillComplete: state?["backfillComplete"] ?? false)
+        }
+    }
+}
+
+extension Store {
+    public func channelUsernames() throws -> [String] {
+        try dbPool.read { db in
+            try String.fetchAll(db, sql: "SELECT username FROM channel ORDER BY username")
         }
     }
 }

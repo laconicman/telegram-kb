@@ -36,6 +36,30 @@ struct Doctor: AsyncParsableCommand {
             }
         }
 
+        // Integrity: ids are a dense sequence, posts are not dense within it. An album covers
+        // several consecutive ids, so most absences are explained by mediaCount. A LONG run of
+        // unexplained ids is the one worth alarming about — that is a missed page, not deletions.
+        if FileManager.default.fileExists(atPath: path), let db = try? Store.openForReading(at: path) {
+            let names = try db.channelUsernames()
+            if !names.isEmpty { print("\nintegrity:") }
+            for name in names {
+                guard let i = try db.integrity(forChannel: name) else { continue }
+                let pct = Double(i.covered) / Double(i.highest - i.lowest + 1) * 100
+                print(String(format: "  @%@: %d posts, ids %d–%d, %.1f%% of the id range accounted for",
+                             name, i.posts, i.lowest, i.highest, pct))
+                print("    unexplained ids: \(i.unexplained) (deletions and service messages are normal)")
+                if let start = i.longestGapStart, i.longestGap >= 25 {
+                    print("    ⚠︎ longest unexplained run: \(i.longestGap) ids from \(start)"
+                        + " — long runs suggest a missed PAGE rather than deletions; consider --full")
+                } else {
+                    print("    longest unexplained run: \(i.longestGap) — consistent with scattered deletions")
+                }
+                if !i.backfillComplete {
+                    print("    ⚠︎ backfill never completed — the next sync will re-crawl in full")
+                }
+            }
+        }
+
         guard !channels.isEmpty else { return }
         print("\nchannels:")
         let fetcher = URLSessionPageFetcher(delay: .seconds(1))

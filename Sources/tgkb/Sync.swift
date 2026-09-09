@@ -83,14 +83,18 @@ struct Sync: AsyncParsableCommand {
                 // together, so an interruption cannot leave a mark for posts that were never
                 // written. Progress is deliberately NOT marked complete here — only a finished
                 // walk can claim that.
+                // Edits are not refreshed on an incremental run: what was cached is what the
+                // citation said when it was indexed. `--full` overwrites, so a deliberate
+                // re-crawl still repairs anything captured wrong.
                 try db.commitPage(posts, channel: channel, lowest: mark.lowestMessageID,
-                                  highest: mark.highestMessageID, backfillComplete: false)
+                                  highest: mark.highestMessageID, backfillComplete: false,
+                                  policy: full ? .replace : .keepExisting)
             }
             if let raw = result.rawChannelID {
                 try db.upsert(channel: Channel(username: channel, rawChannelID: raw,
                                                reachability: .webPreview))
             }
-            try db.upsert(posts: result.posts)   // final pass, incl. the completion flag
+            try db.upsert(posts: result.posts, policy: full ? .replace : .keepExisting)
             try db.recordCrawlState(
                 channel: channel,
                 lowest: result.watermark.lowestMessageID,

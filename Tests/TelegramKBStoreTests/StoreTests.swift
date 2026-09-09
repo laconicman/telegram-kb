@@ -210,3 +210,35 @@ extension StoreTests {
         #expect(try store.post(.init(channelUsername: "iosgr", messageID: 1)) != nil)
     }
 }
+
+extension StoreTests {
+    /// Ids are a dense sequence; posts are not dense within it, because an album covers several.
+    @Test("integrity accounts for album spans rather than calling them gaps")
+    func integrityAccountsForAlbums() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [
+            Self.post(1, "one"),
+            Self.post(2, "album", kind: .album, mediaCount: 6),   // covers 2...7
+            Self.post(10, "later"),                                // 8, 9 genuinely absent
+        ])
+        let i = try #require(try store.integrity(forChannel: "iosgr"))
+        #expect(i.posts == 3)
+        #expect(i.lowest == 1 && i.highest == 10)
+        // 1, 2-7, 10 = 8 ids covered by only three posts.
+        #expect(i.covered == 8, "an album's span must count as covered, not as a gap")
+        #expect(i.unexplained == 2, "only 8 and 9 are unexplained")
+        #expect(i.longestGap == 2 && i.longestGapStart == 8)
+    }
+
+    @Test("keepExisting leaves a cached post alone; replace refreshes it")
+    func writePolicy() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "original")])
+        try store.upsert(posts: [Self.post(1, "edited")], policy: .keepExisting)
+        #expect(try store.post(.init(channelUsername: "iosgr", messageID: 1))?.text == "original",
+                "an edit must not overwrite what a citation already said")
+        try store.upsert(posts: [Self.post(1, "edited")], policy: .replace)
+        #expect(try store.post(.init(channelUsername: "iosgr", messageID: 1))?.text == "edited",
+                "--full must still repair a post captured wrong")
+    }
+}

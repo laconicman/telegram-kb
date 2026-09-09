@@ -138,6 +138,13 @@ missing data.
 Relatedly: **a missing message id is not evidence of deletion.** Albums consume consecutive ids
 that never appear as posts, which is a large part of the 54% id gap in the crawled corpus.
 
+**Corrected 2026-09-09.** That "54%" counts ids with no *post row*, which is the misleading
+framing: an album occupies several consecutive ids while rendering as one post, so most of those
+ids are accounted for by `mediaCount`. Measured across the four synced channels with album spans
+included, **86–95% of each channel's id range is accounted for**, and the longest run of
+genuinely unexplained ids is 4–9 — consistent with scattered deletions and service messages,
+not with missed pages. `tgkb doctor` reports this per channel.
+
 **Discharge.** The first Phase 2 task, before any backfill: fetch one post from a channel already
 crawled from the web and assert the rows reconcile — **including an album**, which is the case
 that actually fails. Group TDLib messages by `media_group_id` before writing, take the first id

@@ -423,6 +423,44 @@ Both sides join on `effective_url`. Either may populate `url_resolution` — we 
 URL first, we are already doing network I/O, and a `HEAD` is not a fetch. Only the destination of
 the result changed.
 
+## Edits are not refreshed; deletions are kept
+
+**Decision.** An incremental sync writes a post only if it is not already stored. `--full`
+overwrites.
+
+A citation should keep saying what it said when it was indexed. An edit is usually a corrected
+link rather than a change of meaning, and re-fetching the newest page on every run would
+otherwise rewrite recent posts continuously. Deleted posts are simply never removed — the
+crawler only ever inserts.
+
+**The cost, stated rather than hidden:** a post captured mid-edit, or with a preview Telegram had
+not yet resolved, stays wrong until someone runs `--full`. That is why `--full` refreshes rather
+than being merely a re-walk.
+
+## Integrity: ids are dense, posts are not
+
+Message ids form a dense sequence; posts do not fill it. **Most absences are albums** — a media
+group occupies several consecutive ids while rendering as one post — so `mediaCount` explains
+them, and only what remains is deletions, service messages, or a page we failed to fetch.
+
+`tgkb doctor` reports per channel: ids covered (counting album spans), unexplained ids, and the
+**longest unexplained run**. The run length is the discriminating signal — scattered deletions
+produce short runs, a missed page produces a long one.
+
+Measured across the four synced channels:
+
+| channel | posts | id range | accounted for | longest run |
+|---|---:|---|---:|---:|
+| `@iosgr` | 4,402 | 1–4762 | **94.5%** | 8 |
+| `@ios_broadcast` | 1,214 | 1–2835 | **90.2%** | 8 |
+| `@prefire_ios` | 154 | 1–181 | **89.5%** | 4 |
+| `@iosdev` | 1,674 | 1–2118 | **86.6%** | 9 |
+
+**This corrects a figure repeated throughout the earlier notes.** "54% of the id space is absent"
+counted ids with no post row, which is the wrong denominator once albums are understood. The
+honest number is 5–13% unexplained, in short runs — which is what a channel with ordinary
+deletions should look like, and which means a long run is a genuine alarm rather than noise.
+
 ## Crawl state belongs in the database, not beside it
 
 **Decision.** A channel's `lowestMessageID`, `highestMessageID` and `backfillComplete` live on the
@@ -611,6 +649,13 @@ Two things I had recorded earlier are wrong or incomplete because of this:
    *N* messages sharing a `media_group_id`. The ID transform is still correct — but a naive
    reconciler would create N rows from TDLib against 1 from the web and treat the difference as
    missing data. Folded into `TD-8`, which is already the Phase 2 gate.
+
+**Corrected 2026-09-09.** That "54%" counts ids with no *post row*, which is the misleading
+framing: an album occupies several consecutive ids while rendering as one post, so most of those
+ids are accounted for by `mediaCount`. Measured across the four synced channels with album spans
+included, **86–95% of each channel's id range is accounted for**, and the longest run of
+genuinely unexplained ids is 4–9 — consistent with scattered deletions and service messages,
+not with missed pages. `tgkb doctor` reports this per channel.
 
 **Decision:** the album's **first message id is the post identity**, `mediaCount` records the
 span, and TDLib ingestion must group by `media_group_id` before writing rather than after.
