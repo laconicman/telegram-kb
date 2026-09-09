@@ -237,3 +237,54 @@ extension Store {
         return out.count
     }
 }
+
+extension Store {
+    /// Highest message id already stored for a channel, or `nil` if none.
+    ///
+    /// **This is the source of truth for incremental sync, not a checkpoint file.** A separate
+    /// watermark file can drift from the database — delete the store but keep the file and sync
+    /// "resumes" from a mark describing rows that no longer exist, silently skipping the
+    /// backfill. That happened on the first full run. Deriving it from the store makes the
+    /// drift impossible rather than merely unlikely.
+    public func highestMessageID(forChannel username: String) throws -> Int? {
+        try dbPool.read { db in
+            try Int.fetchOne(db, sql: "SELECT MAX(messageID) FROM post WHERE channelUsername = ?",
+                             arguments: [username])
+        }
+    }
+}
+
+extension Store {
+    /// What a channel's crawl already covers. The single source of truth for incremental sync.
+    public struct CrawlState: Sendable, Hashable {
+        public var lowest: Int?
+        public var highest: Int?
+        public var backfillComplete: Bool
+    }
+
+    public func crawlState(forChannel username: String) throws -> CrawlState {
+        try dbPool.read { db in
+            guard let row = try Row.fetchOne(db, sql: """
+                SELECT lowestMessageID, highestMessageID, backfillComplete
+                FROM channel WHERE username = ?
+                """, arguments: [username]) else {
+                return CrawlState(lowest: nil, highest: nil, backfillComplete: false)
+            }
+            return CrawlState(lowest: row["lowestMessageID"], highest: row["highestMessageID"],
+                              backfillComplete: row["backfillComplete"] ?? false)
+        }
+    }
+
+    /// Records crawl progress on the channel row, inside the same database as the posts — so the
+    /// two cannot drift apart the way a side file did.
+    public func recordCrawlState(channel username: String, lowest: Int?, highest: Int?,
+                                 backfillComplete: Bool) throws {
+        try dbPool.write { db in
+            try db.execute(sql: """
+                UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
+                       backfillComplete = ?, lastSyncedAt = ?
+                WHERE username = ?
+                """, arguments: [lowest, highest, backfillComplete, Date(), username])
+        }
+    }
+}

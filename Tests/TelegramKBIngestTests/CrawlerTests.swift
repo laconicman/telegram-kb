@@ -125,44 +125,8 @@ struct CrawlerTests {
         #expect(try await ChannelClassifier(fetcher: stub).classify("x") == .group)
     }
 
-    // MARK: - Checkpointing
 
-    @Test("checkpoints round-trip and are written atomically")
-    func checkpointRoundTrip() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ckpt-\(UUID().uuidString)")
-        let store = CheckpointStore(at: dir.appendingPathComponent("watermarks.json"))
-        #expect(try store.load().isEmpty, "a missing checkpoint is empty, not an error")
 
-        let mark = WebPreviewSource.Watermark(channelUsername: "iosgr", highestMessageID: 4744,
-                                              lowestMessageID: 1, updatedAt: Date(),
-                                              isBackfillComplete: true)
-        try store.update(mark)
-        #expect(try store.load()["iosgr"]?.highestMessageID == 4744)
-
-        try store.update(.init(channelUsername: "iosdev", highestMessageID: 1659,
-                               lowestMessageID: 1, updatedAt: Date(), isBackfillComplete: false))
-        #expect(try store.load().count == 2, "updating one channel must not drop the others")
-
-        // Checks CLEANUP, not atomicity. Atomicity is a property of FileManager.replaceItemAt
-        // and cannot be asserted without killing a process mid-write; verified by construction
-        // (temp file in the destination's own directory, so the replace is a rename). The test
-        // that carries real weight is `truncatedCheckpoint` below.
-        let leftovers = try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasSuffix(".tmp") }
-        #expect(leftovers.isEmpty, "the replace must leave no debris: \(leftovers)")
-    }
-
-    @Test("a truncated checkpoint is rejected rather than read as valid")
-    func truncatedCheckpoint() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ckpt-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let file = dir.appendingPathComponent("watermarks.json")
-        // What an append-and-flush writer leaves behind when killed mid-write.
-        try #"{"iosgr":{"channelUsername":"iosgr","highestMes"#.write(to: file, atomically: true, encoding: .utf8)
-        #expect(throws: (any Error).self) { try CheckpointStore(at: file).load() }
-    }
 }
 
 /// Hits the live network, so it is gated. Run with:

@@ -93,13 +93,16 @@ rather than a dedupe one** (<doc:Design>).
 Page by returned ids, never a stride. Polite by default. Per-channel watermarks so a re-run is
 incremental. The four-way channel classifier for `doctor`.
 
-**Checkpoint atomically** — write to a temp file, then rename. `Scripts/resolve_urls.py` appends
-and flushes, which is *not* atomic: a kill mid-write can truncate a line. It survived two session
-deaths by luck (`research/skills-landscape.md`). Handle interruption deliberately rather than
-relying on append-as-you-go.
+**Crawl state lives in the database, not a side file.** A separate watermark file was built
+first, with atomic writes — and then deleted, because the file itself was the problem: it drifts
+from the store. Deleting the database while the file survived left a channel with 17 posts and a
+mark of 181, and sync "resumed" from it, skipping the backfill. Deriving the mark from the store
+does not help — the gap is *below* the mark. Only `backfillComplete`, written beside the posts it
+describes, distinguishes "up to date" from "never finished".
 
 **Delivered.** `WebPreviewSource` pages by returned ids with per-channel watermarks;
-`ChannelClassifier` implements the four-way `doctor` check; `CheckpointStore` writes atomically.
+`ChannelClassifier` implements the four-way `doctor` check; crawl state lives on the channel
+row, in the same database as the posts, so the two cannot drift.
 Nine hermetic tests over committed fixtures, plus an env-gated live suite
 (`TGKB_LIVE=1 swift test --filter LiveCrawl`) that verifies the done-criterion directly: a full
 backfill returns **136 posts spanning ids 1–297**, exactly reproducing the independent Python
@@ -109,7 +112,7 @@ crawl, and a re-run fetches one page.
 
 ## Track C — retrieval *(after B, not alongside it)*
 
-### S5 — `tgkb query`
+### S5 — `tgkb sync`, `query`, `doctor` ✅ *(done)*
 CLI search over the store. Exists before the MCP server because it is how the evals run without
 an MCP client in the loop.
 

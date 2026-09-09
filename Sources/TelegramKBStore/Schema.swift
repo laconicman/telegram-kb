@@ -133,6 +133,23 @@ public enum Schema {
                           columns: ["channelUsername", "messageID"], unique: true)
         }
 
+        m.registerMigration("v3-watermarks-in-channel") { db in
+            // Crawl state lives on the channel row, not in a side file.
+            //
+            // A separate watermark file drifts from the database, and did: deleting the store
+            // while the file survived made sync "resume" from a mark describing rows that no
+            // longer existed, leaving a channel with 17 posts and a high-water mark of 181 —
+            // and no amount of deriving the mark from the store fixes that, because the store's
+            // MAX is also 181. The gap is *below* the mark. One source of truth removes the
+            // failure class instead of narrowing it.
+            try db.alter(table: "channel") { t in
+                t.add(column: "lowestMessageID", .integer)
+                t.add(column: "highestMessageID", .integer)
+                t.add(column: "backfillComplete", .boolean).notNull().defaults(to: false)
+                t.add(column: "lastSyncedAt", .datetime)
+            }
+        }
+
         return m
     }
 }

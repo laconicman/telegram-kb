@@ -36,11 +36,8 @@ struct Sync: AsyncParsableCommand {
             throw ValidationError("Name at least one channel, or pass --import-resolutions.")
         }
 
-        let checkpoints = CheckpointStore(at: URL(fileURLWithPath: store.databasePath)
-            .deletingLastPathComponent().appendingPathComponent("watermarks.json"))
         let fetcher = URLSessionPageFetcher(delay: .seconds(delay))
         let source = WebPreviewSource(fetcher: fetcher)
-        var marks = try checkpoints.load()
 
         for channel in channels {
             switch try await ChannelClassifier(fetcher: fetcher).classify(channel) {
@@ -69,24 +66,35 @@ struct Sync: AsyncParsableCommand {
             try db.upsert(channel: Channel(username: channel, rawChannelID: 0,
                                            reachability: .webPreview))
 
-            let since = full ? nil : marks[channel]?.highestMessageID
-            // Write and checkpoint per PAGE, not per channel. Accumulating a whole channel and
-            // saving once means an interrupted crawl loses everything — 4,388 posts for the
-            // largest channel here — which would make the atomic checkpoint pointless.
+            // One source of truth: the channel row, in the same database as the posts.
+            //
+            // A side watermark file drifts. Deleting the store while the file survived left a
+            // channel with 17 posts and a mark of 181, and sync dutifully "resumed" — skipping
+            // the backfill entirely. Deriving the mark from the store does not help either,
+            // because the gap is *below* the mark. Only `backfillComplete`, written beside the
+            // posts it describes, distinguishes "up to date" from "never finished".
+            let state = try db.crawlState(forChannel: channel)
+            let since = (full || !state.backfillComplete) ? nil : state.highest
+
             let result = try await source.crawl(channel: channel, since: since) { posts, mark in
+                // Per page, so an interrupted crawl loses a page rather than a whole channel.
+                // Progress is deliberately NOT marked complete here — only a finished walk can
+                // claim that.
                 try db.upsert(posts: posts)
-                // `update` load-modify-saves a single channel, so the closure captures nothing
-                // mutable — which is what Swift 6 requires of a @Sendable closure, and is why
-                // this method exists rather than mutating a captured dictionary.
-                try checkpoints.update(mark)
+                try db.recordCrawlState(channel: channel, lowest: mark.lowestMessageID,
+                                        highest: mark.highestMessageID, backfillComplete: false)
             }
             if let raw = result.rawChannelID {
                 try db.upsert(channel: Channel(username: channel, rawChannelID: raw,
                                                reachability: .webPreview))
             }
             try db.upsert(posts: result.posts)   // final pass, incl. the completion flag
-            marks[channel] = result.watermark
-            try checkpoints.save(marks)
+            try db.recordCrawlState(
+                channel: channel,
+                lowest: result.watermark.lowestMessageID,
+                highest: result.watermark.highestMessageID,
+                // An incremental run has not seen the whole history, so it must not claim to.
+                backfillComplete: result.watermark.isBackfillComplete || state.backfillComplete)
 
             print("\(channel): \(result.posts.count) posts, \(result.pagesFetched) pages"
                 + (since.map { ", since \($0)" } ?? ", full backfill"))

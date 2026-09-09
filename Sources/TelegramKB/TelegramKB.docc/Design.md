@@ -423,6 +423,28 @@ Both sides join on `effective_url`. Either may populate `url_resolution` — we 
 URL first, we are already doing network I/O, and a `HEAD` is not a fetch. Only the destination of
 the result changed.
 
+## Crawl state belongs in the database, not beside it
+
+**Decision.** A channel's `lowestMessageID`, `highestMessageID` and `backfillComplete` live on the
+`channel` row, in the same database as the posts they describe.
+
+A separate checkpoint file was built first — with atomic writes, temp-file-then-rename, the lot —
+and then deleted, because atomicity was never the problem. **The second store was.**
+
+The failure, on the first real run: the database was deleted while the watermark file survived.
+Sync read a mark of 181, "resumed" from it, and left the channel with 17 posts and no backfill.
+Nothing errored.
+
+**Deriving the mark from the store does not fix it either** — the store's `MAX(messageID)` is
+*also* 181, because the gap is **below** the mark, not above it. High-water marks cannot express
+"complete". Only `backfillComplete`, written in the same transaction scope as the posts,
+distinguishes *up to date* from *never finished* — and now `sync` self-heals: a channel whose
+backfill never completed is re-crawled in full regardless of its mark.
+
+**Rejected: a side file with better write discipline.** Atomic writes make a file harder to
+corrupt; they do nothing about two stores disagreeing. Removing the second store removes the
+failure class rather than narrowing it.
+
 ## Bot-walled content: try a mirror, and mark its provenance
 
 **Decision, revised.** The earlier position — "where a site is closed to automated fetch, index
