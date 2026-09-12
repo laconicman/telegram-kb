@@ -159,3 +159,70 @@ struct LiveCrawlTests {
         #expect(result.pagesFetched == 1)
     }
 }
+
+/// Round-2 review findings. Each asserts the failure the reviewer described, not merely the fix.
+extension CrawlerTests {
+
+    /// 🔴 A 429 or 5xx parses as an empty page, which is indistinguishable from real exhaustion —
+    /// and marking a truncated crawl complete stops every later sync from recovering the history.
+    @Test("an HTTP error during pagination fails loudly instead of looking like exhaustion")
+    func httpErrorIsNotExhaustion() async throws {
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/x": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/x"),
+            // Page two is rate-limited and empty — exactly the shape of a finished history.
+            "https://t.me/s/x?before=262": FetchResult(body: "", statusCode: 429,
+                                                       finalURL: URL(string: "https://t.me/s/x")!),
+        ])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            _ = try await WebPreviewSource(fetcher: stub).crawl(channel: "x")
+        }
+    }
+
+    /// 🔴 A page-capped walk has not reached the end, so it must not claim completion — otherwise
+    /// the next sync trusts the mark and the remaining history is never fetched.
+    @Test("hitting the page cap does not mark the backfill complete")
+    func pageCapIsNotCompletion() async throws {
+        // Every page yields posts and always makes progress, so only the cap stops the walk.
+        var routes: [String: FetchResult] = [:]
+        let page = try Self.fixture("swiftui_dev")
+        routes["https://t.me/s/y"] = Self.ok(page, "https://t.me/s/y")
+        routes["https://t.me/s/y?before=262"] = Self.ok(try Self.fixture("page-before-262"),
+                                                        "https://t.me/s/y?before=262")
+        let result = try await WebPreviewSource(fetcher: StubFetcher(routes: routes))
+            .crawl(channel: "y", maxPages: 2)
+        #expect(result.pagesFetched == 2)
+        #expect(!result.watermark.isBackfillComplete,
+                "a capped walk has not seen the whole history and must not say it has")
+    }
+
+    /// 🔴 Without a resume cursor a channel larger than the cap re-walks its newest pages forever.
+    @Test("an unfinished backfill resumes from the saved cursor")
+    func resumeFromCursor() async throws {
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/z?before=262": Self.ok(try Self.fixture("page-before-262"),
+                                                   "https://t.me/s/z?before=262"),
+        ])
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "z", resumeFrom: 262)
+        // It must start at the cursor, not at the newest page.
+        #expect(await stub.urls().first == "https://t.me/s/z?before=262")
+        #expect(result.postCount == 14)
+    }
+
+    /// 🔍 Retaining every post defeats the point of committing per page.
+    /// An actor rather than a captured `var`: the callback is `@Sendable`, so Swift 6 rejects
+    /// mutating captured state from it — the same rule that shaped `CheckpointStore.update`.
+    actor Counter {
+        private(set) var total = 0
+        func add(_ n: Int) { total += n }
+    }
+
+    @Test("pages are not retained when a callback consumes them")
+    func streamingDoesNotRetain() async throws {
+        let counter = Counter()
+        let result = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev") { posts, _ in await counter.add(posts.count) }
+        #expect(await counter.total == 34, "every post still reaches the caller")
+        #expect(result.postCount == 34, "and is counted")
+        #expect(result.posts.isEmpty, "but none is held for a final rewrite")
+    }
+}

@@ -28,8 +28,14 @@ struct Sync: AsyncParsableCommand {
         let db = try Store.openForWriting(at: store.databasePath)
 
         if let path = importResolutions {
-            let n = try db.importResolutions(fromJSONLAt: path)
-            print("imported \(n) resolutions")
+            let report = try db.importResolutions(fromJSONLAt: path)
+            print("imported \(report.imported) resolutions")
+            if report.skipped > 0 {
+                // Loud on purpose: a skipped row is a resolution we will never have.
+                let msg = "warning: \(report.skipped) unreadable row(s) skipped — the file "
+                        + "may be truncated or from a different schema\n"
+                FileHandle.standardError.write(Data(msg.utf8))
+            }
             return
         }
         guard !channels.isEmpty else {
@@ -77,8 +83,13 @@ struct Sync: AsyncParsableCommand {
             // posts it describes, distinguishes "up to date" from "never finished".
             let state = try db.crawlState(forChannel: channel)
             let since = (full || !state.backfillComplete) ? nil : state.highest
+            // An unfinished backfill resumes from where it stopped. Without this a channel with
+            // more pages than the cap re-walks its newest pages on every run and never reaches
+            // its own history.
+            let resumeFrom = (full || state.backfillComplete) ? nil : state.lowest
 
-            let result = try await source.crawl(channel: channel, since: since) { posts, mark in
+            let result = try await source.crawl(channel: channel, since: since,
+                                                resumeFrom: resumeFrom) { posts, mark in
                 // One transaction per page: posts and the watermark that describes them commit
                 // together, so an interruption cannot leave a mark for posts that were never
                 // written. Progress is deliberately NOT marked complete here — only a finished
@@ -94,7 +105,8 @@ struct Sync: AsyncParsableCommand {
                 try db.upsert(channel: Channel(username: channel, rawChannelID: raw,
                                                reachability: .webPreview))
             }
-            try db.upsert(posts: result.posts, policy: full ? .replace : .keepExisting)
+            // No final rewrite: every page was already committed by the callback above, and
+            // `crawl` does not retain them when one is given.
             try db.recordCrawlState(
                 channel: channel,
                 lowest: result.watermark.lowestMessageID,
@@ -102,7 +114,7 @@ struct Sync: AsyncParsableCommand {
                 // An incremental run has not seen the whole history, so it must not claim to.
                 backfillComplete: result.watermark.isBackfillComplete || state.backfillComplete)
 
-            print("\(channel): \(result.posts.count) posts, \(result.pagesFetched) pages"
+            print("\(channel): \(result.postCount) posts, \(result.pagesFetched) pages"
                 + (since.map { ", since \($0)" } ?? ", full backfill"))
         }
     }

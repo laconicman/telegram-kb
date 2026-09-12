@@ -177,7 +177,8 @@ extension StoreTests {
         let path = FileManager.default.temporaryDirectory
             .appendingPathComponent("res-\(UUID().uuidString).jsonl").path
         try jsonl.write(toFile: path, atomically: true, encoding: .utf8)
-        #expect(try store.importResolutions(fromJSONLAt: path) == 3)
+        // Return type changed from Int to ImportReport when skipped rows became reportable.
+        #expect(try store.importResolutions(fromJSONLAt: path).imported == 3)
 
         // Same-host path rewrite: NOT cross-host, and it still changes the key. This is the
         // case that makes resolution a seam feature rather than a dedupe one.
@@ -240,5 +241,45 @@ extension StoreTests {
         try store.upsert(posts: [Self.post(1, "edited")], policy: .replace)
         #expect(try store.post(.init(channelUsername: "iosgr", messageID: 1))?.text == "edited",
                 "--full must still repair a post captured wrong")
+    }
+}
+
+/// Round-2 review findings on the store.
+extension StoreTests {
+
+    /// 🟡 When the last post is an album its span runs past that post's own id, so deriving the
+    /// range's upper bound from the row made `covered` larger than the range itself —
+    /// `unexplained` went negative and Doctor could report coverage above 100%.
+    @Test("a trailing album cannot push coverage above 100%")
+    func trailingAlbumIntegrity() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [
+            Self.post(1, "one"),
+            Self.post(5, "album at the end", kind: .album, mediaCount: 6),   // covers 5...10
+        ])
+        let i = try #require(try store.integrity(forChannel: "iosgr"))
+        #expect(i.highest == 10, "the range must end at the last COVERED id, not the last row's id")
+        #expect(i.unexplained >= 0, "coverage cannot exceed the range")
+        #expect(i.covered <= i.highest - i.lowest + 1)
+        #expect(i.unexplained == 3, "2, 3 and 4 are the genuine gaps")
+    }
+
+    /// 🔍 A silently skipped row turns a truncated or version-skewed file into a
+    /// successful-looking import missing rows nobody counted.
+    @Test("unreadable resolution rows are counted, not silently dropped")
+    func importReportsSkippedRows() throws {
+        let (store, _) = try Self.seeded()
+        let jsonl = """
+        {"url_canonical":"https://a.example","final_url":"https://a.example","http_status":200,"hops":0,"resolved_at":"2026-09-06T01:00:00.000000+00:00"}
+        {"url_canonical":"https://b.example","final_
+        {"url_canonical":"https://c.example","final_url":"https://c.example","http_status":200,"hops":0,"resolved_at":"2026-09-06T01:00:00.000000+00:00"}
+        """
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("res-\(UUID().uuidString).jsonl").path
+        try jsonl.write(toFile: path, atomically: true, encoding: .utf8)
+
+        let report = try store.importResolutions(fromJSONLAt: path)
+        #expect(report.imported == 2)
+        #expect(report.skipped == 1, "the truncated line must be reported, not vanish")
     }
 }

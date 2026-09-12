@@ -21,17 +21,29 @@ TGKB="${TGKB:-./.build/release/tgkb}"
 # exited 0 after printing ERR everywhere. The same class of bug being fixed, reintroduced by the
 # fix. Count the ERR values instead, where they are actually visible.
 errors=0
+ERRLOG=$(mktemp)
+trap 'rm -f "$ERRLOG"' EXIT
 
-# Echoes the hit count, or "ERR" — never a silent zero.
+# Echoes the hit count, or "ERR" — never a silent zero, and never a diagnostic mistaken for one.
+#
+# stdout and stderr are captured SEPARATELY. Merging them with 2>&1 meant a successful query that
+# also wrote a warning could return that warning as its "count": `row` only tests for ERR, so the
+# script exited 0 with a non-numeric result printed as a number. A successful command whose first
+# stdout line is not a number is therefore also an error.
 run() {
-  local out status
-  out=$("$@" 2>&1); status=$?
+  local out err status
+  err=$(mktemp)
+  out=$("$@" 2>"$err"); status=$?
   if [ $status -ne 0 ]; then
-    printf '%s' "$out" | tail -1 >> /tmp/tgkb-eval-errors.$$
-    echo "ERR"
-    return
+    tail -1 "$err" >> "$ERRLOG" 2>/dev/null
+    rm -f "$err"; echo "ERR"; return
   fi
-  printf '%s' "$out" | head -1
+  rm -f "$err"
+  out=$(printf '%s' "$out" | head -1 | tr -d '[:space:]')
+  case "$out" in
+    ''|*[!0-9]*) echo "non-numeric result: '$out'" >> "$ERRLOG"; echo "ERR"; return ;;
+  esac
+  printf '%s' "$out"
 }
 q()  { run $TGKB query --db "$DB" --quiet --limit 500 "$@"; }
 qm() { local m="$1"; shift; run $TGKB query --db "$DB" --quiet --limit 500 --mode "$m" "$@"; }
@@ -68,9 +80,7 @@ row G10 "гравитационные волны (none)" "$h" "$(verdict "$h" "-
 echo
 if [ "$errors" -gt 0 ]; then
   echo "$errors quer(y|ies) FAILED TO RUN — results above are NOT a pass." >&2
-  [ -s /tmp/tgkb-eval-errors.$$ ] && echo "last error: $(tail -1 /tmp/tgkb-eval-errors.$$)" >&2
-  rm -f /tmp/tgkb-eval-errors.$$
+  [ -s "$ERRLOG" ] && echo "last error: $(tail -1 "$ERRLOG")" >&2
   exit 1
 fi
-rm -f /tmp/tgkb-eval-errors.$$
 echo "G5/G6/G7 are natural-language and cross-channel cases; they need the MCP surface (S6)."

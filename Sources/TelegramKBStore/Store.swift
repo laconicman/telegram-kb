@@ -204,8 +204,13 @@ extension Store {
     /// The resolver records the *final* URL; canonicalising it here keeps exactly one
     /// canonicaliser in the system, which is the same reason the script pipes through the Swift
     /// binary rather than reimplementing the spec in Python.
+    public struct ImportReport: Sendable { public var imported: Int; public var skipped: Int }
+
+    /// - Returns: how many rows were imported **and how many were unreadable**. A silent skip
+    ///   turns a truncated or version-skewed file into a successful-looking import missing rows
+    ///   nobody counted.
     @discardableResult
-    public func importResolutions(fromJSONLAt path: String) throws -> Int {
+    public func importResolutions(fromJSONLAt path: String) throws -> ImportReport {
         struct Row: Decodable {
             let url_canonical: String
             let final_url: String
@@ -226,8 +231,12 @@ extension Store {
         let text = try String(contentsOfFile: path, encoding: .utf8)
         let iso = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
         var out: [URLResolution] = []
+        var skipped = 0
         for line in text.split(separator: "\n") {
-            guard let row = try? JSONDecoder().decode(Row.self, from: Data(line.utf8)) else { continue }
+            guard let row = try? JSONDecoder().decode(Row.self, from: Data(line.utf8)) else {
+                if !line.trimmingCharacters(in: .whitespaces).isEmpty { skipped += 1 }
+                continue
+            }
             let status = row.http_status?.text
             // A non-2xx outcome is recorded with resolvedCanonical nil: "we checked and it
             // failed" is different information from "we never checked", which is an absent row.
@@ -240,7 +249,7 @@ extension Store {
                 resolvedAt: (try? iso.parse(row.resolved_at)) ?? Date()))
         }
         try upsert(resolutions: out)
-        return out.count
+        return ImportReport(imported: out.count, skipped: skipped)
     }
 }
 
@@ -377,7 +386,12 @@ extension Store {
                 let id: Int = r["messageID"], span: Int = r["mediaCount"] ?? 1
                 for i in id..<(id + max(1, span)) { covered.insert(i) }
             }
-            let lo: Int = first["messageID"], hi = rows.last!["messageID"] as Int
+            // The upper bound is the highest id COVERED, not the highest post's first id.
+            // When the last post is an album its span runs past that id, so deriving `hi` from
+            // the row would put more ids in `covered` than in the range — making `unexplained`
+            // negative and coverage exceed 100%.
+            let lo: Int = first["messageID"]
+            let hi = covered.max() ?? lo
             var longest = 0, longestStart: Int?, run = 0, runStart = 0
             for i in lo...hi {
                 if covered.contains(i) { run = 0; continue }

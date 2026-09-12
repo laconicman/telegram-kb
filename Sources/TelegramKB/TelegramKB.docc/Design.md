@@ -437,6 +437,29 @@ crawler only ever inserts.
 not yet resolved, stays wrong until someone runs `--full`. That is why `--full` refreshes rather
 than being merely a re-walk.
 
+## A failed fetch is never exhaustion
+
+**Decision.** `crawl` checks the HTTP status and throws on anything outside 2xx. A walk that
+ended in an error can never set `backfillComplete`.
+
+The failure this prevents is quiet and permanent. A 429 or 5xx returns a body that parses as
+**zero posts** — byte-for-byte the same signal as reaching the end of a channel's history. The
+crawler would record the backfill as finished, and because a finished backfill is never
+re-walked, the truncated history would stay missing through every later sync. Nothing would ever
+report it.
+
+Two related rules, same principle — **only a walk that actually reached the end may say so**:
+
+- **The page cap is not completion.** A crawl stopped by `maxPages` has not seen the whole
+  history, so it leaves `backfillComplete` false.
+- **An unfinished backfill resumes from its saved `lowestMessageID`.** Without a resume cursor a
+  channel with more pages than the cap re-walks its newest pages on every run and never reaches
+  its own history — the mark would advance forever while the gap stayed put.
+
+**Pages are also not retained when a callback consumes them.** Accumulating the whole channel to
+hand back at the end would defeat the per-page commit it exists alongside; `postCount` carries
+the tally instead.
+
 ## Integrity: ids are dense, posts are not
 
 Message ids form a dense sequence; posts do not fill it. **Most absences are albums** — a media

@@ -34,28 +34,56 @@ public struct WebPreviewSource: Sendable {
         public var posts: [Post]
         public var watermark: Watermark
         public var pagesFetched: Int
+        /// Posts seen across the walk, counted even when pages are not retained.
+        public var postCount: Int
         /// Bare channel id from `data-view`, which yields the TDLib `chat_id` for reconciliation.
         public var rawChannelID: Int64?
     }
 
+    public enum CrawlError: Error, CustomStringConvertible {
+        case http(status: Int, url: String)
+        public var description: String {
+            switch self {
+            case .http(let status, let url): "HTTP \(status) for \(url)"
+            }
+        }
+    }
+
     /// Walks a channel's history, newest page first, following `?before=<lowest id on page>`.
     ///
-    /// - Parameter since: stop once a page contains only posts at or below this id. Pass the
-    ///   previous run's `highestMessageID` for an incremental sync, or `nil` for a full backfill.
-    public func crawl(channel: String, since: Int? = nil, maxPages: Int = 500,
+    /// - Parameters:
+    ///   - since: stop once a page holds only posts at or below this id. The previous run's
+    ///     high-water mark for an incremental sync; `nil` for a backfill.
+    ///   - resumeFrom: begin backward pagination here instead of at the newest page. The saved
+    ///     `lowestMessageID` of an unfinished backfill — without it a channel larger than
+    ///     `maxPages` re-walks its newest pages forever and never reaches its history.
+    ///   - onPage: called with each page as it arrives. **When provided, pages are not retained**
+    ///     — the caller has already persisted them, and holding a whole channel in memory to
+    ///     hand back at the end defeats the point of streaming.
+    public func crawl(channel: String, since: Int? = nil, resumeFrom: Int? = nil,
+                      maxPages: Int = 500,
                       onPage: (@Sendable ([Post], Watermark) async throws -> Void)? = nil)
     async throws -> CrawlResult {
-        var seen: [Int: Post] = [:]
-        var cursor: Int?
-        var pages = 0
+        var retained: [Int: Post] = [:]
+        var cursor: Int? = resumeFrom
+        var pages = 0, count = 0
+        var lowestSeen: Int?, highestSeen: Int?
         var exhausted = false
         var rawChannelID: Int64?
 
         while pages < maxPages {
             var components = URLComponents(string: "https://t.me/s/\(channel)")!
             if let cursor { components.queryItems = [URLQueryItem(name: "before", value: "\(cursor)")] }
-            let result = try await fetcher.fetch(components.url!)
+            let url = components.url!
+            let result = try await fetcher.fetch(url)
             pages += 1
+
+            // A non-2xx response parses as an empty page, which is indistinguishable from real
+            // history exhaustion — and marking a truncated crawl "complete" would stop every
+            // later sync from ever retrieving the missing history. Fail loudly instead.
+            guard (200..<300).contains(result.statusCode) else {
+                throw CrawlError.http(status: result.statusCode, url: url.absoluteString)
+            }
 
             let posts = try WebPreviewParser.parse(html: result.body)
             guard !posts.isEmpty else { exhausted = true; break }
@@ -65,38 +93,40 @@ public struct WebPreviewSource: Sendable {
 
             let ids = posts.map(\.id.messageID)
             let lowest = ids.min()!
-            for p in posts { seen[p.id.messageID] = p }
+            count += posts.count
+            lowestSeen = min(lowestSeen ?? lowest, lowest)
+            highestSeen = max(highestSeen ?? ids.max()!, ids.max()!)
+            if onPage == nil { for p in posts { retained[p.id.messageID] = p } }
 
             if let onPage {
                 try await onPage(posts, Watermark(
-                    channelUsername: channel,
-                    highestMessageID: seen.keys.max() ?? 0,
-                    lowestMessageID: seen.keys.min() ?? 0,
-                    updatedAt: Date(), isBackfillComplete: false))
+                    channelUsername: channel, highestMessageID: highestSeen ?? 0,
+                    lowestMessageID: lowestSeen ?? 0, updatedAt: Date(), isBackfillComplete: false))
             }
 
-            // Incremental stop: this page is entirely at or below the previous run's high-water
-            // mark, so everything older is already ingested.
             if let since, ids.allSatisfy({ $0 <= since }) { break }
 
-            // Page by the ids actually returned, never by a fixed stride. Ids are
-            // non-contiguous — 54% of the id space is absent, largely because an album occupies
-            // several consecutive ids while rendering as one post — so a decrementing cursor
+            // Page by the ids actually returned, never by a stride: ids are non-contiguous
+            // (an album occupies several while rendering as one post), so a decrementing cursor
             // would silently skip posts.
             if let cursor, lowest >= cursor { exhausted = true; break }   // no progress
             if lowest <= 1 { exhausted = true; break }
             cursor = lowest
         }
 
-        let all = seen.values.sorted { $0.id.messageID < $1.id.messageID }
+        let all = retained.values.sorted { $0.id.messageID < $1.id.messageID }
         return CrawlResult(
             posts: all,
             watermark: Watermark(channelUsername: channel,
-                                 highestMessageID: all.last?.id.messageID ?? since ?? 0,
-                                 lowestMessageID: all.first?.id.messageID ?? 0,
+                                 highestMessageID: highestSeen ?? since ?? 0,
+                                 lowestMessageID: lowestSeen ?? 0,
                                  updatedAt: Date(),
-                                 isBackfillComplete: exhausted && since == nil),
+                                 // Only a walk that actually reached the end may claim this, and
+                                 // a page-capped walk has not.
+                                 isBackfillComplete: exhausted && since == nil && pages < maxPages),
             pagesFetched: pages,
+            postCount: count,
             rawChannelID: rawChannelID)
     }
+
 }
