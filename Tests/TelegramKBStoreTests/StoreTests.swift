@@ -283,3 +283,33 @@ extension StoreTests {
         #expect(report.skipped == 1, "the truncated line must be reported, not vanish")
     }
 }
+
+/// Round-3 review findings on the store.
+extension StoreTests {
+
+    /// 🔴 A resumed walk only visits OLDER pages. Replacing the stored high-water mark with its
+    /// maximum regresses the mark, and later incremental syncs re-walk history they already have.
+    @Test("a resumed walk never lowers the stored high-water mark")
+    func resumedWalkPreservesHighest() {
+        // A capped first run stored 500...1000; the resume then fetches 1...499.
+        let before = Store.CrawlState(lowest: 500, highest: 1000, backfillComplete: false)
+        let after = before.merged(lowest: 1, highest: 499, full: false)
+        #expect(after.highest == 1000, "the resume's own maximum (499) must not replace 1000")
+        #expect(after.lowest == 1, "but the low-water mark does advance")
+    }
+
+    @Test("a walk that fetched nothing leaves both bounds untouched")
+    func emptyWalkPreservesBounds() {
+        let before = Store.CrawlState(lowest: 500, highest: 1000, backfillComplete: false)
+        let after = before.merged(lowest: nil, highest: nil, full: false)
+        #expect(after.lowest == 500 && after.highest == 1000,
+                "an empty resume reported zeros, which would have erased both bounds")
+    }
+
+    @Test("a full crawl, which starts at the newest page, may replace the bounds")
+    func fullCrawlReplaces() {
+        let before = Store.CrawlState(lowest: 500, highest: 1000, backfillComplete: false)
+        let after = before.merged(lowest: 1, highest: 1200, full: true)
+        #expect(after.lowest == 1 && after.highest == 1200)
+    }
+}

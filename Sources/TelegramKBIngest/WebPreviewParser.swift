@@ -30,7 +30,11 @@ public enum WebPreviewParser {
         guard !dataPost.isEmpty else { return nil }
         let parts = dataPost.split(separator: "/")
         guard parts.count == 2, let messageID = Int(parts[1]) else { return nil }
-        let channel = String(parts[0])
+        // Lowercased at the parser boundary. Telegram resolves usernames case-insensitively but
+        // SQLite compares keys exactly, so `tgkb sync IOSGR` stored channel `IOSGR` while posts
+        // arrived as `iosgr` — and the first page failed its foreign key against a channel that
+        // plainly exists. The CLI normalises the same way; the two must agree.
+        let channel = String(parts[0]).lowercased()
 
         // The BODY is `js-message_text`. The sibling `js-message_reply_text` is the quoted
         // reply preview, which Telegram truncates to ~256 chars — selecting on the shared

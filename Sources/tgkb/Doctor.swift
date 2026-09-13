@@ -39,7 +39,16 @@ struct Doctor: AsyncParsableCommand {
         // Integrity: ids are a dense sequence, posts are not dense within it. An album covers
         // several consecutive ids, so most absences are explained by mediaCount. A LONG run of
         // unexplained ids is the one worth alarming about — that is a missed page, not deletions.
-        if FileManager.default.fileExists(atPath: path), let db = try? Store.openForReading(at: path) {
+        if FileManager.default.fileExists(atPath: path) {
+            // Not `try?`: a failed open would silently skip every channel's integrity check, and
+            // a doctor that reports nothing looks exactly like a doctor that found nothing wrong.
+            let db: Store
+            do {
+                db = try Store.openForReading(at: path)
+            } catch {
+                print("\nintegrity: SKIPPED — could not open the store read-only: \(error)")
+                throw ExitCode(1)
+            }
             let names = try db.channelUsernames()
             if !names.isEmpty { print("\nintegrity:") }
             for name in names {
@@ -64,7 +73,7 @@ struct Doctor: AsyncParsableCommand {
         print("\nchannels:")
         let fetcher = URLSessionPageFetcher(delay: .seconds(1))
         let classifier = ChannelClassifier(fetcher: fetcher)
-        for channel in channels {
+        for channel in channels.map({ $0.lowercased() }) {
             let verdict = try await classifier.classify(channel)
             let note: String
             switch verdict {

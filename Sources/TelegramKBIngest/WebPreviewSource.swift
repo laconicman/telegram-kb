@@ -68,7 +68,12 @@ public struct WebPreviewSource: Sendable {
         var cursor: Int? = resumeFrom
         var pages = 0, count = 0
         var lowestSeen: Int?, highestSeen: Int?
-        var exhausted = false
+        // Two different outcomes, deliberately separate. `reachedEnd` is PROVEN exhaustion — an
+        // empty successful page, or the walk arriving at id 1. Stopping for any other reason (no
+        // progress, the page cap, the incremental mark) ends the loop without proving anything
+        // about older history. Conflating the two let a single repeated page seal a partial
+        // backfill as complete, and a completed backfill is never re-walked.
+        var reachedEnd = false
         var rawChannelID: Int64?
 
         while pages < maxPages {
@@ -86,7 +91,7 @@ public struct WebPreviewSource: Sendable {
             }
 
             let posts = try WebPreviewParser.parse(html: result.body)
-            guard !posts.isEmpty else { exhausted = true; break }
+            guard !posts.isEmpty else { reachedEnd = true; break }
             if rawChannelID == nil {
                 rawChannelID = try WebPreviewParser.rawChannelID(html: result.body)
             }
@@ -109,8 +114,10 @@ public struct WebPreviewSource: Sendable {
             // Page by the ids actually returned, never by a stride: ids are non-contiguous
             // (an album occupies several while rendering as one post), so a decrementing cursor
             // would silently skip posts.
-            if let cursor, lowest >= cursor { exhausted = true; break }   // no progress
-            if lowest <= 1 { exhausted = true; break }
+            // No progress: stop, but prove nothing. The page repeated, so older posts were never
+            // visited and the backfill stays incomplete for the next run to resume.
+            if let cursor, lowest >= cursor { break }
+            if lowest <= 1 { reachedEnd = true; break }
             cursor = lowest
         }
 
@@ -123,7 +130,7 @@ public struct WebPreviewSource: Sendable {
                                  updatedAt: Date(),
                                  // Only a walk that actually reached the end may claim this, and
                                  // a page-capped walk has not.
-                                 isBackfillComplete: exhausted && since == nil && pages < maxPages),
+                                 isBackfillComplete: reachedEnd && since == nil),
             pagesFetched: pages,
             postCount: count,
             rawChannelID: rawChannelID)

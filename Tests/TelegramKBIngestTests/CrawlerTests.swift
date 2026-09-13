@@ -226,3 +226,45 @@ extension CrawlerTests {
         #expect(result.posts.isEmpty, "but none is held for a final rewrite")
     }
 }
+
+/// Round-3 review findings on the crawler.
+extension CrawlerTests {
+
+    /// 🔴 A repeated page ends the loop but proves nothing about older history. The earlier
+    /// `noProgressStops` test asserted only that the walk STOPPED — so it passed while this bug
+    /// existed. Stopping was never the claim at risk; completion was.
+    @Test("a repeated page stops the walk but does not mark the backfill complete")
+    func repeatedPageIsNotCompletion() async throws {
+        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/x")
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/x": same,
+            "https://t.me/s/x?before=262": same,   // Telegram hands back the same page
+        ])
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "x", maxPages: 50)
+        #expect(result.pagesFetched == 2, "still stops rather than looping")
+        #expect(!result.watermark.isBackfillComplete,
+                "posts below 262 were never visited, so the backfill must stay open to resume")
+    }
+
+    /// Proven exhaustion is still recognised — the fix must not make completion unreachable.
+    @Test("an empty successful page still marks the backfill complete")
+    func emptyPageIsCompletion() async throws {
+        let result = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev")
+        #expect(result.watermark.isBackfillComplete, "reaching an empty page proves the end")
+    }
+}
+
+extension WebPreviewParserTests {
+    /// 🟡 Telegram resolves usernames case-insensitively; SQLite compares keys exactly. A mixed-
+    /// case channel identifier must reach the store in the same form the CLI stores it under.
+    @Test("channel usernames are lowercased at the parser boundary")
+    func channelIsLowercased() throws {
+        let html = try Self.html("swiftui_dev")
+            .replacingOccurrences(of: "data-post=\"swiftui_dev/", with: "data-post=\"SwiftUI_Dev/")
+        let posts = try WebPreviewParser.parse(html: html)
+        #expect(!posts.isEmpty)
+        #expect(posts.allSatisfy { $0.id.channelUsername == "swiftui_dev" },
+                "a mixed-case data-post must not produce a key that fails the channel foreign key")
+    }
+}

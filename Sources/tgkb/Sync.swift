@@ -23,6 +23,14 @@ struct Sync: AsyncParsableCommand {
     @Option(name: .long, help: "Import resolver JSONL into url_resolution and exit.")
     var importResolutions: String?
 
+    /// Negative or non-finite values would reach `Duration.seconds` and the rate-limit
+    /// arithmetic. Zero is valid — no delay is a legitimate, if impolite, request.
+    func validate() throws {
+        guard delay.isFinite, delay >= 0 else {
+            throw ValidationError("--delay must be a finite number of seconds, zero or greater (got \(delay)).")
+        }
+    }
+
     func run() async throws {
         try store.ensureDirectory()
         let db = try Store.openForWriting(at: store.databasePath)
@@ -35,6 +43,10 @@ struct Sync: AsyncParsableCommand {
                 let msg = "warning: \(report.skipped) unreadable row(s) skipped — the file "
                         + "may be truncated or from a different schema\n"
                 FileHandle.standardError.write(Data(msg.utf8))
+                // Non-zero, not just a warning. Automation reads exit status, not stderr prose,
+                // and a zero exit on a partial import is a check reporting success because it
+                // did not fully run.
+                throw ExitCode(3)
             }
             return
         }
@@ -45,7 +57,9 @@ struct Sync: AsyncParsableCommand {
         let fetcher = URLSessionPageFetcher(delay: .seconds(delay))
         let source = WebPreviewSource(fetcher: fetcher)
 
-        for channel in channels {
+        // Same normalisation as WebPreviewParser: Telegram usernames are case-insensitive ASCII,
+        // and a mismatch with the parsed `data-post` fails the post→channel foreign key.
+        for channel in channels.map({ $0.lowercased() }) {
             switch try await ChannelClassifier(fetcher: fetcher).classify(channel) {
             case .webPreview:
                 break
@@ -97,8 +111,10 @@ struct Sync: AsyncParsableCommand {
                 // Edits are not refreshed on an incremental run: what was cached is what the
                 // citation said when it was indexed. `--full` overwrites, so a deliberate
                 // re-crawl still repairs anything captured wrong.
-                try db.commitPage(posts, channel: channel, lowest: mark.lowestMessageID,
-                                  highest: mark.highestMessageID, backfillComplete: false,
+                let bounds = state.merged(lowest: mark.lowestMessageID,
+                                          highest: mark.highestMessageID, full: full)
+                try db.commitPage(posts, channel: channel, lowest: bounds.lowest,
+                                  highest: bounds.highest, backfillComplete: false,
                                   policy: full ? .replace : .keepExisting)
             }
             if let raw = result.rawChannelID {
@@ -107,11 +123,15 @@ struct Sync: AsyncParsableCommand {
             }
             // No final rewrite: every page was already committed by the callback above, and
             // `crawl` does not retain them when one is given.
+            // Merge with the pre-run state — see CrawlState.merged for why replacing is wrong.
+            let fetched = result.postCount > 0
+            let bounds = state.merged(
+                lowest: fetched ? result.watermark.lowestMessageID : nil,
+                highest: fetched ? result.watermark.highestMessageID : nil, full: full)
             try db.recordCrawlState(
                 channel: channel,
-                lowest: result.watermark.lowestMessageID,
-                highest: result.watermark.highestMessageID,
-                // An incremental run has not seen the whole history, so it must not claim to.
+                lowest: bounds.lowest,
+                highest: bounds.highest,
                 backfillComplete: result.watermark.isBackfillComplete || state.backfillComplete)
 
             print("\(channel): \(result.postCount) posts, \(result.pagesFetched) pages"

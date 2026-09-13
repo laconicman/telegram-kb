@@ -414,3 +414,21 @@ extension Store {
         }
     }
 }
+
+extension Store.CrawlState {
+    /// Merges progress from a walk into the state that existed before it.
+    ///
+    /// **Merge, never replace.** A resumed walk starts at the saved low-water mark and visits only
+    /// OLDER pages, so its own maximum sits below what an earlier run already stored; writing it
+    /// back would make every later incremental sync re-walk history it already has. A walk that
+    /// fetched nothing reports zeros, which would erase both bounds outright. Only `full`, which
+    /// starts at the newest page, has seen enough to replace them.
+    ///
+    /// - Parameters:
+    ///   - lowest, highest: the bounds the walk itself observed, or `nil` if it saw no posts.
+    public func merged(lowest: Int?, highest: Int?, full: Bool) -> (lowest: Int?, highest: Int?) {
+        if full { return (lowest, highest) }
+        return (lowest: [self.lowest, lowest].compactMap { $0 }.min(),
+                highest: [self.highest, highest].compactMap { $0 }.max())
+    }
+}
