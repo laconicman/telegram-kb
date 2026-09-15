@@ -237,6 +237,10 @@ extension Store {
                 if !line.trimmingCharacters(in: .whitespaces).isEmpty { skipped += 1 }
                 continue
             }
+            // An unparseable timestamp makes the row unreadable too. Substituting "now" would
+            // import a malformed observation as the freshest one we have, and re-resolution
+            // decides what to retry by age.
+            guard let resolvedAt = try? iso.parse(row.resolved_at) else { skipped += 1; continue }
             let status = row.http_status?.text
             // A non-2xx outcome is recorded with resolvedCanonical nil: "we checked and it
             // failed" is different information from "we never checked", which is an absent row.
@@ -246,7 +250,7 @@ extension Store {
                 resolvedCanonical: succeeded ? URLCanonicaliser.canonicalise(row.final_url) : nil,
                 httpStatus: status,
                 hops: row.hops,
-                resolvedAt: (try? iso.parse(row.resolved_at)) ?? Date()))
+                resolvedAt: resolvedAt))
         }
         try upsert(resolutions: out)
         return ImportReport(imported: out.count, skipped: skipped)
@@ -317,6 +321,19 @@ extension Store {
                 INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
                 ON CONFLICT(username) DO NOTHING
                 """, arguments: [username, reachability.rawValue])
+        }
+    }
+
+    /// Records what a crawl learns about a channel's identity, **and nothing else**.
+    ///
+    /// Not `upsert(channel:)`: a crawl knows only the raw id and that the preview works, so a
+    /// full-row upsert writes `nil` over a title or subscriber count another source recorded.
+    public func updateIdentity(channel username: String, rawChannelID: Int64,
+                               reachability: Channel.Reachability) throws {
+        try dbPool.write { db in
+            try db.execute(sql: """
+                UPDATE channel SET rawChannelID = ?, reachability = ? WHERE username = ?
+                """, arguments: [rawChannelID, reachability.rawValue, username])
         }
     }
 
@@ -455,10 +472,13 @@ extension Store.CrawlState {
     public func afterPage(lowest: Int, highest: Int, full: Bool) -> Store.CrawlState {
         if since(full: full) != nil { return self }
         // A backfill or full walk is contiguous from wherever it started, so its bounds are safe
-        // to record page by page. It is not complete until the walk says so.
+        // to record page by page. Completion is left as it was: false for a backfill, which only
+        // the finished walk may change; and for `--full` over a finished channel, still true —
+        // an interrupted refresh removes nothing, so every older post is still stored, and
+        // clearing the flag would make the next plain sync re-walk the whole history for nothing.
         let bounds = merged(lowest: lowest, highest: highest, full: full)
         return Store.CrawlState(lowest: bounds.lowest, highest: bounds.highest,
-                                backfillComplete: false)
+                                backfillComplete: backfillComplete)
     }
 
     /// The state to record once a walk returns without throwing.
@@ -470,9 +490,17 @@ extension Store.CrawlState {
     public func afterWalk(lowest: Int?, highest: Int?, full: Bool,
                           reachedEnd: Bool, reachedSince: Bool) -> Store.CrawlState {
         let incremental = since(full: full) != nil
-        // Stopped short — page cap, or a repeated page — so the gap above `highest` is still open.
-        // Keep the old mark; the next run walks down to it again.
-        if incremental && !(reachedSince || reachedEnd) { return self }
+        // Stopped short — page cap, or a repeated page — so the gap above the old `highest` is
+        // still open. Keeping the old mark would re-walk the same newest pages forever once the
+        // gap is wider than the cap (TD-18). But what this walk DID cover is contiguous from the
+        // newest page down to `lowest`, which is exactly an unfinished backfill: record it as
+        // one, and the next run resumes below `lowest`, through the gap, to proven exhaustion.
+        // It re-walks already-stored history below the gap; that costs requests, never posts.
+        if incremental && !(reachedSince || reachedEnd) {
+            guard let lowest, let highest else { return self }
+            return Store.CrawlState(lowest: lowest, highest: Swift.max(highest, self.highest ?? highest),
+                                    backfillComplete: false)
+        }
         let bounds = merged(lowest: lowest, highest: highest, full: full)
         // Completion is only ever gained by proven exhaustion, never lost: a capped `--full` over a
         // finished channel still has every older post stored from before.

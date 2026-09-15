@@ -120,8 +120,7 @@ struct Sync: AsyncParsableCommand {
                                   policy: full ? .replace : .keepExisting)
             }
             if let raw = result.rawChannelID {
-                try db.upsert(channel: Channel(username: channel, rawChannelID: raw,
-                                               reachability: .webPreview))
+                try db.updateIdentity(channel: channel, rawChannelID: raw, reachability: .webPreview)
             }
             // No final rewrite of posts: every page was committed by the callback above, and
             // `crawl` does not retain them when one is given.

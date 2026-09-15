@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 import TelegramKBModel
 @testable import TelegramKBStore
@@ -345,7 +346,9 @@ extension StoreTests {
         let before = Store.CrawlState(lowest: 1, highest: 100, backfillComplete: true)
         let stoppedShort = before.afterWalk(lowest: 141, highest: 160, full: false,
                                             reachedEnd: false, reachedSince: false)
-        #expect(stoppedShort == before, "a capped walk left 101...140 unfetched")
+        // Round 5 changed this from "keep the old mark", which never closed a gap wider than the
+        // cap (TD-18). See `cappedIncrementalResumesThroughTheGap`.
+        #expect(stoppedShort.since(full: false) == nil, "a capped walk left 101...140 unfetched")
         let arrived = before.afterWalk(lowest: 81, highest: 160, full: false,
                                        reachedEnd: false, reachedSince: true)
         #expect(arrived == Store.CrawlState(lowest: 1, highest: 160, backfillComplete: true))
@@ -375,5 +378,104 @@ extension StoreTests {
         let all = try store.search("swift", mode: .both, limit: 10)
         #expect(all.hits.last?.id.messageID == 3, "word hits first, substring-only after")
         #expect(try store.search("swift", mode: .words, limit: 10).total == 2)
+    }
+}
+
+/// Round-5 review findings on the store.
+extension StoreTests {
+
+    static func commit(_ store: Store, _ state: Store.CrawlState, _ range: ClosedRange<Int>) throws {
+        try store.commitPage(range.map { Self.post($0, "p\($0)") }, channel: "iosgr",
+                             lowest: state.lowest, highest: state.highest,
+                             backfillComplete: state.backfillComplete, policy: .keepExisting)
+    }
+
+    /// 🟡 With more new pages than the cap, every run walked the newest pages, kept the old mark
+    /// and started again — the gap below never entered the store (TD-18).
+    @Test("a capped incremental walk becomes a resumable backfill that crosses the gap")
+    func cappedIncrementalResumesThroughTheGap() {
+        let finished = Store.CrawlState(lowest: 1, highest: 100, backfillComplete: true)
+        // New posts reach 20,000; the capped walk got down to 10,001.
+        let capped = finished.afterWalk(lowest: 10_001, highest: 20_000, full: false,
+                                        reachedEnd: false, reachedSince: false)
+        #expect(capped == Store.CrawlState(lowest: 10_001, highest: 20_000, backfillComplete: false))
+        #expect(capped.resumeFrom(full: false) == 10_001, "the next run starts below what it has")
+        #expect(capped.since(full: false) == nil, "and does not stop at the new top")
+        let done = capped.afterWalk(lowest: 1, highest: 10_000, full: false,
+                                    reachedEnd: true, reachedSince: false)
+        #expect(done == Store.CrawlState(lowest: 1, highest: 20_000, backfillComplete: true))
+    }
+
+    /// 🔍 The interruption matrix in REVIEW.md names four walks; two had no test.
+    @Test("an interrupted resumed backfill keeps its top and resumes below the page it wrote")
+    func interruptedResumedBackfill() throws {
+        let (store, _) = try Self.seeded()
+        try store.recordCrawlState(channel: "iosgr", lowest: 500, highest: 1000, backfillComplete: false)
+        let before = try store.crawlState(forChannel: "iosgr")
+        #expect(before.resumeFrom(full: false) == 500)
+        try Self.commit(store, before.afterPage(lowest: 480, highest: 499, full: false), 480...499)
+
+        let after = try store.crawlState(forChannel: "iosgr")
+        #expect(after == Store.CrawlState(lowest: 480, highest: 1000, backfillComplete: false))
+        #expect(after.resumeFrom(full: false) == 480 && after.since(full: false) == nil)
+    }
+
+    @Test("an interrupted --full over a finished channel stays finished and loses nothing")
+    func interruptedFullOverFinishedChannel() throws {
+        let (store, _) = try Self.seeded()
+        try store.recordCrawlState(channel: "iosgr", lowest: 1, highest: 1000, backfillComplete: true)
+        let before = try store.crawlState(forChannel: "iosgr")
+        try Self.commit(store, before.afterPage(lowest: 981, highest: 1100, full: true), 981...1100)
+
+        let after = try store.crawlState(forChannel: "iosgr")
+        #expect(after.backfillComplete,
+                "the refresh removed nothing; clearing the flag would re-walk all history for nothing")
+        #expect(after.since(full: false) == 1100, "a plain sync continues above what the refresh reached")
+    }
+
+    @Test("an interrupted --full over an unfinished channel resumes below the page it wrote")
+    func interruptedFullOverUnfinishedChannel() throws {
+        let (store, _) = try Self.seeded()
+        try store.recordCrawlState(channel: "iosgr", lowest: 500, highest: 1000, backfillComplete: false)
+        let before = try store.crawlState(forChannel: "iosgr")
+        try Self.commit(store, before.afterPage(lowest: 981, highest: 1100, full: true), 981...1100)
+
+        let after = try store.crawlState(forChannel: "iosgr")
+        #expect(after == Store.CrawlState(lowest: 981, highest: 1100, backfillComplete: false))
+        #expect(after.resumeFrom(full: false) == 981, "posts below 981 are not proven stored")
+    }
+
+    /// 🟡 Sync wrote a full channel row carrying only the id, nulling metadata from elsewhere.
+    @Test("recording a crawled identity leaves title and subscriber count alone")
+    func identityUpdateKeepsMetadata() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(channel: Channel(username: "iosgr", rawChannelID: 1, title: "iOS Good Reads",
+                                          subscriberCount: 1234, reachability: .previewDisabled))
+        try store.updateIdentity(channel: "iosgr", rawChannelID: 1_076_035_790, reachability: .webPreview)
+        let row = try #require(try store.dbPool.read { db in
+            try Row.fetchOne(db, sql: "SELECT * FROM channel WHERE username = 'iosgr'") })
+        #expect(row["title"] as String? == "iOS Good Reads")
+        #expect(row["subscriberCount"] as Int? == 1234)
+        #expect(row["rawChannelID"] as Int64? == 1_076_035_790)
+        #expect(row["reachability"] as String? == Channel.Reachability.webPreview.rawValue)
+    }
+
+    /// 🟡 A row with a bad `resolved_at` decoded fine and was stamped "now".
+    @Test("a resolution with an unparseable timestamp is counted as unreadable, not stamped now")
+    func malformedTimestampIsSkipped() throws {
+        let (store, _) = try Self.seeded()
+        let jsonl = """
+        {"url_canonical":"https://a.example","final_url":"https://a.example","http_status":200,"hops":0,"resolved_at":"2026-09-05T22:50:59.691197+00:00"}
+        {"url_canonical":"https://b.example","final_url":"https://b.example","http_status":200,"hops":0,"resolved_at":"yesterday"}
+        """
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("res-\(UUID().uuidString).jsonl").path
+        try jsonl.write(toFile: path, atomically: true, encoding: .utf8)
+
+        let report = try store.importResolutions(fromJSONLAt: path)
+        #expect(report.imported == 1 && report.skipped == 1)
+        let stored = try store.dbPool.read { db in
+            try String.fetchAll(db, sql: "SELECT urlCanonical FROM urlResolution ORDER BY urlCanonical") }
+        #expect(stored == ["https://a.example"], "the malformed row must not be imported as fresh")
     }
 }

@@ -16,32 +16,38 @@ extension Store {
     /// inflected query matches an inflected post in either direction. Skipping either step makes
     /// recall *worse* than Telegram's own search on Russian, which is the whole of `TD-4`.
     public func searchWords(_ query: String, limit: Int? = 50) throws -> [Hit] {
+        try dbPool.read { db in try Self.wordHits(query, limit: limit, in: db) }
+    }
+
+    /// Takes a `Database`, not the pool, so it cannot open a snapshot of its own — callers that
+    /// combine indexes decide how many snapshots there are.
+    static func wordHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
         let folded = TextNormalizer.normalizeQuery(query)
         let terms = TextNormalizer.lemmas(folded) ?? folded
-        return try dbPool.read { db in
-            // Failable, not throwing, and it discards FTS5 operator characters — the sanctioned
-            // path for text arriving straight from an LLM tool call (`research/grdb-fts5.md`).
-            guard let pattern = try? FTS5Pattern(matchingAllTokensIn: terms) else { return [] }
-            return try Hit.fetchAll(db, sql: """
-                SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postFTS) AS rank
-                FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid
-                WHERE postFTS MATCH ? ORDER BY rank LIMIT ?
-                """, arguments: [pattern, limit ?? -1])   // SQLite: a negative LIMIT is no limit
-        }
+        // Failable, not throwing, and it discards FTS5 operator characters — the sanctioned
+        // path for text arriving straight from an LLM tool call (`research/grdb-fts5.md`).
+        guard let pattern = try? FTS5Pattern(matchingAllTokensIn: terms) else { return [] }
+        return try Hit.fetchAll(db, sql: """
+            SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postFTS) AS rank
+            FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid
+            WHERE postFTS MATCH ? ORDER BY rank LIMIT ?
+            """, arguments: [pattern, limit ?? -1])   // SQLite: a negative LIMIT is no limit
     }
 
     /// Substring search over the `trigram` index — the thing Telegram's search cannot do at all
     /// (`imation` returns 0 there, 14 here).
     public func searchSubstring(_ query: String, limit: Int? = 50) throws -> [Hit] {
+        try dbPool.read { db in try Self.substringHits(query, limit: limit, in: db) }
+    }
+
+    static func substringHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
         let folded = TextNormalizer.normalizeQuery(query)
         guard folded.count >= 3 else { return [] }   // trigram needs three characters
-        return try dbPool.read { db in
-            return try Hit.fetchAll(db, sql: """
-                SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postTrigram) AS rank
-                FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid
-                WHERE postTrigram MATCH ? ORDER BY rank LIMIT ?
-                """, arguments: [FTS5Pattern(matchingPhrase: folded), limit ?? -1])
-        }
+        return try Hit.fetchAll(db, sql: """
+            SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postTrigram) AS rank
+            FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid
+            WHERE postTrigram MATCH ? ORDER BY rank LIMIT ?
+            """, arguments: [FTS5Pattern(matchingPhrase: folded), limit ?? -1])
     }
 
     public enum SearchMode: String, Sendable, CaseIterable {
@@ -64,13 +70,19 @@ extension Store {
     /// everything both indexes find — which demotes the Russian lemma-only matches (`архитектура`:
     /// 144 found by words alone) and still buries `SwiftUI` under `swift`. The substring-only
     /// tail is not dropped when words fill `limit`: `total` says it exists. See Design.md.
+    ///
+    /// **One snapshot for both indexes.** Two `dbPool.read` calls are two snapshots, and a sync
+    /// committing between them makes the two lists disagree about what exists — a post counted
+    /// as substring-only because it had not yet reached the word read.
     public func search(_ query: String, mode: SearchMode, limit: Int) throws -> SearchResults {
-        let words = mode == .substring ? [] : try searchWords(query, limit: nil)
-        var seen = Set(words.map(\.id))
-        let substringOnly = mode == .words ? [] : try searchSubstring(query, limit: nil)
-            .filter { seen.insert($0.id).inserted }
-        let all = words + substringOnly
-        return SearchResults(hits: Array(all.prefix(max(limit, 0))), total: all.count)
+        try dbPool.read { db in
+            let words = mode == .substring ? [] : try Self.wordHits(query, limit: nil, in: db)
+            var seen = Set(words.map(\.id))
+            let substringOnly = mode == .words ? [] : try Self.substringHits(query, limit: nil, in: db)
+                .filter { seen.insert($0.id).inserted }
+            let all = words + substringOnly
+            return SearchResults(hits: Array(all.prefix(max(limit, 0))), total: all.count)
+        }
     }
 
     public func post(_ id: Post.ID) throws -> Post? {

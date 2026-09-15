@@ -183,6 +183,10 @@ reproduce words-first ordering with worse Russian recall.
 **Rejected: a reserved quota for substring-only hits.** A number with no data behind it; it trades
 precise hits for partial-token ones at a ratio nobody has measured.
 
+**Both indexes are read in one snapshot.** Two reads are two snapshots, and a sync committing
+between them makes the lists disagree about which posts exist (PR #1 round 5). The per-index
+queries take a `Database` rather than the pool, so they cannot open a snapshot of their own.
+
 **What `total` buys.** Truncation stops being loss: the CLI prints `3 of 3741`, and the MCP surface
 will carry `total` beside an opaque cursor, so the tail is reachable rather than silently gone.
 
@@ -497,6 +501,15 @@ Two related rules, same principle — **only a walk that actually reached the en
   toward the stored `highestMessageID`. Committing a page's maximum as the new mark — or clearing
   `backfillComplete` — before the walk reaches the old mark let an interruption skip everything
   in between, permanently. Posts are still written page by page; only the state waits.
+- **An incremental walk that stops short becomes an unfinished backfill.** Keeping the old mark
+  after the page cap meant a gap wider than 500 pages was never reached: every run walked the same
+  newest pages again. What a capped walk did cover is contiguous from the newest page down, which
+  is exactly an unfinished backfill, so it is recorded as one and the next run resumes through
+  the gap. The price is re-walking stored history below it — requests, never posts. (PR #1
+  round 5; this was `TD-18`.)
+- **An interrupted `--full` over a finished channel stays finished.** A refresh removes nothing,
+  so every older post is still stored; clearing the flag would send the next plain sync on a
+  full historical re-walk for no gain.
 - **Classification is subject to the same rule.** A throttled `t.me/<name>` page carries no
   channel markers, so it read as "not publicly resolvable" and `sync` skipped a live channel
   with exit status 0. The classifier now throws on non-2xx as well. (t.me answers 200 even for

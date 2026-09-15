@@ -26,13 +26,17 @@ struct Doctor: AsyncParsableCommand {
         print("  directory writable: \(writable)"
             + (writable ? "" : "  <- a read-only open will fail with 'attempt to write a readonly database'"))
 
+        // Every FAILED line must reach the exit status. Printing it is for the person; automation
+        // reads only the status, and later checks passing does not undo an earlier failure.
+        var failed = false
         if FileManager.default.fileExists(atPath: path) {
             do {
                 let db = try Store.openForReading(at: path)
-                let n = try db.searchWords("a", limit: 1).count
-                print("  read-only open:    ok (\(n >= 0 ? "queryable" : ""))")
+                _ = try db.searchWords("a", limit: 1)
+                print("  read-only open:    ok (queryable)")
             } catch {
                 print("  read-only open:    FAILED — \(error)")
+                failed = true
             }
         }
 
@@ -69,7 +73,10 @@ struct Doctor: AsyncParsableCommand {
             }
         }
 
-        guard !channels.isEmpty else { return }
+        guard !channels.isEmpty else {
+            if failed { throw ExitCode(1) }
+            return
+        }
         print("\nchannels:")
         let fetcher = URLSessionPageFetcher(delay: .seconds(1))
         let classifier = ChannelClassifier(fetcher: fetcher)
@@ -84,5 +91,6 @@ struct Doctor: AsyncParsableCommand {
             }
             print("  @\(channel): \(verdict.rawValue) — \(note)")
         }
+        if failed { throw ExitCode(1) }
     }
 }

@@ -84,9 +84,16 @@ public enum WebPreviewParser {
     ///
     /// This is what lets a web-crawled channel produce a TDLib `chat_id`
     /// (`Channel.tdlibChatID`), so the two sources can reconcile (`TD-8`).
-    public static func rawChannelID(html: String) throws -> Int64? {
+    ///
+    /// Only a block whose `data-post` names `channel` is trusted. Every page observed so far —
+    /// eight fixtures and live `@iosgr` / `@ios_broadcast` listings, forwards included — carries
+    /// the host channel's id on every block, so this never rejects real markup; it keeps a
+    /// foreign block, should Telegram ever render one first, from becoming this channel's identity.
+    public static func rawChannelID(html: String, channel: String) throws -> Int64? {
         let doc = try SwiftSoup.parse(html)
-        for element in try doc.select("div.tgme_widget_message[data-view]") {
+        for element in try doc.select("div.tgme_widget_message[data-view][data-post]") {
+            let owner = try element.attr("data-post").split(separator: "/").first.map(String.init)
+            guard owner?.lowercased() == channel.lowercased() else { continue }
             let encoded = try element.attr("data-view")
             let padded = encoded.padding(toLength: ((encoded.count + 3) / 4) * 4,
                                          withPad: "=", startingAt: 0)

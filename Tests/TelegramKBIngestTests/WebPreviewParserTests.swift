@@ -164,11 +164,24 @@ extension WebPreviewParserTests {
     /// two sources can reconcile (`TD-8`).
     @Test("the bare channel id is decoded from the data-view payload")
     func rawChannelIDFromDataView() throws {
-        let id = try #require(try WebPreviewParser.rawChannelID(html: try Self.html("swiftui_dev")))
+        let id = try #require(try WebPreviewParser.rawChannelID(html: try Self.html("swiftui_dev"), channel: "swiftui_dev"))
         #expect(id == 1_492_664_793, "measured from this fixture's data-view during Phase 0")
 
         // …and it must yield the familiar chat id, arithmetically.
         let channel = TelegramKBModel.Channel(username: "swiftui_dev", rawChannelID: id)
         #expect(channel.tdlibChatID == -1_001_492_664_793)
+    }
+}
+
+extension WebPreviewParserTests {
+    /// 🔍 The first decodable `data-view` was trusted whatever channel its block belonged to.
+    @Test("a foreign message block cannot supply the channel's identity")
+    func rawChannelIDIgnoresForeignBlocks() throws {
+        // {"c":-999} — a block for another channel, placed first.
+        let foreign = #"<div class="tgme_widget_message" data-post="other/1" data-view="eyJjIjotOTk5fQ"></div>"#
+        let html = try Self.html("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(foreign)<div hidden")
+        let id = try #require(try WebPreviewParser.rawChannelID(html: html, channel: "swiftui_dev"))
+        #expect(id == 1_492_664_793, "the foreign block's 999 must not be taken")
+        #expect(try WebPreviewParser.rawChannelID(html: html, channel: "nobody") == nil)
     }
 }

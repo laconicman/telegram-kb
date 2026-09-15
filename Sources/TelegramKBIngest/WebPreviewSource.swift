@@ -98,7 +98,7 @@ public struct WebPreviewSource: Sendable {
             let posts = try WebPreviewParser.parse(html: result.body)
             guard !posts.isEmpty else { reachedEnd = true; break }
             if rawChannelID == nil {
-                rawChannelID = try WebPreviewParser.rawChannelID(html: result.body)
+                rawChannelID = try WebPreviewParser.rawChannelID(html: result.body, channel: channel)
             }
 
             let ids = posts.map(\.id.messageID)
