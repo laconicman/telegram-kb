@@ -46,6 +46,15 @@ not with missed pages. `tgkb doctor` reports this per channel.
   on our own built binary. The FTS5 measured on this machine is the FTS5 GRDB gets.
 - `trigram` needs no custom build: `FTS5TokenizerDescriptor(components: ["trigram"])`.
 - A connection lacking a custom tokenizer fails at *step* time with `no such tokenizer`.
+- **Second opinion, DeepWiki on `groue/GRDB.swift`, 2026-09-15 — agrees with the design.** The
+  writer's `PERSIST_WAL` plus a `readonly` `DatabasePool` that checks `hasCompletedMigrations` is
+  GRDB's own `DatabaseSharing` sample. Filling plain FTS5 tables by hand in the content
+  transaction is the *right* choice for derived text, because `synchronize(withTable:)` copies
+  columns verbatim and cannot lemmatise. A pooled reader sees each new commit on its next `read`
+  without reopening. One gap it names: the writer sets no `busyMode`, so a second concurrent
+  `tgkb sync` fails with `SQLITE_BUSY` immediately rather than waiting. That is acceptable under
+  the MVP's one-writer rule, but it should be a deliberate choice.
+  [Conversation](https://deepwiki.com/search/second-opinion-on-a-two-proces_743b448a-1dae-4f2d-8bfb-1cae6fad3065?mode=deep).
 
 ### Packaging — `research/spm-traits-binarytarget.md`
 - **SwiftPM traits gate `binaryTarget` downloads.** Trait off: no download, and
@@ -78,6 +87,12 @@ not with missed pages. `tgkb doctor` reports this per channel.
 - swift-docc-plugin 1.5.0; a docs-only target needs only a comments-only source file — **no
   dummy public symbol**. Confirmed by our own building scaffold.
 - SwiftSoup 2.13.7 (2026-07-23); ~26 ms per 159 KB page. **`text()` silently drops `<br/>`.**
+- **Second opinion, DeepWiki on `modelcontextprotocol/swift-sdk`, 2026-09-15**, for the S6 tool
+  design. It confirms the annotation defaults and the stdout rule above. It adds that
+  `tools/call` has no protocol cursor, that `CallTool.Result(structuredContent:)` encodes any
+  `Codable` value, and that `StdioTransport(logger:)` accepts a stderr `StreamLogHandler`.
+  Folded into S6 in <doc:Roadmap>.
+  [Conversation](https://deepwiki.com/search/i-am-about-to-build-a-read-onl_a94e89e4-6ce5-453c-b199-99706ad4f70d?mode=deep).
 
 ### Binary artifact — `research/Swiftgram-TDLibFramework.md`
 Measured from the shipped zip's central directory via an HTTP range request — actual bytes.
@@ -259,8 +274,16 @@ Carried forward deliberately. Do not build on these without probing first.
   the body, preview title, or preview description we captured. Candidates: linked-page content,
   semantic expansion, or media metadata we drop. Load-bearing for how much link-target content
   Phase 3 ingests.
-- **No build of any dependency under Swift 6.3 strict concurrency beyond the scaffold**, which
-  has no real code in it yet.
+- ~~No build of any dependency under Swift 6.3 strict concurrency beyond the scaffold.~~
+  **Answered** — GRDB, SwiftSoup and swift-argument-parser now carry real code through S1–S5
+  under Swift 6.3 strict concurrency, with 69 tests. The MCP SDK compiles into `tgkb-mcp` but is
+  not exercised until S6.
+- **Claims from the 2026-09-15 DeepWiki second opinions that no probe of ours has exercised.**
+  Each is cited to source but not tested here: GRDB readers default to
+  `readonlyBusyMode = .timeout(10)`; GRDB 7 begins every write transaction `IMMEDIATE`; GRDB's
+  `DatabaseSharing` guide wraps database *creation* in `NSFileCoordinator`, which we do not; the
+  MCP SDK does not validate arguments against `inputSchema`, and it suppresses the response to a
+  cancelled request.
 
 ## See Also
 

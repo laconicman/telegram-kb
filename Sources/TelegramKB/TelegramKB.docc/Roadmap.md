@@ -25,7 +25,7 @@ The `url_canonical` spec and its shared fixture list.
   links shared across channels.
 - Implement it in `TelegramKBModel`. `artanl` implements the same list independently.
 
-**Delivered, now at spec v2 after cross-implementation review.** `Spec/url-canonical/SPEC.md` and `Spec/url-canonical/fixtures.json` (**42** cases) plus
+**Delivered, now at spec v3 after cross-implementation review.** `Spec/url-canonical/SPEC.md` and `Spec/url-canonical/fixtures.json` (**49** cases) plus
 `corpus-canonical.tsv` (**11,773** rows, self-checking), implemented in
 `TelegramKBModel.URLCanonicaliser` and run by `TelegramKBModelTests`. Validated against all **11,665** unique corpus URLs: 100% canonicalised,
 zero tracking parameters surviving, idempotent throughout, **1,995 raw forms collapsed (17%)**.
@@ -118,6 +118,12 @@ an MCP client in the loop.
 
 **Done:** `G1`–`G10` in `evals/golden-queries.md` are runnable and produce numbers.
 
+**Delivered in PR #1, through four Devin review rounds: 20 findings, 0 false positives.** Every one
+of those rounds found a bug in crawl-state handling, and in two of them some findings were bugs
+the previous round's fixes had introduced. So the state decisions now live in `Store.CrawlState` as pure,
+tested functions, and every fix gets a mutation check: the fix is reverted and its test must
+fail. The review lessons are encoded in `REVIEW.md`.
+
 ### S6 — `tgkb-mcp`
 **Load the `mcp-builder` skill first** — it is from `anthropics/skills`, already installed, and
 covers exactly this. Designing the tool surface from the SDK research alone would skip it
@@ -127,6 +133,20 @@ covers exactly this. Designing the tool surface from the SDK research alone woul
 every row, `find_links` keyed on `url_canonical`. Annotations set explicitly — the SDK defaults
 are `destructive: true`, `openWorld: true`. All diagnostics to stderr; fd 1 redirected at
 startup.
+
+**Carried in from S5 and a DeepWiki second opinion** (2026-09-15, <doc:Research>):
+
+- `search_posts` calls `Store.search(_:mode:limit:)` and never merges indexes itself; it
+  returns `total` beside the cursor, so a truncated list is never silent (<doc:Design>).
+- The SDK has **no cursor for `tools/call`**: the cursor is a tool parameter and an output
+  field.
+- Records go in `structuredContent` with a declared `outputSchema`, plus a short text
+  `content` for clients that render only text.
+- Set all four annotations, `destructiveHint: false` and `idempotentHint: true` included.
+- Arguments are not validated against `inputSchema` by the SDK: decode and reject with
+  `invalidParams` ourselves.
+- Keep `strict` initialisation on, check `Task.isCancelled` in handlers, and keep each
+  `dbPool.read` short. A long read holds a stale snapshot and blocks WAL checkpoints.
 
 **Done:** Claude answers "what has anyone shared about X" with cited `t.me` links.
 
@@ -153,7 +173,7 @@ Unlocks the two channels the web preview cannot reach: `@iosmmcresources` (previ
 
 ## Next — Phase 3: retrieval quality
 
-Lemma column via `NLTagger` (`TD-4`). Links promoted to first-class entities with cross-channel
+(Lemmatisation, once planned here, shipped in S2 — `TD-4`.) Links promoted to first-class entities with cross-channel
 dedupe. Reactions as a ranking signal. The `artanl` join on `url_canonical`, and its extracted
 text in a **separate FTS table** (`TD-12`). Dual search — local index and Telegram's live `?q=`
 merged, since theirs caps at ~22 and ours is a crawl-time snapshot. Semantic search decided from

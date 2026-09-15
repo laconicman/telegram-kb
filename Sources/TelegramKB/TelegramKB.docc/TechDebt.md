@@ -61,6 +61,13 @@ documented **bots-only** and are not available to a user session.
 
 ## TD-4 — Russian morphology is not handled by FTS5
 
+> **Discharged in S2, not Phase 3.** The `unicode61` index holds folded surface text *and*
+> `NLTagger` lemmas; queries are lemmatised the same way (`TextNormalizer`, `Store.searchWords`).
+> `G1` passes (108 hits for `навигация`). One divergence from the plan below: the language is
+> detected per text with `NLLanguageRecognizer` and then set explicitly, not stored on the row. A
+> single-word query that cannot be identified falls back to its surface form, which still matches
+> the lemmas indexed for every post. The history below is kept as the reasoning.
+
 **Now measured rather than suspected**, and the finding inverts the naive assumption: on
 inflected Russian, Telegram's own search is *better* than a plain FTS5 prefix index. SQLite has
 no Russian stemmer.
@@ -95,6 +102,11 @@ to forget. The same hazard applies to `duckdb-swift`, which has no stable tag at
 against the runtime `getOption("version")`, and a scheduled check for newer upstream tags.
 
 ## TD-6 — Read-only open of a WAL database is conditionally fragile
+
+> **Discharged in S2 and S5, as planned below.** `Store.openForWriting` sets
+> `SQLITE_FCNTL_PERSIST_WAL`; `tgkb doctor` reports directory writability in plain language. A
+> DeepWiki second opinion on GRDB (2026-09-15, see <doc:Research>) confirms this is GRDB's own
+> documented pattern for multi-process access.
 
 A `mode=ro` connection must still create the `-shm` file, so it fails with
 `attempt to write a readonly database` when the containing directory is not writable — despite
@@ -183,6 +195,9 @@ price MLX only against the cross-script problem, which is the one thing Apple's 
 solve. **Do not** ship semantics for English and lemma-only for Russian.
 
 ## TD-10 — Cyrillic ё is not folded to е
+
+> **Discharged in S2.** `TextNormalizer.foldYo` runs at index and query time. The test
+> `вёрстка and верстка are the same word` pins it, and `G3` covers it in the evals.
 
 `unicode61 remove_diacritics 2` does **not** fold ё→е — ё is a distinct Cyrillic letter, not an
 accented е. Verified directly: index `вёрстка`, query `верстка`, zero hits.
