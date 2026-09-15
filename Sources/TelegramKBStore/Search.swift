@@ -15,7 +15,7 @@ extension Store {
     /// The query is normalised the same way the index was — folded, then lemmatised — so an
     /// inflected query matches an inflected post in either direction. Skipping either step makes
     /// recall *worse* than Telegram's own search on Russian, which is the whole of `TD-4`.
-    public func searchWords(_ query: String, limit: Int = 50) throws -> [Hit] {
+    public func searchWords(_ query: String, limit: Int? = 50) throws -> [Hit] {
         let folded = TextNormalizer.normalizeQuery(query)
         let terms = TextNormalizer.lemmas(folded) ?? folded
         return try dbPool.read { db in
@@ -26,13 +26,13 @@ extension Store {
                 SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postFTS) AS rank
                 FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid
                 WHERE postFTS MATCH ? ORDER BY rank LIMIT ?
-                """, arguments: [pattern, limit])
+                """, arguments: [pattern, limit ?? -1])   // SQLite: a negative LIMIT is no limit
         }
     }
 
     /// Substring search over the `trigram` index — the thing Telegram's search cannot do at all
     /// (`imation` returns 0 there, 14 here).
-    public func searchSubstring(_ query: String, limit: Int = 50) throws -> [Hit] {
+    public func searchSubstring(_ query: String, limit: Int? = 50) throws -> [Hit] {
         let folded = TextNormalizer.normalizeQuery(query)
         guard folded.count >= 3 else { return [] }   // trigram needs three characters
         return try dbPool.read { db in
@@ -40,8 +40,37 @@ extension Store {
                 SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postTrigram) AS rank
                 FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid
                 WHERE postTrigram MATCH ? ORDER BY rank LIMIT ?
-                """, arguments: [FTS5Pattern(matchingPhrase: folded), limit])
+                """, arguments: [FTS5Pattern(matchingPhrase: folded), limit ?? -1])
         }
+    }
+
+    public enum SearchMode: String, Sendable, CaseIterable {
+        case words, substring, both
+    }
+
+    public struct SearchResults: Sendable {
+        /// Ordered, at most `limit` long.
+        public var hits: [Hit]
+        /// Every match, before truncation. `hits.count < total` means more exist — never that
+        /// the rest were discarded.
+        public var total: Int
+    }
+
+    /// One search across both indexes, with a single merge policy for every caller.
+    ///
+    /// **Policy: word hits by bm25, then substring-only hits by bm25.** Not rank fusion. On the
+    /// synced corpus word hits are almost exactly a subset of substring hits for Latin text
+    /// (`swift`: 2932 of 3740; `concurrency`: 236 of 239), so fusion doubles the score of
+    /// everything both indexes find — which demotes the Russian lemma-only matches (`архитектура`:
+    /// 144 found by words alone) and still buries `SwiftUI` under `swift`. The substring-only
+    /// tail is not dropped when words fill `limit`: `total` says it exists. See Design.md.
+    public func search(_ query: String, mode: SearchMode, limit: Int) throws -> SearchResults {
+        let words = mode == .substring ? [] : try searchWords(query, limit: nil)
+        var seen = Set(words.map(\.id))
+        let substringOnly = mode == .words ? [] : try searchSubstring(query, limit: nil)
+            .filter { seen.insert($0.id).inserted }
+        let all = words + substringOnly
+        return SearchResults(hits: Array(all.prefix(max(limit, 0))), total: all.count)
     }
 
     public func post(_ id: Post.ID) throws -> Post? {

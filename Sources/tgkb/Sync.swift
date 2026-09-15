@@ -14,7 +14,12 @@ struct Sync: AsyncParsableCommand {
     @Argument(help: "Channel usernames, without the @.")
     var channels: [String] = []
 
-    @Flag(name: .long, help: "Re-crawl from the beginning, ignoring saved watermarks.")
+    @Flag(name: .long, help: ArgumentHelp(
+        "Re-crawl from the newest page, overwriting stored copies of every post it sees.",
+        discussion: """
+            Refreshes content; it does not reconcile. Posts since deleted on Telegram stay in \
+            the index by design — a citation must not vanish because its source did.
+            """))
     var full = false
 
     @Option(name: .long, help: "Seconds between requests.")
@@ -95,44 +100,38 @@ struct Sync: AsyncParsableCommand {
             // the backfill entirely. Deriving the mark from the store does not help either,
             // because the gap is *below* the mark. Only `backfillComplete`, written beside the
             // posts it describes, distinguishes "up to date" from "never finished".
+            // What each page and the finished walk may record is decided by `CrawlState` in the
+            // store, where it is unit-tested — three review rounds of watermark bugs all lived in
+            // this loop, which no test could reach.
             let state = try db.crawlState(forChannel: channel)
-            let since = (full || !state.backfillComplete) ? nil : state.highest
-            // An unfinished backfill resumes from where it stopped. Without this a channel with
-            // more pages than the cap re-walks its newest pages on every run and never reaches
-            // its own history.
-            let resumeFrom = (full || state.backfillComplete) ? nil : state.lowest
+            let since = state.since(full: full)
 
             let result = try await source.crawl(channel: channel, since: since,
-                                                resumeFrom: resumeFrom) { posts, mark in
-                // One transaction per page: posts and the watermark that describes them commit
-                // together, so an interruption cannot leave a mark for posts that were never
-                // written. Progress is deliberately NOT marked complete here — only a finished
-                // walk can claim that.
+                                                resumeFrom: state.resumeFrom(full: full)) { posts, mark in
+                // One transaction per page: posts and the state that describes them commit
+                // together, so an interruption cannot leave a mark for posts never written.
                 // Edits are not refreshed on an incremental run: what was cached is what the
                 // citation said when it was indexed. `--full` overwrites, so a deliberate
                 // re-crawl still repairs anything captured wrong.
-                let bounds = state.merged(lowest: mark.lowestMessageID,
-                                          highest: mark.highestMessageID, full: full)
-                try db.commitPage(posts, channel: channel, lowest: bounds.lowest,
-                                  highest: bounds.highest, backfillComplete: false,
+                let next = state.afterPage(lowest: mark.lowestMessageID,
+                                           highest: mark.highestMessageID, full: full)
+                try db.commitPage(posts, channel: channel, lowest: next.lowest,
+                                  highest: next.highest, backfillComplete: next.backfillComplete,
                                   policy: full ? .replace : .keepExisting)
             }
             if let raw = result.rawChannelID {
                 try db.upsert(channel: Channel(username: channel, rawChannelID: raw,
                                                reachability: .webPreview))
             }
-            // No final rewrite: every page was already committed by the callback above, and
+            // No final rewrite of posts: every page was committed by the callback above, and
             // `crawl` does not retain them when one is given.
-            // Merge with the pre-run state — see CrawlState.merged for why replacing is wrong.
             let fetched = result.postCount > 0
-            let bounds = state.merged(
+            let final = state.afterWalk(
                 lowest: fetched ? result.watermark.lowestMessageID : nil,
-                highest: fetched ? result.watermark.highestMessageID : nil, full: full)
-            try db.recordCrawlState(
-                channel: channel,
-                lowest: bounds.lowest,
-                highest: bounds.highest,
-                backfillComplete: result.watermark.isBackfillComplete || state.backfillComplete)
+                highest: fetched ? result.watermark.highestMessageID : nil, full: full,
+                reachedEnd: result.reachedEnd, reachedSince: result.reachedSince)
+            try db.recordCrawlState(channel: channel, lowest: final.lowest,
+                                   highest: final.highest, backfillComplete: final.backfillComplete)
 
             print("\(channel): \(result.postCount) posts, \(result.pagesFetched) pages"
                 + (since.map { ", since \($0)" } ?? ", full backfill"))

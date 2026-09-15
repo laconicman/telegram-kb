@@ -307,6 +307,20 @@ rather than indistinguishable from "not yet checked". Re-resolve NULLs periodica
 transient. Resolve **early**: every day a shortener stays unresolved is a day it might die, and
 the corpus already reaches back to 2016.
 
+## TD-18 — An incremental gap wider than the page cap never closes
+
+An incremental walk records nothing until it reaches the stored mark (see Design, *A failed fetch
+is never exhaustion*). If more than `maxPages` pages (500, about 10,000 posts) appeared since the
+last sync, every run walks the newest 500 pages, stops short, keeps the old mark, and starts again
+from the top — the posts are written, but the gap below them is never reached.
+
+**Cost.** None at current volumes: the busiest synced channel posts a few times a day. It bites a
+channel synced for the first time in years through a stale mark, or a much larger channel.
+
+**Discharge.** A second cursor for the gap — the lowest id the unfinished incremental walk
+reached — resumed exactly as a backfill resumes from `lowestMessageID`. Not built now because it
+adds a column and a state to a machine that has already produced four review rounds of bugs.
+
 ## See Also
 
 - <doc:Design>

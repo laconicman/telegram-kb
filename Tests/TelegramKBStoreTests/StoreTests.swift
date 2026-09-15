@@ -313,3 +313,67 @@ extension StoreTests {
         #expect(after.lowest == 1 && after.highest == 1200)
     }
 }
+
+/// Round-4 review findings on the store.
+extension StoreTests {
+
+    /// 🔴 After one page of an incremental walk, the page's own maximum was committed as the mark
+    /// and `backfillComplete` was cleared. An interruption then resumed from the historical
+    /// low-water mark — or, with only the flag kept, stopped at the new mark — and either way the
+    /// posts between that page and the old mark were never fetched.
+    @Test("an interrupted incremental sync still walks down to the old mark")
+    func interruptedIncrementalKeepsGapOpen() throws {
+        let (store, _) = try Self.seeded()
+        try store.recordCrawlState(channel: "iosgr", lowest: 1, highest: 100, backfillComplete: true)
+        let before = try store.crawlState(forChannel: "iosgr")
+        #expect(before.since(full: false) == 100)
+
+        // 101...160 appear. The walk commits its newest page, 141...160, then dies.
+        let next = before.afterPage(lowest: 141, highest: 160, full: false)
+        try store.commitPage((141...160).map { Self.post($0, "new \($0)") }, channel: "iosgr",
+                             lowest: next.lowest, highest: next.highest,
+                             backfillComplete: next.backfillComplete, policy: .keepExisting)
+
+        let after = try store.crawlState(forChannel: "iosgr")
+        #expect(after.since(full: false) == 100, "the next run must still fetch 101...140")
+        #expect(after.resumeFrom(full: false) == nil,
+                "and must not become a resume from message 1, which skips them too")
+    }
+
+    @Test("an incremental walk advances the mark only once it arrives")
+    func incrementalWalkAdvancesOnlyOnArrival() {
+        let before = Store.CrawlState(lowest: 1, highest: 100, backfillComplete: true)
+        let stoppedShort = before.afterWalk(lowest: 141, highest: 160, full: false,
+                                            reachedEnd: false, reachedSince: false)
+        #expect(stoppedShort == before, "a capped walk left 101...140 unfetched")
+        let arrived = before.afterWalk(lowest: 81, highest: 160, full: false,
+                                       reachedEnd: false, reachedSince: true)
+        #expect(arrived == Store.CrawlState(lowest: 1, highest: 160, backfillComplete: true))
+    }
+
+    /// The fix must not freeze a first backfill, which is contiguous from the newest page down.
+    @Test("a first backfill still records progress page by page and completes only at the end")
+    func backfillRecordsProgress() {
+        let empty = Store.CrawlState(lowest: nil, highest: nil, backfillComplete: false)
+        let page = empty.afterPage(lowest: 141, highest: 160, full: false)
+        #expect(page == Store.CrawlState(lowest: 141, highest: 160, backfillComplete: false))
+        #expect(page.resumeFrom(full: false) == 141)
+        let done = page.afterWalk(lowest: 1, highest: 140, full: false,
+                                  reachedEnd: true, reachedSince: false)
+        #expect(done == Store.CrawlState(lowest: 1, highest: 160, backfillComplete: true))
+    }
+
+    /// 🔍 Word hits filled `limit`, and truncation discarded every substring-only hit unseen.
+    @Test("combined search orders substring-only hits after word hits and counts a cut tail")
+    func combinedSearchReportsTruncatedTail() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "swift news"), Self.post(2, "swift tips"),
+                                 Self.post(3, "SwiftUI layout")])
+        let cut = try store.search("swift", mode: .both, limit: 2)
+        #expect(cut.hits.map(\.id.messageID).sorted() == [1, 2])
+        #expect(cut.total == 3, "the SwiftUI post matches and must be reported, not dropped")
+        let all = try store.search("swift", mode: .both, limit: 10)
+        #expect(all.hits.last?.id.messageID == 3, "word hits first, substring-only after")
+        #expect(try store.search("swift", mode: .words, limit: 10).total == 2)
+    }
+}

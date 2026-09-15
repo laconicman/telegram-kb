@@ -153,6 +153,39 @@ prefixes (`навига`: 0 → 3) — and Phase 3 lemmatisation closes the morp
 Untrusted query text is converted with GRDB's failable `FTS5Pattern.matching…` initialisers,
 which discard FTS5 operator characters. Only `rawPattern` throws, and it takes no user input.
 
+## Combining the two indexes: word hits first, and never a silent cut
+
+**Decision.** `Store.search(_:mode:limit:)` returns word hits by bm25, then substring-only hits by
+bm25, truncated to `limit`, with `total` counting every match. One policy, in the store, so
+`tgkb` and `tgkb-mcp` cannot diverge.
+
+The earlier merge lived in the CLI and cut at `limit` — so whenever word search filled the limit,
+every substring-only hit disappeared unreported (PR #1, round 4). Measured on the 7,444-post
+corpus before choosing a replacement:
+
+| query | words | substring | substring only | words only |
+|---|---:|---:|---:|---:|
+| `swift` | 2932 | 3740 | **808** | 0 |
+| `concurrency` | 236 | 239 | 3 | 0 |
+| `imation` | 0 | 66 | 66 | 0 |
+| `навигация` | 108 | 47 | 0 | **61** |
+| `архитектура` | 1280 | 1137 | 1 | **144** |
+
+For Latin text the word hits are **almost exactly a subset** of the substring hits; for Russian
+the lemma path finds inflections the trigram phrase cannot.
+
+**Rejected: reciprocal rank fusion.** The textbook hybrid merge scores a document by the sum of
+its reciprocal ranks — so everything *both* indexes find scores double. On this corpus that is
+nearly every Latin word hit, which pushes the Russian lemma-only matches (the point of `TD-4`)
+below exact-form ones and still buries `SwiftUI` under `swift`. Fusion would look principled and
+reproduce words-first ordering with worse Russian recall.
+
+**Rejected: a reserved quota for substring-only hits.** A number with no data behind it; it trades
+precise hits for partial-token ones at a ratio nobody has measured.
+
+**What `total` buys.** Truncation stops being loss: the CLI prints `3 of 3741`, and the MCP surface
+will carry `total` beside an opaque cursor, so the tail is reachable rather than silently gone.
+
 ## SQLite + GRDB stays — no challenger cleared the bar
 
 **Decision.** SQLite + GRDB + FTS5, as scaffolded. Reviewed deliberately rather than inherited
@@ -437,6 +470,11 @@ crawler only ever inserts.
 not yet resolved, stays wrong until someone runs `--full`. That is why `--full` refreshes rather
 than being merely a re-walk.
 
+**`--full` refreshes content; it does not reconcile.** It overwrites every post it sees and removes
+none it does not. A full walk cannot tell a deleted post from one it failed to reach, and an index
+whose citations vanish when their source does would break the promise above. Asked in review
+(PR #1, round 4) and kept; the flag's help text now says so.
+
 ## A failed fetch is never exhaustion
 
 **Decision.** `crawl` checks the HTTP status and throws on anything outside 2xx. A walk that
@@ -455,6 +493,18 @@ Two related rules, same principle — **only a walk that actually reached the en
 - **An unfinished backfill resumes from its saved `lowestMessageID`.** Without a resume cursor a
   channel with more pages than the cap re-walks its newest pages on every run and never reaches
   its own history — the mark would advance forever while the gap stayed put.
+- **An incremental walk records nothing until it arrives.** It descends from the newest page
+  toward the stored `highestMessageID`. Committing a page's maximum as the new mark — or clearing
+  `backfillComplete` — before the walk reaches the old mark let an interruption skip everything
+  in between, permanently. Posts are still written page by page; only the state waits.
+- **Classification is subject to the same rule.** A throttled `t.me/<name>` page carries no
+  channel markers, so it read as "not publicly resolvable" and `sync` skipped a live channel
+  with exit status 0. The classifier now throws on non-2xx as well. (t.me answers 200 even for
+  a name that does not exist, so the throw never replaces a real classification.)
+
+These decisions live in `Store.CrawlState` — `since`, `resumeFrom`, `afterPage`, `afterWalk` —
+as pure functions, because four review rounds of watermark bugs all lived in the sync loop of an
+executable no test could reach.
 
 **Pages are also not retained when a callback consumes them.** Accumulating the whole channel to
 hand back at the end would defeat the per-page commit it exists alongside; `postCount` carries

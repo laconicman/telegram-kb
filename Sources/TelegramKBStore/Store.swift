@@ -431,4 +431,52 @@ extension Store.CrawlState {
         return (lowest: [self.lowest, lowest].compactMap { $0 }.min(),
                 highest: [self.highest, highest].compactMap { $0 }.max())
     }
+
+    /// The incremental mark: fetch only posts above it. `nil` means walk from the newest page
+    /// without stopping early — a backfill, or `--full`.
+    public func since(full: Bool) -> Int? {
+        (full || !backfillComplete) ? nil : highest
+    }
+
+    /// Where an unfinished backfill resumes. Without it a channel with more pages than the cap
+    /// re-walks its newest pages on every run and never reaches its own history.
+    public func resumeFrom(full: Bool) -> Int? {
+        (full || backfillComplete) ? nil : lowest
+    }
+
+    /// The state to commit alongside one page of a walk.
+    ///
+    /// **An incremental walk records nothing until it arrives.** It descends from the newest page
+    /// toward `highest`, so after any page short of that, the posts between the page and the stored
+    /// range are still unfetched. Advancing `highest` there — or clearing `backfillComplete`, which
+    /// turns the next run into a resume from the historical low-water mark — makes an interruption
+    /// skip those posts permanently. The page's posts are still written; re-walking them after an
+    /// interruption costs requests, not data.
+    public func afterPage(lowest: Int, highest: Int, full: Bool) -> Store.CrawlState {
+        if since(full: full) != nil { return self }
+        // A backfill or full walk is contiguous from wherever it started, so its bounds are safe
+        // to record page by page. It is not complete until the walk says so.
+        let bounds = merged(lowest: lowest, highest: highest, full: full)
+        return Store.CrawlState(lowest: bounds.lowest, highest: bounds.highest,
+                                backfillComplete: false)
+    }
+
+    /// The state to record once a walk returns without throwing.
+    ///
+    /// - Parameters:
+    ///   - lowest, highest: bounds the walk observed, or `nil` if it saw no posts.
+    ///   - reachedEnd: the walk PROVED exhaustion (an empty page, or id 1).
+    ///   - reachedSince: the walk arrived at the incremental mark.
+    public func afterWalk(lowest: Int?, highest: Int?, full: Bool,
+                          reachedEnd: Bool, reachedSince: Bool) -> Store.CrawlState {
+        let incremental = since(full: full) != nil
+        // Stopped short — page cap, or a repeated page — so the gap above `highest` is still open.
+        // Keep the old mark; the next run walks down to it again.
+        if incremental && !(reachedSince || reachedEnd) { return self }
+        let bounds = merged(lowest: lowest, highest: highest, full: full)
+        // Completion is only ever gained by proven exhaustion, never lost: a capped `--full` over a
+        // finished channel still has every older post stored from before.
+        return Store.CrawlState(lowest: bounds.lowest, highest: bounds.highest,
+                                backfillComplete: backfillComplete || reachedEnd)
+    }
 }

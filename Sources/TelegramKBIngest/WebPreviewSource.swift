@@ -38,6 +38,11 @@ public struct WebPreviewSource: Sendable {
         public var postCount: Int
         /// Bare channel id from `data-view`, which yields the TDLib `chat_id` for reconciliation.
         public var rawChannelID: Int64?
+        /// The walk PROVED there is nothing older: an empty successful page, or id 1.
+        public var reachedEnd: Bool
+        /// The walk arrived at `since`. An incremental walk that stops for any other reason has
+        /// left a gap between its last page and the stored range.
+        public var reachedSince: Bool
     }
 
     public enum CrawlError: Error, CustomStringConvertible {
@@ -73,7 +78,7 @@ public struct WebPreviewSource: Sendable {
         // progress, the page cap, the incremental mark) ends the loop without proving anything
         // about older history. Conflating the two let a single repeated page seal a partial
         // backfill as complete, and a completed backfill is never re-walked.
-        var reachedEnd = false
+        var reachedEnd = false, reachedSince = false
         var rawChannelID: Int64?
 
         while pages < maxPages {
@@ -109,7 +114,7 @@ public struct WebPreviewSource: Sendable {
                     lowestMessageID: lowestSeen ?? 0, updatedAt: Date(), isBackfillComplete: false))
             }
 
-            if let since, ids.allSatisfy({ $0 <= since }) { break }
+            if let since, ids.allSatisfy({ $0 <= since }) { reachedSince = true; break }
 
             // Page by the ids actually returned, never by a stride: ids are non-contiguous
             // (an album occupies several while rendering as one post), so a decrementing cursor
@@ -133,7 +138,9 @@ public struct WebPreviewSource: Sendable {
                                  isBackfillComplete: reachedEnd && since == nil),
             pagesFetched: pages,
             postCount: count,
-            rawChannelID: rawChannelID)
+            rawChannelID: rawChannelID,
+            reachedEnd: reachedEnd,
+            reachedSince: reachedSince)
     }
 
 }

@@ -268,3 +268,41 @@ extension WebPreviewParserTests {
                 "a mixed-case data-post must not produce a key that fails the channel foreign key")
     }
 }
+
+/// Round-4 review findings on ingestion.
+extension CrawlerTests {
+
+    /// 🟡 A 429 or 5xx page holds no classification markers, so it read as "not publicly
+    /// resolvable" and `sync` skipped a live channel with exit status 0.
+    @Test("an HTTP failure while classifying is an error, not an unresolvable channel",
+          arguments: [429, 502, 503])
+    func classifierThrowsOnHTTPError(status: Int) async throws {
+        let failing = { (u: String) in
+            FetchResult(body: "<html>error</html>", statusCode: status, finalURL: URL(string: u)!)
+        }
+        // On the preview request itself.
+        let direct = StubFetcher(routes: ["https://t.me/s/iosgr": failing("https://t.me/s/iosgr")])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            try await ChannelClassifier(fetcher: direct).classify("iosgr")
+        }
+        // On the plain page, after `/s/` redirected away.
+        let redirected = StubFetcher(routes: [
+            "https://t.me/s/iosgr": Self.ok("", "https://t.me/iosgr"),
+            "https://t.me/iosgr": failing("https://t.me/iosgr"),
+        ])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            try await ChannelClassifier(fetcher: redirected).classify("iosgr")
+        }
+    }
+
+    /// The signal `afterWalk` needs to tell "arrived at the mark" from "stopped short".
+    @Test("a walk reports whether it reached the incremental mark")
+    func reachedSinceIsReported() async throws {
+        let arrived = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev", since: 297)
+        #expect(arrived.reachedSince && !arrived.reachedEnd)
+        let capped = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev", since: 100, maxPages: 1)
+        #expect(!capped.reachedSince, "one page of a longer walk has not reached 100")
+    }
+}

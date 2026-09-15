@@ -16,16 +16,14 @@ struct Query: AsyncParsableCommand {
     @Argument(help: "What to search for.")
     var terms: [String]
 
-    @Option(name: .long, help: "words | substring | both")
-    var mode: Mode = .both
+    @Option(name: .long, help: "words | substring | both (word hits first, then substring-only)")
+    var mode: Store.SearchMode = .both
 
     @Option(name: .shortAndLong, help: "Maximum results.")
     var limit: Int = 20
 
     @Flag(name: .long, help: "Print ids and counts only — for eval scripting.")
     var quiet = false
-
-    enum Mode: String, ExpressibleByArgument { case words, substring, both }
 
     /// `Array.prefix` **traps** on a negative length, so a bad `--limit` would crash rather than
     /// report. SQLite treats a negative LIMIT as unlimited, so the failure surfaces only later,
@@ -40,13 +38,9 @@ struct Query: AsyncParsableCommand {
         let db = try Store.openForReading(at: store.databasePath)
         let query = terms.joined(separator: " ")
 
-        var hits: [Store.Hit] = []
-        if mode != .substring { hits += try db.searchWords(query, limit: limit) }
-        if mode != .words {
-            let seen = Set(hits.map(\.id))
-            hits += try db.searchSubstring(query, limit: limit).filter { !seen.contains($0.id) }
-        }
-        hits = Array(hits.prefix(limit))
+        // The merge policy lives in the store, not here: `tgkb-mcp` cannot depend on this target.
+        let results = try db.search(query, mode: mode, limit: limit)
+        let hits = results.hits
 
         if quiet {
             print(hits.count)
@@ -64,7 +58,9 @@ struct Query: AsyncParsableCommand {
             print("\(date)  \(post.permalink)\(reactions)")
             print("    \(Self.snippet(post.text.isEmpty ? (post.poll?.question ?? "") : post.text))")
         }
-        print("\n\(hits.count) result(s)")
+        print(hits.count < results.total
+              ? "\n\(hits.count) of \(results.total) result(s) — raise --limit for the rest"
+              : "\n\(hits.count) result(s)")
     }
 
     static func snippet(_ text: String, limit: Int = 140) -> String {
@@ -73,3 +69,5 @@ struct Query: AsyncParsableCommand {
         return flat.count <= limit ? flat : String(flat.prefix(limit)) + "…"
     }
 }
+
+extension Store.SearchMode: ExpressibleByArgument {}
