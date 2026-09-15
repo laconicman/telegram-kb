@@ -118,7 +118,7 @@ an MCP client in the loop.
 
 **Done:** `G1`–`G10` in `evals/golden-queries.md` are runnable and produce numbers.
 
-**Delivered in PR #1, through four Devin review rounds: 20 findings, 0 false positives.** Every one
+**Delivered in PR #1, through five Devin review rounds: 27 findings, 0 false positives.** Every one
 of those rounds found a bug in crawl-state handling, and in two of them some findings were bugs
 the previous round's fixes had introduced. So the state decisions now live in `Store.CrawlState` as pure,
 tested functions, and every fix gets a mutation check: the fix is reverted and its test must
@@ -138,8 +138,10 @@ startup.
 
 - `search_posts` calls `Store.search(_:mode:limit:)` and never merges indexes itself; it
   returns `total` beside the cursor, so a truncated list is never silent (<doc:Design>).
-- The SDK has **no cursor for `tools/call`**: the cursor is a tool parameter and an output
-  field.
+- The MCP protocol, and so the MCP Swift SDK, paginates **list** operations (`tools/list`,
+  `resources/list`) but has **no cursor for `tools/call`** results: pagination of search results
+  is ours, as a `cursor` tool parameter and a `next_cursor` output field. (Not TDLib, which
+  paginates its own history and search calls.)
 - Records go in `structuredContent` with a declared `outputSchema`, plus a short text
   `content` for clients that render only text.
 - Set all four annotations, `destructiveHint: false` and `idempotentHint: true` included.

@@ -3,7 +3,17 @@
 Numbered `TD-n`, each with what it costs and what discharges it. Reference from code as
 `// TODO(TD-n): …`.
 
+Every entry opens with a **Status** line: *Open*, *Partly discharged*, *Mitigated* (the cause
+cannot be removed, only watched), *Discharged* or *Superseded*, with the date and commit that
+changed it. Entries are never deleted or renumbered: the history below a status line is the
+reasoning, and existing references must keep resolving.
+
 ## TD-1 — `t.me/s/` HTML has no stability contract
+
+**Status: Mitigated** — 2026-09-06, `a0540d4` (S3). SwiftSoup with the precise `js-message_text`
+selector; every extracted field pinned by fixture tests, plus a test comparing it against an independent
+implementation. Still open: `tgkb doctor --check-parser`, the live drift check. The
+markup itself will never have a contract, so this entry stays open by nature.
 
 The class names we parse (`tgme_widget_message_*`) are internal to Telegram's web front end and
 carry no compatibility guarantee. Markup can change without notice or version.
@@ -20,6 +30,10 @@ every extracted field with a fixture-based parser test against the committed HTM
 field-by-field, so drift surfaces as a failed check rather than as quietly worse answers.
 
 ## TD-2 — Large binary dependency in the package graph
+
+**Status: Partly discharged** — 2026-08-30, `e8cb32e` (scaffold). The TDLib dependency is
+trait-gated and verified not to download with the trait off. Still open: the Xcode resolver, and a
+macOS-only slim artifact (Phase 2).
 
 **The brief's "~300 MB" was low, and the number that matters is a different one.** Measured from
 the shipped artifact's zip central directory (`research/Swiftgram-TDLibFramework.md`):
@@ -48,6 +62,9 @@ Remaining, in order of value:
 
 ## TD-3 — Reaction counts go stale between syncs
 
+**Status: Open.** Reaction counts are stored, but no per-post observation time yet — the only
+`observedAt` column belongs to link previews.
+
 There is no reaction-based search in the Telegram API outside Saved Messages tags (Premium), so
 reactions must be indexed locally — and a count is a snapshot at crawl time.
 
@@ -61,12 +78,12 @@ documented **bots-only** and are not available to a user session.
 
 ## TD-4 — Russian morphology is not handled by FTS5
 
-> **Discharged in S2, not Phase 3.** The `unicode61` index holds folded surface text *and*
-> `NLTagger` lemmas; queries are lemmatised the same way (`TextNormalizer`, `Store.searchWords`).
-> `G1` passes (108 hits for `навигация`). One divergence from the plan below: the language is
-> detected per text with `NLLanguageRecognizer` and then set explicitly, not stored on the row. A
-> single-word query that cannot be identified falls back to its surface form, which still matches
-> the lemmas indexed for every post. The history below is kept as the reasoning.
+**Status: Discharged** — 2026-09-06, `c42455b` (S2), earlier than the Phase 3 planned below. The
+`unicode61` index holds folded surface text *and* `NLTagger` lemmas, and queries are lemmatised the
+same way (`TextNormalizer`, `Store.searchWords`). `G1` passes: 108 hits for `навигация`. One
+divergence from the plan: language is detected per text with `NLLanguageRecognizer` and then set
+explicitly, not stored on the row. A single-word query that cannot be identified falls back to its
+surface form, which still matches the lemmas indexed for every post.
 
 **Now measured rather than suspected**, and the finding inverts the naive assumption: on
 inflected Russian, Telegram's own search is *better* than a plain FTS5 prefix index. SQLite has
@@ -91,6 +108,9 @@ Track recall against `evals/golden-queries.md` so the improvement is measured, n
 
 ## TD-5 — TDLib version pinning drift
 
+**Status: Open.** `TDLibKit` is pinned `exact:` in `Package.swift`; the `doctor` version check and
+the upstream-tag check are not built (Phase 2).
+
 TDLibKit and TDLibFramework version independently while both track upstream TDLib, and
 TDLibKit's tags are **pre-release-shaped** (`1.5.2-tdlib-1.8.66-022d6020`).
 
@@ -103,10 +123,10 @@ against the runtime `getOption("version")`, and a scheduled check for newer upst
 
 ## TD-6 — Read-only open of a WAL database is conditionally fragile
 
-> **Discharged in S2 and S5, as planned below.** `Store.openForWriting` sets
-> `SQLITE_FCNTL_PERSIST_WAL`; `tgkb doctor` reports directory writability in plain language. A
-> DeepWiki second opinion on GRDB (2026-09-15, see <doc:Research>) confirms this is GRDB's own
-> documented pattern for multi-process access.
+**Status: Discharged**, as planned below — 2026-09-06, `c42455b` (S2): the writer sets
+`SQLITE_FCNTL_PERSIST_WAL`; 2026-09-09, `e810b45` (S5): `tgkb doctor` reports directory writability
+in plain language. A DeepWiki second opinion (2026-09-15, <doc:Research>) confirms this is GRDB's
+documented multi-process pattern.
 
 A `mode=ro` connection must still create the `-shm` file, so it fails with
 `attempt to write a readonly database` when the containing directory is not writable — despite
@@ -121,6 +141,9 @@ trades a loud failure for silently stale reads.
 
 ## TD-7 — Views are captured lossily
 
+**Status: Discharged for the web source** — 2026-09-06, `b0d54de` (S1, `ViewCount.isApproximate`)
+and `c42455b` (S2, the `viewsIsApproximate` column). Exact counts arrive with TDLib in Phase 2.
+
 `tgme_widget_message_views` renders abbreviated ("1.4K", "1.67K"), so exact view counts are not
 recoverable from the web source.
 
@@ -132,6 +155,8 @@ reactions as the engagement signal — 164,747 of them across the corpus, and ex
 exact view counts in Phase 2 for channels reachable that way.
 
 ## TD-8 — No end-to-end proof of ID reconciliation
+
+**Status: Open** — the Phase 2 gate.
 
 The transform between web `data-post` numbers and TDLib `message_id` is verified from TDLib
 source and corroborated by TDLib's own link builder, but has not been executed against a live
@@ -163,6 +188,8 @@ that actually fails. Group TDLib messages by `media_group_id` before writing, ta
 as identity. Keep it as a permanent integration test.
 
 ## TD-9 — Semantic retrieval over Russian needs care (partly superseded)
+
+**Status: Open**, not owed until Phase 3.
 
 **Originally filed as "no on-device embedding model exists for Russian". That was wrong**, and
 the correction is worth keeping visible: it was a claim about `NLEmbedding` generalised into a
@@ -196,8 +223,9 @@ solve. **Do not** ship semantics for English and lemma-only for Russian.
 
 ## TD-10 — Cyrillic ё is not folded to е
 
-> **Discharged in S2.** `TextNormalizer.foldYo` runs at index and query time. The test
-> `вёрстка and верстка are the same word` pins it, and `G3` covers it in the evals.
+**Status: Discharged** — 2026-09-06, `c42455b` (S2). `TextNormalizer.foldYo` runs at index and
+query time. The test `вёрстка and верстка are the same word` pins it, and `G3` covers it in the
+evals.
 
 `unicode61 remove_diacritics 2` does **not** fold ё→е — ё is a distinct Cyrillic letter, not an
 accented е. Verified directly: index `вёрстка`, query `верстка`, zero hits.
@@ -209,6 +237,8 @@ contain ё** — roughly 200 posts in one channel. Telegram's own search folds t
 must be applied symmetrically or it makes things worse. Add a golden query covering it.
 
 ## TD-11 — Telegram's search reaches content we do not extract
+
+**Status: Open.**
 
 While reconciling our index against Telegram's results, two posts matched on Telegram with no
 occurrence of the term in the body, preview title, or preview description we captured.
@@ -230,6 +260,8 @@ better than Telegram here rather than merely matching it.
 
 ## TD-12 — Link content will outweigh post text 15–25× and pollute ranking
 
+**Status: Open**, Phase 3.
+
 Extracted link text is estimated at **50–80 MB against 3.38 MB of post bodies**
 (`research/link-content-fetching.md`).
 
@@ -245,6 +277,8 @@ extracted text per document.
 
 ## TD-13 — SUPERSEDED: extraction moved to `artanl`
 
+**Status: Superseded** — 2026-09-03, `1600de4`.
+
 Originally: `mrowlinson/jusText-swift` is unlicensed and cannot be vendored, so the boilerplate
 classifier must be ported from the BSD-2-Clause Python original.
 
@@ -255,6 +289,10 @@ travels: **an unlicensed repository cannot be vendored no matter how convenient 
 (`LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING` all 404; the GitHub API reports no licence).
 
 ## TD-14 — SUPERSEDED: coverage is the ladder's problem, and it has a floor
+
+**Status: Superseded** — 2026-09-03, `1600de4`. Of the three obligations it leaves, two were met
+in `c42455b` (S2): a preview with `previewObservedAt` on every link, and `urlCanonical` stored at
+ingest. `contentProvenance` is owed once fetched content reaches this store.
 
 Originally: ~8% link rot, ~10% bot-walled, ~7% YouTube — roughly 30% of URLs yielding no useful
 text.
@@ -274,6 +312,9 @@ nothing. What survives as *our* obligation is narrow and concrete:
 
 ## TD-15 — `robots.txt` compliance is deferred, deliberately
 
+**Status: Open, deliberately.** Note for publication: `tgkb` fetches only `t.me`, which has no
+`robots.txt`; `Scripts/resolve_urls.py` does request third-party sites.
+
 The engine currently plans to fetch without consulting `robots.txt`. This is the author's
 explicit decision, recorded rather than silently assumed: the priority is retrieval quality, and
 restricting scope later is the easy direction — particularly relevant if any of this is ever
@@ -292,6 +333,10 @@ those unnecessary, which is the strongest argument against them.
 
 ## TD-16 — `url_canonical` can silently diverge between two repos
 
+**Status: Discharged** — 2026-09-03, `3be0eb2` (S0); spec v3 on 2026-09-06, `2f1de8d`. The other
+implementation is tested against the same fixture list. The two implementations remain, so a new rule is a new
+fixture, never a local fix.
+
 The join key between `telegram-kb` and `artanl` is a **canonicalisation algorithm implemented
 twice, in two languages**. Redirect following, `http`→`https` upgrade (529 corpus URLs),
 `utm_*`/`ssource`/`share`/fragment stripping — each is a place the two can drift.
@@ -307,6 +352,11 @@ enumerable from it.
 
 
 ## TD-17 — Roughly a fifth of URLs will never resolve
+
+**Status: Partly discharged** — 2026-09-06, `6a6f4c0` (S3.5). `httpStatus` and `resolvedAt` are
+recorded per row, so a failure is distinguishable from "never checked" (and since 2026-09-15,
+`6e3aff7`, a row with an unreadable timestamp is rejected rather than stamped fresh). Still open:
+periodic re-resolution of failures.
 
 Measured on a 50-URL sample: 6 unreachable (`URLError`), 3 × 404, 2 × 403 and 1 × 418 — about
 **18% not resolving cleanly**, consistent with the ~8% link rot plus ~10% bot-walled estimate in
@@ -324,17 +374,25 @@ the corpus already reaches back to 2016.
 
 ## TD-18 — An incremental gap wider than the page cap never closes
 
+**Status: Discharged** — 2026-09-15, `6e3aff7` (PR #1, review round 5), without the second cursor
+planned below. What a capped incremental walk covered is contiguous from the newest page down, so
+`Store.CrawlState.afterWalk` now records it as an unfinished backfill. The next run resumes through
+the gap, at the price of re-walking stored history below it. Test:
+`cappedIncrementalResumesThroughTheGap`.
+
 An incremental walk records nothing until it reaches the stored mark (see Design, *A failed fetch
 is never exhaustion*). If more than `maxPages` pages (500, about 10,000 posts) appeared since the
-last sync, every run walks the newest 500 pages, stops short, keeps the old mark, and starts again
-from the top — the posts are written, but the gap below them is never reached.
+last sync, every run walked the newest 500 pages, stopped short, kept the old mark, and started
+again from the top — the posts were written, but the gap below them was never reached.
 
-**Cost.** None at current volumes: the busiest synced channel posts a few times a day. It bites a
-channel synced for the first time in years through a stale mark, or a much larger channel.
+**Cost.** None at current volumes: the busiest synced channel posts a few times a day. It would
+have bitten a channel synced for the first time in years through a stale mark, or a much larger
+channel.
 
-**Discharge.** A second cursor for the gap — the lowest id the unfinished incremental walk
-reached — resumed exactly as a backfill resumes from `lowestMessageID`. Not built now because it
-adds a column and a state to a machine that has already produced four review rounds of bugs.
+**Discharge, as first planned.** A second cursor for the gap, resumed the way a backfill resumes
+from `lowestMessageID`. Deferred at the time because it added a column and a state to a machine
+that had already produced four review rounds of bugs — and then made unnecessary by seeing that
+the existing resume state already describes the case.
 
 ## See Also
 

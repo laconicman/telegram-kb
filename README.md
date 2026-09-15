@@ -1,5 +1,7 @@
 # telegram-kb
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/laconicman/telegram-kb)
+
 A searchable knowledge base built from Telegram channels, exposed to Claude over MCP.
 
 Useful articles, libraries and documentation get shared in Telegram channels and then become
@@ -89,15 +91,25 @@ swift build --traits TDLib       # adds the TDLib ingestion source
 | `evals/` | Golden queries, grounded in the real corpus |
 | `research/` | Investigation notes and reproducible probes. Evidence for `Research`, not API documentation. |
 | `reports/` | Drafts of upstream bug reports and their reproductions |
+| `SYNC-*.md`, `OPEN-QUESTIONS.md` | Working notes: the exchange with the sibling project that shares the URL spec, and questions still open. Kept in the repository as the record of how decisions were reached. |
 
 ## Reviewing
 
 `REVIEW.md` lists what a reviewer here should look hardest at. It was built from the bug classes
-that four rounds of automated review actually found. `Scripts/check-invariants.sh` must pass
+that five rounds of automated review actually found. `Scripts/check-invariants.sh` must pass
 before every commit.
 
-## Licence note
+## Licence
 
-No licence has been chosen yet. TDLib is Boost; TDLibKit, TDLibFramework, GRDB, SwiftSoup and
-the MCP SDK are MIT. **Never vendor code from `Telegram-iOS` or `Swiftgram/Telegram-iOS`: both
-are GPLv2**, and copying from them would relicense this project.
+Licensed under the [Apache License 2.0](LICENSE).
+
+Dependencies are compatible with it: GRDB, SwiftSoup, TDLibKit and TDLibFramework are MIT; TDLib
+is Boost 1.0; swift-argument-parser, swift-log and swift-nio are Apache 2.0; the MCP Swift SDK is
+Apache 2.0, with contributions not yet relicensed remaining MIT.
+
+**Never vendor code from `Telegram-iOS` or `Swiftgram/Telegram-iOS`: both are GPLv2**, and copying
+from them would relicense this project.
+
+The HTML fixtures in `Tests/TelegramKBIngestTests/Fixtures/` and `research/fixtures/`, and the
+URLs in `Spec/url-canonical/`, were captured from public Telegram channels. They are included as
+test data. Their content belongs to its authors and is not covered by this licence.

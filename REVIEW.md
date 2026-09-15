@@ -1,7 +1,7 @@
 # Review Guidelines
 
 Every rule below comes from a bug that automated review actually found on this repository (PR #1,
-four rounds, 20 findings, none false). Rationale lives in
+five rounds, 27 findings, none false). Rationale lives in
 `Sources/TelegramKB/TelegramKB.docc/Design.md`: flag a change that contradicts a decision recorded
 there rather than re-arguing the decision.
 
