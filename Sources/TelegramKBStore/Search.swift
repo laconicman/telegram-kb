@@ -21,12 +21,37 @@ extension Store {
 
     /// Takes a `Database`, not the pool, so it cannot open a snapshot of its own — callers that
     /// combine indexes decide how many snapshots there are.
-    static func wordHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
+    /// The two patterns a query becomes, built once so a page and its `total` cannot disagree.
+    ///
+    /// Quoted runs are ordered phrases; everything else is an implicit AND of terms. Every piece
+    /// is quoted into the expression, so text arriving from an LLM tool call cannot become an
+    /// FTS5 operator, and `rawPattern` is validated by SQLite before it is used.
+    static func patterns(for query: String) -> (word: FTS5Pattern?, substring: FTS5Pattern?) {
         let folded = TextNormalizer.normalizeQuery(query)
-        let terms = TextNormalizer.lemmas(folded) ?? folded
-        // Failable, not throwing, and it discards FTS5 operator characters — the sanctioned
-        // path for text arriving straight from an LLM tool call (`research/grdb-fts5.md`).
-        guard let pattern = try? FTS5Pattern(matchingAllTokensIn: terms) else { return [] }
+        let parsed = QueryParser.parse(folded)
+
+        let word: FTS5Pattern?
+        if parsed.phrases.isEmpty {
+            // No phrase: the long-standing path, where the lemmatiser widens the whole query.
+            // Failable, not throwing, and it discards FTS5 operator characters — the sanctioned
+            // path for text arriving straight from an LLM tool call (`research/grdb-fts5.md`).
+            let terms = TextNormalizer.lemmas(folded) ?? folded
+            word = try? FTS5Pattern(matchingAllTokensIn: terms)
+        } else {
+            let lemmatised = parsed.phrases.map { TextNormalizer.lemmas($0) }
+            word = QueryParser.expression(parsed, lemmatised: lemmatised)
+                .flatMap { try? FTS5Pattern(rawPattern: $0) }
+        }
+
+        // Substring search is literal by nature, so the quote characters are noise: match what was
+        // inside them. `«вёрстка»` and `вёрстка` are the same substring request.
+        let literal = (parsed.phrases + parsed.tokens).joined(separator: " ")
+        let substring = literal.count >= 3 ? FTS5Pattern(matchingPhrase: literal) : nil
+        return (word, substring)
+    }
+
+    static func wordHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
+        guard let pattern = patterns(for: query).word else { return [] }
         return try Hit.fetchAll(db, sql: """
             SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postFTS) AS rank
             FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid
@@ -41,13 +66,12 @@ extension Store {
     }
 
     static func substringHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
-        let folded = TextNormalizer.normalizeQuery(query)
-        guard folded.count >= 3 else { return [] }   // trigram needs three characters
+        guard let pattern = patterns(for: query).substring else { return [] }  // trigram needs 3
         return try Hit.fetchAll(db, sql: """
             SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postTrigram) AS rank
             FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid
             WHERE postTrigram MATCH ? ORDER BY rank LIMIT ?
-            """, arguments: [FTS5Pattern(matchingPhrase: folded), limit ?? -1])
+            """, arguments: [pattern, limit ?? -1])
     }
 
     public enum SearchMode: String, Sendable, CaseIterable {
@@ -100,10 +124,7 @@ extension Store {
     /// Every match, counted in SQLite rather than in Swift. A truncated page reports what it
     /// left behind without the caller holding the rest.
     static func matchCount(_ query: String, mode: SearchMode, in db: Database) throws -> Int {
-        let folded = TextNormalizer.normalizeQuery(query)
-        let terms = TextNormalizer.lemmas(folded) ?? folded
-        let wordPattern = try? FTS5Pattern(matchingAllTokensIn: terms)
-        let substringPattern = folded.count >= 3 ? FTS5Pattern(matchingPhrase: folded) : nil
+        let (wordPattern, substringPattern) = patterns(for: query)
 
         func count(_ table: String, _ pattern: FTS5Pattern?) throws -> Int {
             guard let pattern else { return 0 }

@@ -152,6 +152,36 @@ prefixes (`навига`: 0 → 3) — and Phase 3 lemmatisation closes the morp
 Untrusted query text is converted with GRDB's failable `FTS5Pattern.matching…` initialisers,
 which discard FTS5 operator characters. Only `rawPattern` throws, and it takes no user input.
 
+## Phrase search: quotes make word order part of the query
+
+**Decision.** A quoted run of words is matched as an ordered phrase; everything else is an
+implicit AND of terms, as before. `"…"`, `«…»` and `“…”` all quote, because a Russian keyboard
+produces the second and macOS autocorrects into the third.
+
+Word search ANDs its terms, so until now `адаптивная вёрстка` and `вёрстка адаптивная` were the
+same query. Measured on the corpus after the change: `чистая архитектура` matches **12** posts
+unquoted and **2** quoted, and the reversed phrase matches **0**. Case and ё/е still never matter —
+both indexes fold them, verified directly against `unicode61` and `trigram`.
+
+**The lemma line makes inflected phrases work.** A document stores its folded text followed by its
+lemmas *in reading order*, so a phrase of lemmas matches the same adjacency. Each quoted phrase is
+therefore searched as `("surface" OR "lemmas")`: the query `"чистой архитектуры"` finds posts
+written *чистая архитектура*. Where the lemmatiser emits nothing (`TD-23`) a phrase falls back to
+its surface form, which is the honest outcome rather than a silent miss.
+
+**Nothing a searcher types becomes an operator.** Each phrase and term is quoted into the FTS5
+expression with embedded quotes doubled, so `OR`, `NOT`, `NEAR` and `*` are literal text. The
+assembled expression goes through `FTS5Pattern(rawPattern:)`, which SQLite itself validates —
+relevant because these queries arrive from an LLM tool call, not a person.
+
+**Rejected: treating any multi-word argument as a phrase.** It reads well in a shell and is wrong
+in an MCP call, where a model passes a sentence and means "these words". The searcher should have
+to say which they mean, and quoting is the convention every search box already teaches.
+
+**A shell gotcha worth documenting rather than fixing.** `tgkb query "адаптивная вёрстка"` loses
+its quotes to the shell and arrives as two terms; the quotes must be nested:
+`tgkb query '"адаптивная вёрстка"'`. `tgkb query --help` says so.
+
 ## Combining the two indexes: word hits first, and never a silent cut
 
 **Decision.** `Store.search(_:mode:limit:)` returns word hits by bm25, then substring-only hits by

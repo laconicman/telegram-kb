@@ -596,3 +596,67 @@ extension StoreTests {
                                  reachedEnd: false, reachedSince: false).lowest == 500)
     }
 }
+
+/// Phrase search: quoting a run of words makes their ORDER part of the query. Word search ANDs
+/// its terms, so without this `адаптивная вёрстка` and `вёрстка адаптивная` were the same query.
+extension StoreTests {
+
+    static func phraseStore() throws -> Store {
+        let (store, _) = try seeded()
+        try store.upsert(posts: [
+            post(1, "Адаптивная вёрстка экрана на SwiftUI"),
+            post(2, "Вёрстка адаптивная — обратный порядок слов"),
+            post(3, "Просто вёрстка, без второго слова"),
+        ])
+        return store
+    }
+
+    @Test("a quoted phrase matches in order; unquoted terms still match in any order")
+    func phraseRespectsOrder() throws {
+        let store = try Self.phraseStore()
+        let phrase = try store.search("\"адаптивная вёрстка\"", mode: .words, limit: 10)
+        #expect(phrase.hits.map(\.id.messageID) == [1], "only the post with that word order")
+        #expect(phrase.total == 1, "and the count agrees with the page")
+
+        let loose = try store.search("адаптивная вёрстка", mode: .words, limit: 10)
+        #expect(Set(loose.hits.map(\.id.messageID)) == [1, 2], "unquoted is still an AND of terms")
+    }
+
+    @Test("phrase search ignores case and ё, like every other query here")
+    func phraseIgnoresCaseAndYo() throws {
+        let store = try Self.phraseStore()
+        for query in ["\"АДАПТИВНАЯ ВЁРСТКА\"", "\"адаптивная верстка\"", "«Адаптивная Вёрстка»"] {
+            #expect(try store.search(query, mode: .words, limit: 10).hits.map(\.id.messageID) == [1],
+                    "\(query) must find the same post")
+        }
+    }
+
+    @Test("a phrase combines with loose terms, and an unclosed quote is treated as words")
+    func phraseCombinesAndToleratesTypos() throws {
+        let store = try Self.phraseStore()
+        #expect(try store.search("\"адаптивная вёрстка\" SwiftUI", mode: .words, limit: 10)
+                    .hits.map(\.id.messageID) == [1])
+        #expect(try store.search("\"адаптивная вёрстка\" отсутствует", mode: .words, limit: 10)
+                    .hits.isEmpty, "the loose term still has to match")
+        // An unclosed quote is a typo, not a reason to return nothing.
+        #expect(!(try store.search("\"адаптивная вёрстка", mode: .words, limit: 10).hits.isEmpty))
+    }
+
+    @Test("quotes are not operators: a searcher cannot inject FTS5 syntax")
+    func quotedTextCannotBecomeAnOperator() throws {
+        let store = try Self.phraseStore()
+        // `OR`, `NOT` and `*` are FTS5 operators. Inside a phrase they must be literal text,
+        // and none of these queries may throw or match everything.
+        for query in ["\"вёрстка OR swiftui\"", "\"вёрстка\" NOT", "вёрстка*", "\"\"", "\"*\""] {
+            let results = try store.search(query, mode: .both, limit: 10)
+            #expect(results.hits.count <= 3, "\(query) must not match beyond the corpus")
+        }
+    }
+
+    @Test("a quoted phrase in substring mode matches the literal text, quotes stripped")
+    func phraseInSubstringMode() throws {
+        let store = try Self.phraseStore()
+        #expect(try store.search("\"адаптивная вёрстка\"", mode: .substring, limit: 10)
+                    .hits.map(\.id.messageID) == [1])
+    }
+}

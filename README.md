@@ -46,6 +46,7 @@ Swift 6.1+ toolchain. Development uses Swift 6.3 with strict concurrency.
 swift build -c release
 .build/release/tgkb sync iosgr prefire_ios        # first run backfills; later runs are incremental
 .build/release/tgkb query навигация               # word hits first, then substring-only hits
+.build/release/tgkb query '"адаптивная вёрстка"'   # quoted: that word order only
 .build/release/tgkb query --mode substring imation
 .build/release/tgkb doctor iosgr                  # coverage, gaps, reachability
 ```
