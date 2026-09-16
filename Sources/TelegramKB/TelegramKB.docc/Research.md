@@ -263,8 +263,13 @@ Carried forward deliberately. Do not build on these without probing first.
   myself. A pass over them would now be confirmatory rather than decisive. Flagged as a
   conscious omission, not an oversight.
 - **Scale.** Storage results are from 60-row samples; retrieval results now come from a real
-  7,406-post corpus. Nothing yet speaks to WAL growth during a long backfill or checkpoint
-  starvation under a concurrent reader.
+  7,406-post corpus. WAL growth under a long backfill is **no longer a vague worry but still
+  unmeasured**: a DeepWiki consult on GRDB (2026-09-16) established the mechanism — GRDB does no
+  background checkpointing, SQLite's automatic checkpoint is `PASSIVE` and fires at 1,000 WAL
+  pages, and it can only reclaim frames no reader snapshot pins, so continuously overlapping reads
+  starve it. Ours is exactly that shape once `tgkb-mcp` exists. Filed as `TD-22`; the number to
+  watch is the `-wal` file during a backfill.
+  [Conversation](https://deepwiki.com/search/two-questions-about-multi-proc_352cb065-96b1-4eca-88f7-970e3d0cabaa?mode=deep).
 - **Whether mean-centering helps or hurts embedding rank quality.** The storage research measured
   raw cosine inverting and centering fixing it; my own probe measured the opposite sign. My mean
   was over 8 sentences — far too few to be representative. Unresolved; settle on the real corpus.

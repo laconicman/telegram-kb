@@ -449,6 +449,39 @@ by channel identity gives the same guarantee for concurrent channel crawls; it c
 processes, and `Task(name:)` is a debugging label, not an identity (verified: two tasks may share
 a name).
 
+**How to write it, from a DeepWiki consult on GRDB (2026-09-16, <doc:Research>).** GRDB has no
+lease primitive, and none is needed: it begins every write transaction as `IMMEDIATE`, so the
+write lock is taken before the lease row is read. Put the staleness check and the claim in **one**
+`dbPool.write` — never read the row in one access and claim it in another, because a read that
+later escalates to a write is the one `SQLITE_BUSY` a timeout cannot prevent. Do not reach for
+`BEGIN EXCLUSIVE`: it would block WAL readers, which is `tgkb-mcp`. One constraint that falls out
+of our own settings: **the staleness threshold must be comfortably larger than `busyMode`'s 10
+seconds**, or two processes contending for a takeover fail on the timeout instead of cleanly
+losing the race.
+
+## TD-22 — WAL growth during a long backfill is unmanaged and unmeasured
+
+**Status: Open** — named after a DeepWiki consult on GRDB (2026-09-16, <doc:Research>) turned a
+vague worry in the Research ledger into a specific mechanism.
+
+GRDB runs no background checkpointing. The only checkpoints are SQLite's own automatic one, which
+fires after a commit that leaves the WAL at 1,000+ pages and runs in `PASSIVE` mode, and whatever
+the application calls itself. A `PASSIVE` checkpoint can only reclaim frames no reader snapshot
+still pins.
+
+**Cost.** Our shape is exactly the one that starves it: a writer committing a small transaction per
+page for the length of a backfill, and `tgkb-mcp` reading in another process. Individually short
+reads are fine; *continuously overlapping* ones are not, because some snapshot is then always
+pinned near the start of the WAL and the file grows for the whole backfill. Nobody has measured
+ours — a 116-page backfill is short, and the reader has not been built yet.
+
+**Discharge.** Measure first: watch the `-wal` file during a full backfill with a reader looping
+against it. If it grows without bound, call `db.checkpoint(.passive)` from the writer on a cadence
+(every N pages), and a `.truncate` once at the end to give the space back. Do **not** use
+`.full`/`.restart`/`.truncate` mid-backfill: they block until readers release.
+
+
+
 ## See Also
 
 - <doc:Design>
