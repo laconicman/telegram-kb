@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..54f77a1 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -89,7 +89,7 @@ public struct Store: Sendable {
+     }
+ 
+     static func write(_ post: Post, into db: Database, policy: WritePolicy = .replace) throws {
+-        if policy == .keepExisting {
++        if policy == .replace {
+             let exists = try Int.fetchOne(db, sql: """
+                 SELECT 1 FROM post WHERE channelUsername = ? AND messageID = ?
+                 """, arguments: [post.id.channelUsername, post.id.messageID]) != nil

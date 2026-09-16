@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
+index 64ebf39..e3d4ae2 100644
+--- a/Sources/TelegramKBIngest/WebPreviewSource.swift
++++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
+@@ -104,7 +104,7 @@ public struct WebPreviewSource: Sendable {
+             // Keep only this channel's blocks. A foreign block carries another channel's
+             // `data-post`, so writing it would fail the post → channel foreign key and take the
+             // whole sync down with it — the page would be unreadable rather than partly useful.
+-            let posts = parsed.filter { $0.id.channelUsername == channel.lowercased() }
++            let posts = parsed
+             foreignBlocks += parsed.count - posts.count
+             guard !posts.isEmpty else { reachedEnd = true; break }
+             if rawChannelID == nil {

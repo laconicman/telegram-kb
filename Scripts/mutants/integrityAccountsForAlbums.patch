@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..c26e2ee 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -427,7 +427,7 @@ extension Store {
+                 }
+                 // `max(…, highestCovered + 1)` keeps overlapping spans — an album running into
+                 // the next post's id — from being counted twice, as the old set did not.
+-                covered += max(0, span.last - max(span.first, highestCovered + 1) + 1)
++                covered += 1
+                 highestCovered = max(highestCovered, span.last)
+             }
+             // The upper bound is the highest id COVERED, not the highest post's first id. When

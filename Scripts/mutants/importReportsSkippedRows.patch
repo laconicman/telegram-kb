@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..27670dd 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -244,7 +244,7 @@ extension Store {
+         var skipped = 0
+         for line in text.split(separator: "\n") {
+             guard let row = try? JSONDecoder().decode(Row.self, from: Data(line.utf8)) else {
+-                if !line.trimmingCharacters(in: .whitespaces).isEmpty { skipped += 1 }
++                _ = line
+                 continue
+             }
+             // An unparseable timestamp makes the row unreadable too. Substituting "now" would

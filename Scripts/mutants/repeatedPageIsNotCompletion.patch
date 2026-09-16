@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
+index 64ebf39..0fb57c0 100644
+--- a/Sources/TelegramKBIngest/WebPreviewSource.swift
++++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
+@@ -131,7 +131,7 @@ public struct WebPreviewSource: Sendable {
+             // would silently skip posts.
+             // No progress: stop, but prove nothing. The page repeated, so older posts were never
+             // visited and the backfill stays incomplete for the next run to resume.
+-            if let cursor, lowest >= cursor { break }
++            if let cursor, lowest >= cursor { reachedEnd = true; break }
+             if lowest <= 1 { reachedEnd = true; break }
+             cursor = lowest
+         }

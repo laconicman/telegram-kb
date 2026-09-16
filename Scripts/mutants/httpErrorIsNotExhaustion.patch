@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
+index 64ebf39..f9ac84a 100644
+--- a/Sources/TelegramKBIngest/WebPreviewSource.swift
++++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
+@@ -96,7 +96,7 @@ public struct WebPreviewSource: Sendable {
+             // A non-2xx response parses as an empty page, which is indistinguishable from real
+             // history exhaustion — and marking a truncated crawl "complete" would stop every
+             // later sync from ever retrieving the missing history. Fail loudly instead.
+-            guard (200..<300).contains(result.statusCode) else {
++            guard true else {
+                 throw CrawlError.http(status: result.statusCode, url: url.absoluteString)
+             }
+ 
