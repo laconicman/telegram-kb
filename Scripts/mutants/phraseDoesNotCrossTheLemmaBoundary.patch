@@ -1,15 +1,14 @@
-diff --git a/Sources/TelegramKBStore/QueryParser.swift b/Sources/TelegramKBStore/QueryParser.swift
-index e4cfd8e..320a945 100644
---- a/Sources/TelegramKBStore/QueryParser.swift
-+++ b/Sources/TelegramKBStore/QueryParser.swift
-@@ -93,9 +93,7 @@ public enum QueryParser {
+diff --git a/Sources/TelegramKBStore/TextNormalizer.swift b/Sources/TelegramKBStore/TextNormalizer.swift
+index e829697..c864b64 100644
+--- a/Sources/TelegramKBStore/TextNormalizer.swift
++++ b/Sources/TelegramKBStore/TextNormalizer.swift
+@@ -59,7 +59,8 @@ public enum TextNormalizer {
+     public static func indexed(text: String, extras: [String] = []) -> (surface: String, lemmas: String) {
+         let joined = ([text] + extras.filter { !$0.isEmpty }).joined(separator: "\n")
+         let folded = foldYo(joined)
+-        return (folded, lemmas(folded) ?? "")
++        // MUTANT: both sections back in one column, separated by a newline FTS5 tokenises away.
++        return (folded + "\n" + (lemmas(folded) ?? ""), "")
+     }
  
-         func widened(_ text: String, _ lemma: String?, qualified: Bool) -> String {
-             guard let lemma, !lemma.isEmpty, lemma != text else { return quoted(text) }
--            return qualified
--                ? "(content:\(quoted(text)) OR lemmas:\(quoted(lemma)))"
--                : "(\(quoted(text)) OR \(quoted(lemma)))"
-+            return "(\(quoted(text)) OR \(quoted(lemma)))"
-         }
- 
-         var parts: [String] = []
+     /// Normalises a user query the same way the index was built. Never skip this.

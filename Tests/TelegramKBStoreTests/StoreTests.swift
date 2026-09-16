@@ -683,9 +683,11 @@ extension StoreTests {
     @Test("loose terms beside a phrase are still lemmatised")
     func looseTermsKeepTheirLemmasBesideAPhrase() throws {
         let (store, _) = try Self.seeded()
-        try store.upsert(posts: [Self.post(1, "Вопросы навигации в SwiftUI сегодня")])
-        #expect(try store.search("\"в swiftui\" навигация", mode: .words, limit: 10).hits.count == 1,
-                "навигация must still reach навигации while a phrase is present")
+        try store.upsert(posts: [Self.post(1, "Тут про навигацию в SwiftUI сегодня")])
+        // The query term is the inflected one: a bare term already reaches the lemmas column, so
+        // only lemmatising the TERM connects "навигацией" to a post carrying "навигацию".
+        #expect(try store.search("\"в swiftui\" навигацией", mode: .words, limit: 10).hits.count == 1,
+                "a loose term must still be lemmatised while a phrase is present")
     }
 
     /// 🟡 Substring search is literal, and grouping the phrases first searched a sequence the
