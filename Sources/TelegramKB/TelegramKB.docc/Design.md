@@ -155,8 +155,9 @@ which discard FTS5 operator characters. Only `rawPattern` throws, and it takes n
 ## Phrase search: quotes make word order part of the query
 
 **Decision.** A quoted run of words is matched as an ordered phrase; everything else is an
-implicit AND of terms, as before. `"…"`, `«…»` and `“…”` all quote, because a Russian keyboard
-produces the second and macOS autocorrects into the third.
+implicit AND of terms, as before. `"…"`, `«…»` and `“…”` all quote: `«…»` are the Russian
+quotation marks and `“…”` is what smart-quote substitution produces, so a searcher who types the
+quotes their keyboard or editor gives them gets the phrase they meant.
 
 Word search ANDs its terms, so until now `адаптивная вёрстка` and `вёрстка адаптивная` were the
 same query. Measured on the corpus after the change: `чистая архитектура` matches **12** posts
@@ -181,6 +182,16 @@ to say which they mean, and quoting is the convention every search box already t
 **A shell gotcha worth documenting rather than fixing.** `tgkb query "адаптивная вёрстка"` loses
 its quotes to the shell and arrives as two terms; the quotes must be nested:
 `tgkb query '"адаптивная вёрстка"'`. `tgkb query --help` says so.
+
+**What Telegram itself does, measured where it can be measured.** Probed against the `?q=` oracle
+on `@iosgr`, 2026-09-16: unquoted `чистая архитектура` returns 6 posts and **all six contain both
+words**, so that endpoint is AND-like, as we are. Quoting it returns **0** — the web endpoint has
+no phrase syntax and searches the quote characters literally. The maintainer reports that the iOS
+app behaves differently: `"…"` matches a phrase there, and an unquoted query can return posts
+carrying only *some* of the words. That is a different search path (MTProto server-side, not this
+endpoint) and cannot be probed from here, so it is recorded as testimony in <doc:Research> rather
+than as a measurement. If it holds, our unquoted AND is the stricter of the two — a precision
+choice, with `both` mode and `total` as the recall escape hatch.
 
 ## Combining the two indexes: word hits first, and never a silent cut
 

@@ -260,7 +260,15 @@ Carried forward deliberately. Do not build on these without probing first.
   of four channels — 7,406 posts over ~480 page requests at a 1 s delay — completed with no
   throttling, no 429s, no challenges. Still not a probe *for* the limit, but casual crawling at
   real corpus scale is now demonstrated rather than extrapolated.
-- **Whether `?q=` is stable or supported.** Undocumented; used as a test oracle only.
+- **Whether `?q=` is stable or supported.** Undocumented; used as a test oracle only. Measured
+  2026-09-16: it is **AND-like for unquoted multi-word queries** (`чистая архитектура` → 6 posts,
+  6 of 6 containing both words) and has **no phrase syntax** — the quoted form returns 0, matching
+  the quote characters literally.
+- **How Telegram's iOS app searches, as against the web endpoint.** Maintainer's testimony,
+  2026-09-16: in the app a `"…"` query matches a phrase, and an unquoted query may return posts
+  containing only some of the words. Not probed here — it is a different code path (server-side
+  MTProto search) and needs a client to test. It matters because it sets what a user expects of
+  our unquoted queries, which are AND.
 - **HTML stability over time** — single point in time, no churn estimate. `TD-1`.
 - **Trait gating under Xcode's resolver**, as opposed to the SwiftPM CLI.
 - **Whether a macOS-only slim TDLibFramework build actually produces a usable artifact.** Read

@@ -14,11 +14,15 @@ struct Query: AsyncParsableCommand {
     @OptionGroup var store: StoreOptions
 
     @Argument(help: ArgumentHelp("What to search for.", discussion: """
-        Terms match in any order. Quote a run of words to require that ORDER —         "адаптивная вёрстка" finds only that phrase, while адаптивная вёрстка finds both words         anywhere in a post. Case and ё/е never matter. «…» and “…” quote a phrase too.
+        Terms match in any order, and all of them must appear.
+        Quote a run of words to require that ORDER instead:
+          tgkb query '"адаптивная вёрстка"'   only that phrase
+          tgkb query  адаптивная вёрстка      both words, any order
+        Case and ё/е never matter. «…» and “…” quote a phrase as well as "…".
 
-        The quotes have to survive the shell, so pass them inside single quotes:
-          tgkb query '"адаптивная вёрстка"'
-        A shell-quoted argument alone — tgkb query "адаптивная вёрстка" — reaches this command         without quotes, and is therefore an unordered pair of terms.
+        The quotes must survive the shell, hence the single quotes above.
+        A plain tgkb query "адаптивная вёрстка" arrives with the quotes already
+        eaten by the shell, and is an unordered pair of terms.
         """))
     var terms: [String]
 
