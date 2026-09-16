@@ -91,6 +91,7 @@ swift build --traits TDLib       # adds the TDLib ingestion source
 | `evals/` | Golden queries, grounded in the real corpus |
 | `research/` | Investigation notes and reproducible probes. Evidence for `Research`, not API documentation. |
 | `reports/` | Drafts of upstream bug reports and their reproductions |
+| `upstream/` | Drafts of feedback to projects this one builds on. Nothing here is posted without the maintainer saying so. |
 | `SYNC-*.md`, `OPEN-QUESTIONS.md` | Working notes: the exchange with the sibling project that shares the URL spec, and questions still open. Kept in the repository as the record of how decisions were reached. |
 
 ## Reviewing

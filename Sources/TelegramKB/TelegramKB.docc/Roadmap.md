@@ -201,6 +201,26 @@ TDLib lives once MCP needs it — the four options are in <doc:Design>, unanswer
 
 ---
 
+## Publication
+
+The repository is private and **goes public only when the maintainer says so**. Decisions already
+taken, so they are not re-asked:
+
+| Question | Decision |
+|---|---|
+| Licence | **Apache-2.0** (`LICENSE`, 2026-09-15). Every dependency is MIT, Apache-2.0 or Boost. |
+| `t.me/+…` invite links in the golden URL files and fixtures | **Kept.** Scraped from public channels, mostly dead; not worth rewriting history over. |
+| Working notes (`SYNC-*.md`, `OPEN-QUESTIONS.md`) | **Kept in the repository** as the record of how decisions were reached. |
+| DeepWiki | Badge added ahead of publication so the wiki indexes and auto-refreshes. |
+| Captured third-party content | Fixtures and corpus URLs are other people's posts, included as test data and excluded from the licence grant — said in `README.md`. |
+
+Open at publication time:
+
+- Check the first generated DeepWiki against `.devin/wiki.json` — steering has no success signal.
+- `TD-15` (`robots.txt`) stays deferred by the maintainer's decision until this is production
+  ready. `tgkb` itself fetches only `t.me`, which publishes no `robots.txt`;
+  `Scripts/resolve_urls.py` is the part that requests third-party hosts.
+
 ## Working in parallel
 
 | Track | Owns | Never touches |
