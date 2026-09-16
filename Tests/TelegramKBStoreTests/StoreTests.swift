@@ -580,3 +580,19 @@ extension StoreTests {
         #expect(Set(page.hits.map(\.id)).count == page.hits.count, "no duplicates across indexes")
     }
 }
+
+/// Round-10: `--full` may replace the bounds, but a walk that fetched nothing has nothing to
+/// replace them with — writing its nils back sent every later sync into a fresh backfill.
+extension StoreTests {
+    @Test("a --full walk that fetched nothing leaves the bounds alone")
+    func emptyFullWalkKeepsBounds() {
+        let before = Store.CrawlState(lowest: 1, highest: 1000, backfillComplete: true)
+        let after = before.afterWalk(lowest: nil, highest: nil, full: true,
+                                     reachedEnd: false, reachedSince: false)
+        #expect(after.lowest == 1 && after.highest == 1000)
+        #expect(after.backfillComplete, "and it must not undo a completed backfill either")
+        // A --full walk that DID fetch still replaces, which is the point of the flag.
+        #expect(before.afterWalk(lowest: 500, highest: 1200, full: true,
+                                 reachedEnd: false, reachedSince: false).lowest == 500)
+    }
+}

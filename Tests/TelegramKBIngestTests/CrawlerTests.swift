@@ -307,3 +307,42 @@ extension CrawlerTests {
         #expect(!capped.reachedSince, "one page of a longer walk has not reached 100")
     }
 }
+
+/// Round-10 review findings on the crawler.
+extension CrawlerTests {
+
+    /// 🔴 A preview that vanishes mid-walk redirects to the plain page, which answers 200 and
+    /// parses as zero posts — the same false completion as an error page, wearing a success code.
+    @Test("a redirect away from /s/ is an error, not the end of history")
+    func redirectMidWalkIsNotExhaustion() async throws {
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"),
+            // The owner disables the preview between pages: 302 → plain page → 200.
+            "https://t.me/s/swiftui_dev?before=262":
+                Self.ok(try Self.fixture("plain-subscribers"), "https://t.me/swiftui_dev"),
+        ])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev")
+        }
+    }
+
+    /// The filter added in round 9 opened a second false-completion path: a page full of someone
+    /// else's blocks is not an empty page.
+    @Test("a page whose blocks all belong to another channel does not prove the end")
+    func allForeignPageIsNotExhaustion() async throws {
+        let foreign = #"""
+        <div class="tgme_widget_message" data-post="someone_else/7" data-view="eyJjIjotOTk5fQ">
+          <div class="tgme_widget_message_text js-message_text">not ours</div>
+          <a class="tgme_widget_message_date"><time datetime="2026-01-01T00:00:00+00:00"></time></a>
+        </div>
+        """#
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"),
+            "https://t.me/s/swiftui_dev?before=262": Self.ok(foreign, "https://t.me/s/swiftui_dev?before=262"),
+        ])
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev")
+        #expect(result.foreignBlocks == 1)
+        #expect(!result.watermark.isBackfillComplete,
+                "history below 262 was never visited, so the backfill must stay open")
+    }
+}

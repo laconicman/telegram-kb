@@ -87,6 +87,14 @@ not with missed pages. `tgkb doctor` reports this per channel.
 - swift-docc-plugin 1.5.0; a docs-only target needs only a comments-only source file — **no
   dummy public symbol**. Confirmed by our own building scaffold.
 - SwiftSoup 2.13.7 (2026-07-23); ~26 ms per 159 KB page. **`text()` silently drops `<br/>`.**
+- **An incremental build can leave a test target linked against a type's OLD layout**, and the
+  result is a SIGSEGV in a test that has nothing to do with the change. Observed 2026-09-16 on
+  Swift 6.3.3: adding a second payload case to `WebPreviewSource.CrawlError` segfaulted one test
+  in another target, and bisecting *within* incremental builds confirmed a false cause (the
+  payload) because every variant shared the stale objects. `swift package clean` then passed all
+  92 tests unchanged. The tell is in the linker diagnostic: a symbol mangled `CrawlErrorO` (enum)
+  referenced from an object built before the type changed. **When a test crashes after a type's
+  layout changes, clean before believing any bisect.**
 - **Second opinion, DeepWiki on `modelcontextprotocol/swift-sdk`, 2026-09-15**, for the S6 tool
   design. It confirms the annotation defaults and the stdout rule above. It adds that
   `tools/call` has no protocol cursor, that `CallTool.Result(structuredContent:)` encodes any

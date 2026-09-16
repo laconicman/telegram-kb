@@ -51,9 +51,14 @@ public struct WebPreviewSource: Sendable {
 
     public enum CrawlError: Error, CustomStringConvertible {
         case http(status: Int, url: String)
+        /// The preview redirected away from `/s/` mid-walk — the owner disabled it, or the
+        /// channel stopped being publicly previewable.
+        case previewUnavailable(channel: String, finalURL: String)
         public var description: String {
             switch self {
             case .http(let status, let url): "HTTP \(status) for \(url)"
+            case .previewUnavailable(let channel, let url):
+                "@\(channel): the web preview redirected to \(url) — it is no longer previewable"
             }
         }
     }
@@ -99,14 +104,28 @@ public struct WebPreviewSource: Sendable {
             guard (200..<300).contains(result.statusCode) else {
                 throw CrawlError.http(status: result.statusCode, url: url.absoluteString)
             }
+            // A preview that disappears mid-walk is the same trap wearing a 200. `t.me/s/<ch>`
+            // 302s to the plain channel page, which answers 200 and parses as zero posts —
+            // indistinguishable from reaching the end of history, and it would seal a truncated
+            // backfill as complete. The path is the only thing that tells them apart, which is
+            // why `ChannelClassifier` checks it too.
+            guard result.finalURL.path.hasPrefix("/s/") else {
+                throw CrawlError.previewUnavailable(channel: channel,
+                                                    finalURL: result.finalURL.absoluteString)
+            }
 
             let parsed = try WebPreviewParser.parse(html: result.body)
             // Keep only this channel's blocks. A foreign block carries another channel's
             // `data-post`, so writing it would fail the post → channel foreign key and take the
             // whole sync down with it — the page would be unreadable rather than partly useful.
+            // Only a page with NO message blocks at all proves exhaustion. A page whose blocks
+            // all belong to someone else proves nothing about this channel's history, so it stops
+            // the walk without claiming an end — the round-9 filter would otherwise have opened a
+            // second false-completion path beside the one it closed.
+            guard !parsed.isEmpty else { reachedEnd = true; break }
             let posts = parsed.filter { $0.id.channelUsername == channel.lowercased() }
             foreignBlocks += parsed.count - posts.count
-            guard !posts.isEmpty else { reachedEnd = true; break }
+            guard !posts.isEmpty else { break }
             if rawChannelID == nil {
                 rawChannelID = try WebPreviewParser.rawChannelID(html: result.body, channel: channel)
             }

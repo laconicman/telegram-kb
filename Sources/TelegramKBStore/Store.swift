@@ -466,7 +466,10 @@ extension Store.CrawlState {
     /// - Parameters:
     ///   - lowest, highest: the bounds the walk itself observed, or `nil` if it saw no posts.
     public func merged(lowest: Int?, highest: Int?, full: Bool) -> (lowest: Int?, highest: Int?) {
-        if full { return (lowest, highest) }
+        // `full` starts at the newest page and so may replace the bounds — but a walk that saw
+        // NOTHING has seen nothing to replace them with. Writing its nils back erased the range
+        // and sent every later sync into a fresh backfill.
+        if full { return (lowest ?? self.lowest, highest ?? self.highest) }
         return (lowest: [self.lowest, lowest].compactMap { $0 }.min(),
                 highest: [self.highest, highest].compactMap { $0 }.max())
     }
