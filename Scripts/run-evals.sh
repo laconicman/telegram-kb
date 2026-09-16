@@ -47,8 +47,14 @@ run() {
   esac
   printf '%s' "$out"
 }
-q()  { run $TGKB query --db "$DB" --quiet --limit 500 "$@"; }
-qm() { local m="$1"; shift; run $TGKB query --db "$DB" --quiet --limit 500 --mode "$m" "$@"; }
+# The limit is far above any expected result set on purpose: at --limit 500 the G4 count came
+# back as exactly "500", a capped number masquerading as a measurement.
+LIMIT=5000
+q()  { run $TGKB query --db "$DB" --quiet --limit $LIMIT "$@"; }
+qm() { local m="$1"; shift; run $TGKB query --db "$DB" --quiet --limit $LIMIT --mode "$m" "$@"; }
+# The ids themselves, for criteria that name a specific post rather than a count.
+qids() { $TGKB query --db "$DB" --quiet --limit $LIMIT "$@" 2>/dev/null | tail -n +2; }
+returns() { qids "$2" | grep -qx "$1" && echo yes || echo no; }
 
 # PASS only when the query actually ran AND met its expectation.
 verdict() { # <hits> <test> <pass-text> <fail-text>
@@ -73,17 +79,22 @@ printf "%-5s %-28s %6s  %s\n" "ID" "QUERY" "HITS" "EXPECTATION"
 printf -- "-%.0s" {1..92}; echo
 
 h=$(q навигация)
-row G1 "навигация (inflection)" "$h" "$(verdict "$h" "-ge 3" "PASS — matches навигации too" "FAIL — TD-4 regression")"
+row G1 "навигация (inflection)" "$h" "$(verdict "$h" "-ge 36" "PASS — matches навигации too" "FAIL — TD-4 regression; the criterion is >= 36, prefix-only finds 11")"
 h=$(qm substring imation)
 row G2 "imation (substring)" "$h" "$(verdict "$h" "-ge 1" "PASS — trigram only; Telegram returns 0" "FAIL")"
+# G3 names a post, not a count: the criterion is that a ё-WRITTEN post comes back for an е-spelled
+# query. `iosdev/530` is the case that holds today; `iosgr/2081`, which golden-queries.md called
+# canonical, does NOT — see TD-23, and read that entry before weakening this check.
 h=$(q верстка)
-row G3 "верстка (ё folding)" "$h" "$(verdict "$h" "-ge 1" "PASS — must include вёрстка" "FAIL — TD-10")"
+if [ "$(returns iosdev/530 верстка)" = yes ]; then g3="PASS — returns the ё-written iosdev/530"
+else g3="FAIL — TD-10: an е-spelled query no longer returns the ё-written iosdev/530"; fi
+row G3 "верстка (ё folding)" "$h" "$g3"
 h=$(q архитектура)
-row G4 "архитектура (cap-beating)" "$h" "$(verdict "$h" "-gt 22" "PASS — beats Telegram's ~22 cap" "FAIL — no better than Telegram")"
+row G4 "архитектура (cap-beating)" "$h" "$(verdict "$h" "-ge 150" "PASS — beats Telegram's ~22 cap" "FAIL — the criterion is >= 150 corpus-wide")"
 h=$(q swiftui)
 row G8 "swiftui (volume)" "$h" "$(verdict "$h" "-ge 0" "ranking signal available" "-")"
 h=$(q корутин)
-row G9 "корутин (sparse term)" "$h" "$(verdict "$h" "-ge 0" "expect a handful, not padding" "-")"
+row G9 "корутин (sparse term)" "$h" "$(verdict "$h" "-ge 4" "all 4 corpus-wide, no padding" "-")"
 h=$(q гравитационные волны)
 row G10 "гравитационные волны (none)" "$h" "$(verdict "$h" "-eq 0" "PASS — says nothing rather than confabulating" "FAIL — matched an absent topic")"
 

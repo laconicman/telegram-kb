@@ -225,7 +225,9 @@ solve. **Do not** ship semantics for English and lemma-only for Russian.
 
 **Status: Discharged** — 2026-09-06, `c42455b` (S2). `TextNormalizer.foldYo` runs at index and
 query time. The test `вёрстка and верстка are the same word` pins it, and `G3` covers it in the
-evals.
+evals. **The folding works; the inflections of folded words often do not** — an `е`-spelled query
+still misses most ё-written posts, because the lemmatiser emits nothing for the inflected form.
+That is `TD-23`, not a folding failure.
 
 `unicode61 remove_diacritics 2` does **not** fold ё→е — ё is a distinct Cyrillic letter, not an
 accented е. Verified directly: index `вёрстка`, query `верстка`, zero hits.
@@ -481,6 +483,30 @@ against it. If it grows without bound, call `db.checkpoint(.passive)` from the w
 `.full`/`.restart`/`.truncate` mid-backfill: they block until readers release.
 
 
+
+## TD-23 — `NLTagger` gives no lemma for roughly a fifth of Russian words
+
+**Status: Open** — found 2026-09-16, following a review finding that the golden checks were weaker
+than their own criteria (PR #1, round 11). Measured, not suspected.
+
+`NLTagger` with `.lemma` and the language set explicitly to Russian returns **no tag at all** for
+`верстку`, even in the clean sentence *"Сегодня я хотел бы рассказать про верстку в нашем
+приложении"*. Across post `iosgr/2081`, 10 of 43 tagged words came back with no lemma.
+
+**Cost, measured on the synced corpus.** The word index holds folded surface text plus whatever
+lemmas the tagger produced, so a word the tagger skips is reachable only by its exact form. The
+trigram index cannot rescue it either: `верстка` is not a substring of `верстку`. Of the **8 posts
+written with `вёрст…`, an `е`-spelled query returns 1**. `TD-4` is therefore discharged for the
+words Apple's lexicon knows and no further — a narrower claim than this register made before.
+
+This also corrects `evals/golden-queries.md`: `iosgr/2081` was described as the canonical ё case,
+and it is not currently returned at all. `iosdev/530` is, and `G3` now asserts that specific post
+rather than a bare non-zero count.
+
+**Discharge — decide on eval evidence, not preference.** Candidates, in the order worth measuring:
+add a prefix term per Cyrillic query token (FTS5 `верстк*`) alongside the lemma path and measure
+`G1`/`G3` before and after; or vendor a Russian stemmer and index the stem as a third field. Both
+widen recall and can cost precision, which is exactly what the golden queries exist to arbitrate.
 
 ## See Also
 

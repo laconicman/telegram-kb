@@ -41,7 +41,7 @@ index. Beating Telegram on recall is not the bar — it is the floor.
 |---|---|---|---|---|
 | **G1** | `навигация` | Russian inflection | ≥36 posts in `@iosgr`. Prefix-only finds 11 — **that is a fail.** Must match `навигации`, `навигацию`, `навигацией`. | `TD-4` |
 | **G2** | `imation` | substring | Non-empty. Telegram returns 0; `unicode61` returns 0; only the `trigram` index can serve this. | — |
-| **G3** | `верстка` | **ё/е folding** | Must also return posts written `вёрстка`. Post `iosgr/2081` is the canonical case — and its only match is in the **link-preview description**, not the body. | `TD-10`, `TD-11` |
+| **G3** | `верстка` | **ё/е folding** | Must return a post *written* with `вёрстка` for an `е`-spelled query; asserted on `iosdev/530`. **Corrected 2026-09-16:** `iosgr/2081` was named here as the canonical case and is **not returned at all** — its match sits in the link-preview description as `вёрстку`, for which `NLTagger` emits no lemma, so neither index reaches it. Of 8 ё-written posts, 1 comes back. See `TD-23`. | `TD-10`, `TD-11`, `TD-23` |
 | **G4** | `архитектура` | **cap-beating recall** | ≥150 posts corpus-wide (369 contain the stem). Returning ~22 means we have reimplemented Telegram's limitation. | — |
 | **G5** | "what did anyone share about app startup time" | natural language → link | Should surface `emergetools.com/blog/…improve-popular-iOS-app-startup`, shared in **3 channels**. Answer must cite `t.me` links. | — |
 | **G6** | `swift-build` | cross-channel dedupe | `github.com/swiftlang/swift-build` was shared in **all 4 channels**. Phase 3 must return it **once**, listing all four sharings — not four near-identical rows. | — |
