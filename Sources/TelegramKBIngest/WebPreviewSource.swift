@@ -43,6 +43,10 @@ public struct WebPreviewSource: Sendable {
         /// The walk arrived at `since`. An incremental walk that stops for any other reason has
         /// left a gap between its last page and the stored range.
         public var reachedSince: Bool
+        /// Blocks on the page belonging to some other channel, dropped rather than written.
+        /// Counted, never silently discarded: none have ever been observed, so a non-zero value
+        /// means the page layout changed and the parser's assumptions want re-checking.
+        public var foreignBlocks: Int = 0
     }
 
     public enum CrawlError: Error, CustomStringConvertible {
@@ -79,6 +83,7 @@ public struct WebPreviewSource: Sendable {
         // about older history. Conflating the two let a single repeated page seal a partial
         // backfill as complete, and a completed backfill is never re-walked.
         var reachedEnd = false, reachedSince = false
+        var foreignBlocks = 0
         var rawChannelID: Int64?
 
         while pages < maxPages {
@@ -95,7 +100,12 @@ public struct WebPreviewSource: Sendable {
                 throw CrawlError.http(status: result.statusCode, url: url.absoluteString)
             }
 
-            let posts = try WebPreviewParser.parse(html: result.body)
+            let parsed = try WebPreviewParser.parse(html: result.body)
+            // Keep only this channel's blocks. A foreign block carries another channel's
+            // `data-post`, so writing it would fail the post → channel foreign key and take the
+            // whole sync down with it — the page would be unreadable rather than partly useful.
+            let posts = parsed.filter { $0.id.channelUsername == channel.lowercased() }
+            foreignBlocks += parsed.count - posts.count
             guard !posts.isEmpty else { reachedEnd = true; break }
             if rawChannelID == nil {
                 rawChannelID = try WebPreviewParser.rawChannelID(html: result.body, channel: channel)
@@ -140,7 +150,8 @@ public struct WebPreviewSource: Sendable {
             postCount: count,
             rawChannelID: rawChannelID,
             reachedEnd: reachedEnd,
-            reachedSince: reachedSince)
+            reachedSince: reachedSince,
+            foreignBlocks: foreignBlocks)
     }
 
 }

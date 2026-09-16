@@ -32,6 +32,9 @@ public struct ChannelSync: Sendable {
         public var pagesFetched = 0
         /// The incremental mark this run started from, or `nil` for a backfill or `--full`.
         public var since: Int?
+        /// Blocks dropped because they belonged to another channel. Always zero so far; a
+        /// non-zero value is worth reporting rather than swallowing.
+        public var foreignBlocks = 0
     }
 
     /// - Parameter full: re-walk from the newest page, overwriting stored copies. Never removes.
@@ -82,6 +85,7 @@ public struct ChannelSync: Sendable {
                                    backfillComplete: final.backfillComplete)
 
         return Outcome(channel: channel, skipped: nil, postCount: result.postCount,
-                       pagesFetched: result.pagesFetched, since: since)
+                       pagesFetched: result.pagesFetched, since: since,
+                       foreignBlocks: result.foreignBlocks)
     }
 }

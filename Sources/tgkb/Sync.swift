@@ -84,6 +84,11 @@ struct Sync: AsyncParsableCommand {
                 FileHandle.standardError.write(Data("\(outcome.channel): \(Self.explain(skipped))\n".utf8))
                 continue
             }
+            if outcome.foreignBlocks > 0 {
+                let warning = "\(outcome.channel): \(outcome.foreignBlocks) block(s) belonged to "
+                            + "another channel and were skipped — the page layout may have changed\n"
+                FileHandle.standardError.write(Data(warning.utf8))
+            }
             print("\(outcome.channel): \(outcome.postCount) posts, \(outcome.pagesFetched) pages"
                 + (outcome.since.map { ", since \($0)" } ?? ", full backfill"))
         }

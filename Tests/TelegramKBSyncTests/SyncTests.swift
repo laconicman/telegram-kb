@@ -168,3 +168,26 @@ struct SyncTests {
                 "a second casing would be a second channel, and the posts would fail the foreign key")
     }
 }
+
+/// Round-9: a page carrying another channel's block used to abort the whole sync — the foreign
+/// post failed the `post → channel` foreign key, so one stray block made the page unreadable.
+extension SyncTests {
+    @Test("a foreign block on the page is dropped and counted, not written and not fatal")
+    func foreignBlockDoesNotAbortTheSync() async throws {
+        let store = try Self.store()
+        let foreign = #"""
+        <div class="tgme_widget_message" data-post="someone_else/7" data-view="eyJjIjotOTk5fQ">
+          <div class="tgme_widget_message_text js-message_text">not ours</div>
+          <a class="tgme_widget_message_date"><time datetime="2026-01-01T00:00:00+00:00"></time></a>
+        </div>
+        """#
+        let page = try Self.fixture("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(foreign)<div hidden")
+        let stub = StubFetcher(["https://t.me/s/swiftui_dev": Self.ok(page, "https://t.me/s/swiftui_dev")])
+
+        let outcome = try await ChannelSync(store: store, fetcher: stub).sync(channel: "swiftui_dev")
+        #expect(outcome.foreignBlocks == 1, "dropped, and counted rather than swallowed")
+        #expect(outcome.postCount > 0, "this channel's posts on the same page still land")
+        #expect(try store.post(.init(channelUsername: "someone_else", messageID: 7)) == nil)
+        #expect(try store.channelUsernames() == ["swiftui_dev"])
+    }
+}
