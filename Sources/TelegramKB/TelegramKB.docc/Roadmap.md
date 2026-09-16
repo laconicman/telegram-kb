@@ -216,6 +216,10 @@ TDLib lives once MCP needs it — the four options are in <doc:Design>, unanswer
 Still open now that it is public:
 
 - Check the first generated DeepWiki against `.devin/wiki.json` — steering has no success signal.
+  **It indexes the default branch**: asked on 2026-09-16 it correctly reported no `Store.CrawlState`
+  and no `Sources/tgkb/Sync.swift`, because `main` is still the Phase 0 scaffold while the work sits
+  on the PR branch. The wiki is worth nothing as a review aid until this merges — the same root
+  cause as the licence detection above.
 - GitHub's licence detection reports none, because it reads the **default branch** and `LICENSE`
   currently exists only on the PR branch. It resolves on merge — the file itself is byte-identical
   to `apache.org/licenses/LICENSE-2.0.txt` (sha256 `cfc7749b…`), verified against the source.
