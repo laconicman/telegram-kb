@@ -104,8 +104,9 @@ every commit.
 ./Scripts/mutation-check.sh    # puts each fixed bug back, and proves its test fails
 ```
 
-Every regression test here is expected to fail when its fix is reverted; a test that passes either
-way is not one. The mutants in `Scripts/mutants/` are those proofs, replayable.
+A regression test that passes with and without its fix is not a regression test. The 19 mutants in
+`Scripts/mutants/` are the proofs that ours are — one patch per silent-failure bug found here,
+named after the test it must break.
 
 ## Licence
 

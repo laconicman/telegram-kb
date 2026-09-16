@@ -33,9 +33,11 @@ there rather than re-arguing the decision.
 ## Conventions
 
 - Require a test that fails without the fix for every fix in `Sources/`, and require the test to
-  FAIL when the fix is reverted — a repro that fails for another reason proves nothing. Ask for a
-  mutant in `Scripts/mutants/` (a patch that puts the bug back, named after the test it must
-  break) so `Scripts/mutation-check.sh` re-runs that proof. Flag a test asserting
+  FAIL when the fix is reverted — a repro that fails for another reason proves nothing.
+- Require a mutant in `Scripts/mutants/` — a patch putting the bug back, named after the test it
+  must break — for any fix whose failure mode is **silent**: lost posts, a false completion, a
+  check that cannot fail, a skipped row, a stale identity. `Scripts/mutation-check.sh` replays
+  them. Fixes to wording, formatting or argument validation do not need one: they fail loudly. Flag a test asserting
   only that a walk stopped, without asserting the `Store.CrawlState` it left.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
