@@ -132,6 +132,32 @@ struct SyncTests {
                 "a channel we cannot crawl must not leave a row behind")
     }
 
+    /// The fourth walk kind, end to end. `--full` overwrites what it re-reads and removes nothing:
+    /// a citation must not vanish because its source did (Design § *Edits are not refreshed*).
+    @Test("--full refreshes a stored post and keeps one the crawl no longer returns")
+    func fullRefreshesWithoutRemoving() async throws {
+        let store = try Self.store()
+        _ = try await ChannelSync(store: store, fetcher: try Self.twoPages()).sync(channel: "swiftui_dev")
+
+        // Corrupt one post that the crawl WILL return, and add one it never will.
+        try store.upsert(posts: [Post(id: .init(channelUsername: "swiftui_dev", messageID: 262),
+                                      date: .distantPast, kind: .text, formatSource: .web,
+                                      mediaCount: 1, text: "stale text")])
+        try store.upsert(posts: [Post(id: .init(channelUsername: "swiftui_dev", messageID: 99_999),
+                                      date: .distantPast, kind: .text, formatSource: .web,
+                                      mediaCount: 1, text: "deleted upstream")])
+
+        let outcome = try await ChannelSync(store: store, fetcher: try Self.twoPages())
+            .sync(channel: "swiftui_dev", full: true)
+        #expect(outcome.since == nil, "--full ignores the mark and starts at the newest page")
+
+        let refreshed = try #require(try store.post(.init(channelUsername: "swiftui_dev", messageID: 262)))
+        #expect(refreshed.text != "stale text", "--full overwrites what it re-reads")
+        #expect(try store.post(.init(channelUsername: "swiftui_dev", messageID: 99_999)) != nil,
+                "a post the crawl no longer returns is KEPT — refresh is not reconciliation")
+        #expect(try store.crawlState(forChannel: "swiftui_dev").backfillComplete)
+    }
+
     @Test("a mixed-case channel argument reaches the store lowercased")
     func channelIsLowercased() async throws {
         let store = try Self.store()
