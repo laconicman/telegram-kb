@@ -21,6 +21,7 @@ TGKB="${TGKB:-./.build/release/tgkb}"
 # exited 0 after printing ERR everywhere. The same class of bug being fixed, reintroduced by the
 # fix. Count the ERR values instead, where they are actually visible.
 errors=0
+failures=0
 ERRLOG=$(mktemp)
 trap 'rm -f "$ERRLOG"' EXIT
 
@@ -56,6 +57,9 @@ verdict() { # <hits> <test> <pass-text> <fail-text>
 }
 row() {
   [ "$3" = "ERR" ] && errors=$((errors + 1))
+  # A verdict beginning FAIL belongs to a query with a REQUIRED threshold (G1, G3, G10). It
+  # printed FAIL and changed nothing, so the run exited 0 while missing its acceptance criteria.
+  case "$4" in FAIL*) failures=$((failures + 1)) ;; esac
   printf "%-5s %-28s %6s  %s\n" "$1" "$2" "$3" "$4"
 }
 
@@ -81,6 +85,9 @@ echo
 if [ "$errors" -gt 0 ]; then
   echo "$errors quer(y|ies) FAILED TO RUN — results above are NOT a pass." >&2
   [ -s "$ERRLOG" ] && echo "last error: $(tail -1 "$ERRLOG")" >&2
-  exit 1
 fi
+if [ "$failures" -gt 0 ]; then
+  echo "$failures required quer(y|ies) MISSED their threshold — this is a FAIL, not a note." >&2
+fi
+if [ "$errors" -gt 0 ] || [ "$failures" -gt 0 ]; then exit 1; fi
 echo "G5/G6/G7 are natural-language and cross-channel cases; they need the MCP surface (S6)."

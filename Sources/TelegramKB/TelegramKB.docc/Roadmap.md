@@ -154,6 +154,19 @@ startup.
 
 ---
 
+### S7 — channel identity by `rawChannelID`
+Schema `v4`. `rawChannelID` becomes the channel key and `post`'s foreign key; `username` becomes a
+unique-when-present label with its own index. Permalinks keep rendering from the username, falling
+back to the `t.me/c/<rawChannelID>/<id>` form when there is none. Rationale, including what it
+costs, is in <doc:Design> § *Channel identity is `rawChannelID`, not the username*.
+
+Comes **before Phase 2**: TDLib reconciliation joins on this id (`TD-8`), and a username rename
+would otherwise orphan a channel's whole history (`TD-19`).
+
+**Done:** a channel renamed between two syncs keeps one row and one history, proven by a test that
+renames the username and re-crawls; `doctor` still reports per-channel integrity; permalinks
+resolve for a channel with no username.
+
 ## The Phase-1 exit
 
 **`S0`–`S6`, and `G1`–`G10` measured — not necessarily all passing.** `G1` (Russian inflection)

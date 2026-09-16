@@ -19,7 +19,9 @@ there rather than re-arguing the decision.
 - Flag a non-2xx response that is classified instead of thrown in
   `Sources/TelegramKBIngest/ChannelClassifier.swift`; it reads as an unresolvable channel.
 - Flag a post write and a crawl-state write in separate `dbPool.write` calls; both belong in one
-  `Store.commitPage` transaction.
+  `Store.commitPage` transaction. One exception, and only this one: the final state write in
+  `Sources/tgkb/Sync.swift` after a walk ends, because completion is knowable only once the walk
+  stops — a crash before it costs a re-crawl, never a false completion.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and

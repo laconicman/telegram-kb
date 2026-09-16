@@ -17,6 +17,13 @@ public struct Store: Sendable {
     /// Opens for writing and runs migrations.
     public static func openForWriting(at path: String) throws -> Store {
         var config = Configuration()
+        // SQLite allows ONE writer per database file, across processes. GRDB's default
+        // (`.immediateError`) fails the moment the lock is held, so a second `tgkb sync` died
+        // instantly if its commit landed inside another's — measured: 0.00s to failure without a
+        // timeout, and a wait-then-succeed with one. Page commits last milliseconds, so waiting
+        // is the honest behaviour. It bounds the wait; it does not remove SQLITE_BUSY, and it is
+        // NOT a substitute for keeping one writer per channel (see Design).
+        config.busyMode = .timeout(10)
         config.prepareDatabase { db in
             // Keeps -wal and -shm on disk after the writer closes.
             //
@@ -222,8 +229,11 @@ extension Store {
             case int(Int), string(String)
             init(from d: Decoder) throws {
                 let c = try d.singleValueContainer()
-                if let i = try? c.decode(Int.self) { self = .int(i) }
-                else { self = .string((try? c.decode(String.self)) ?? "") }
+                if let i = try? c.decode(Int.self) { self = .int(i); return }
+                // Anything else must THROW, so the row counts as unreadable. Falling back to ""
+                // turned a malformed status into a *failed observation*, and the import then
+                // overwrote a valid stored resolution with it.
+                self = .string(try c.decode(String.self))
             }
             var text: String { switch self { case .int(let i): "\(i)"; case .string(let s): s } }
         }
@@ -390,36 +400,48 @@ extension Store {
     }
 
     public func integrity(forChannel username: String) throws -> Integrity? {
-        try dbPool.read { db in
-            let rows = try Row.fetchAll(db, sql: """
+        /// One post's id span. Decoded by property name, so the column names are not repeated
+        /// as string literals in a `Row` subscript.
+        struct Span: Decodable, FetchableRecord {
+            var messageID: Int
+            var mediaCount: Int?
+            var first: Int { messageID }
+            var last: Int { messageID + max(1, mediaCount ?? 1) - 1 }
+        }
+
+        return try dbPool.read { db in
+            let spans = try Span.fetchAll(db, sql: """
                 SELECT messageID, mediaCount FROM post WHERE channelUsername = ? ORDER BY messageID
                 """, arguments: [username])
-            guard let first = rows.first else { return nil }
-            let state = try Row.fetchOne(db,
-                sql: "SELECT backfillComplete FROM channel WHERE username = ?", arguments: [username])
+            guard let lo = spans.first?.first else { return nil }
 
-            var covered = Set<Int>()
-            for r in rows {
-                let id: Int = r["messageID"], span: Int = r["mediaCount"] ?? 1
-                for i in id..<(id + max(1, span)) { covered.insert(i) }
+            // A single ordered pass, because the cost must follow the number of POSTS, not the
+            // width of the id range. Materialising every covered id was fine for web ids in the
+            // thousands and will not be for TDLib's, which are spaced by 2^20.
+            var covered = 0, longest = 0, longestStart: Int?
+            var highestCovered = lo - 1
+            for span in spans {
+                if span.first > highestCovered + 1 {
+                    let gap = span.first - highestCovered - 1
+                    if gap > longest { longest = gap; longestStart = highestCovered + 1 }
+                }
+                // `max(…, highestCovered + 1)` keeps overlapping spans — an album running into
+                // the next post's id — from being counted twice, as the old set did not.
+                covered += max(0, span.last - max(span.first, highestCovered + 1) + 1)
+                highestCovered = max(highestCovered, span.last)
             }
-            // The upper bound is the highest id COVERED, not the highest post's first id.
-            // When the last post is an album its span runs past that id, so deriving `hi` from
-            // the row would put more ids in `covered` than in the range — making `unexplained`
-            // negative and coverage exceed 100%.
-            let lo: Int = first["messageID"]
-            let hi = covered.max() ?? lo
-            var longest = 0, longestStart: Int?, run = 0, runStart = 0
-            for i in lo...hi {
-                if covered.contains(i) { run = 0; continue }
-                if run == 0 { runStart = i }
-                run += 1
-                if run > longest { longest = run; longestStart = runStart }
-            }
-            return Integrity(lowest: lo, highest: hi, posts: rows.count,
-                             covered: covered.count, unexplained: (hi - lo + 1) - covered.count,
+            // The upper bound is the highest id COVERED, not the highest post's first id. When
+            // the last post is an album its span runs past that id, which would make
+            // `unexplained` negative and coverage exceed 100%.
+            let hi = highestCovered
+            let complete = try Bool.fetchOne(db,
+                sql: "SELECT backfillComplete FROM channel WHERE username = ?",
+                arguments: [username]) ?? false
+
+            return Integrity(lowest: lo, highest: hi, posts: spans.count,
+                             covered: covered, unexplained: (hi - lo + 1) - covered,
                              longestGap: longest, longestGapStart: longestStart,
-                             backfillComplete: state?["backfillComplete"] ?? false)
+                             backfillComplete: complete)
         }
     }
 }

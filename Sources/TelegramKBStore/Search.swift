@@ -74,14 +74,55 @@ extension Store {
     /// **One snapshot for both indexes.** Two `dbPool.read` calls are two snapshots, and a sync
     /// committing between them makes the two lists disagree about what exists — a post counted
     /// as substring-only because it had not yet reached the word read.
+    ///
+    /// **Reads are bounded by `limit`.** `total` comes from `COUNT` queries, so a small page
+    /// stays a small page: asking for 20 of `swift` no longer materialises 6,672 rows.
     public func search(_ query: String, mode: SearchMode, limit: Int) throws -> SearchResults {
-        try dbPool.read { db in
-            let words = mode == .substring ? [] : try Self.wordHits(query, limit: nil, in: db)
-            var seen = Set(words.map(\.id))
-            let substringOnly = mode == .words ? [] : try Self.substringHits(query, limit: nil, in: db)
-                .filter { seen.insert($0.id).inserted }
-            let all = words + substringOnly
-            return SearchResults(hits: Array(all.prefix(max(limit, 0))), total: all.count)
+        let cap = max(limit, 0)
+        return try dbPool.read { db in
+            let words = mode == .substring ? [] : try Self.wordHits(query, limit: cap, in: db)
+            var hits = words
+            if mode != .words, hits.count < cap {
+                // Fewer word hits came back than the limit asked for, so the word set is
+                // COMPLETE — which is what makes "not in the word set" mean substring-only here.
+                // Had the page filled, the substring tail would be below the cut anyway.
+                var seen = Set(words.map(\.id))
+                for hit in try Self.substringHits(query, limit: cap, in: db)
+                where seen.insert(hit.id).inserted {
+                    hits.append(hit)
+                    if hits.count == cap { break }
+                }
+            }
+            return SearchResults(hits: hits, total: try Self.matchCount(query, mode: mode, in: db))
+        }
+    }
+
+    /// Every match, counted in SQLite rather than in Swift. A truncated page reports what it
+    /// left behind without the caller holding the rest.
+    static func matchCount(_ query: String, mode: SearchMode, in db: Database) throws -> Int {
+        let folded = TextNormalizer.normalizeQuery(query)
+        let terms = TextNormalizer.lemmas(folded) ?? folded
+        let wordPattern = try? FTS5Pattern(matchingAllTokensIn: terms)
+        let substringPattern = folded.count >= 3 ? FTS5Pattern(matchingPhrase: folded) : nil
+
+        func count(_ table: String, _ pattern: FTS5Pattern?) throws -> Int {
+            guard let pattern else { return 0 }
+            return try Int.fetchOne(db, sql: "SELECT count(*) FROM \(table) WHERE \(table) MATCH ?",
+                                    arguments: [pattern]) ?? 0
+        }
+        switch mode {
+        case .words: return try count("postFTS", wordPattern)
+        case .substring: return try count("postTrigram", substringPattern)
+        case .both:
+            guard let wordPattern, let substringPattern else {
+                return try count("postFTS", wordPattern) + count("postTrigram", substringPattern)
+            }
+            let both = try Int.fetchOne(db, sql: """
+                SELECT count(*) FROM (
+                  SELECT rowid FROM postFTS WHERE postFTS MATCH ?
+                  INTERSECT SELECT rowid FROM postTrigram WHERE postTrigram MATCH ?)
+                """, arguments: [wordPattern, substringPattern]) ?? 0
+            return try count("postFTS", wordPattern) + count("postTrigram", substringPattern) - both
         }
     }
 

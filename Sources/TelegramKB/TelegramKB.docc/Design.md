@@ -27,12 +27,11 @@ should start instantly. It also puts credentials in the process most exposed to 
 **Cost accepted:** no live search until a `search_live` tool arrives in Phase 3, and the user
 must run `tgkb sync` periodically.
 
-**MVP concurrency: an explicit lock.** Rather than relying on SQLite's own locking alone, the
-writer takes an advisory file lock for the duration of a sync and the reader tolerates its
-absence. This is a deliberate MVP choice, not a permanent one — it trades some concurrency for a
-failure mode that is easy to reason about while the schema is still moving. **The wider question
-— whether SQLite/GRDB is the right engine at all for a two-process design — is open and worth a
-dedicated research pass** rather than an assumption inherited from the brief.
+**Superseded — there is no advisory file lock.** This section once said the writer takes one for
+the duration of a sync. It never did, and the storage question it deferred has since been
+answered: SQLite and GRDB stay (§ *SQLite + GRDB stays*), the writer waits on a bounded busy
+timeout, and the store is one file (§ *One writer per store*). Two syncs of the same channel are
+still unguarded; that is `TD-21`, not a lock that exists.
 
 **Caveat that must be designed for, not discovered.** GRDB's own `DatabaseSharing.md` opens by
 discouraging database sharing, and its concrete hazard for us is that
@@ -189,6 +188,66 @@ queries take a `Database` rather than the pool, so they cannot open a snapshot o
 
 **What `total` buys.** Truncation stops being loss: the CLI prints `3 of 3741`, and the MCP surface
 will carry `total` beside an opaque cursor, so the tail is reachable rather than silently gone.
+
+## One writer per store: a busy timeout now, single-flight next
+
+**Decision.** The writer sets `busyMode = .timeout(10)`. One database file stays. A second
+`tgkb sync` on the same channel is still not prevented — that is recorded as `TD-21`.
+
+SQLite allows **one writer per database file, across processes**, and GRDB's default is
+`.immediateError`. Measured with one process holding the write lock for three seconds: without a
+timeout the second writer failed **after 0.00 s** with `database is locked`; with a five-second
+timeout it waited 2.41 s and succeeded. Page commits last milliseconds, so waiting is both honest
+and nearly always invisible. A timeout **bounds** `SQLITE_BUSY`; it does not remove it.
+
+**Rejected: one database file per channel.** The appeal is obvious — contention would almost
+vanish, and a per-channel lock or single-flight would be natural. The reads make it wrong.
+Every interesting query in this project is cross-channel ("what has anyone shared about X"), and
+measured on this machine's SQLite:
+
+- `PRAGMA compile_options` reports **`MAX_ATTACHED=10`**. A tenth channel is a hard wall, and the
+  channel list is meant to grow.
+- FTS5 rejects a schema-qualified table: `bm25(ch0.fts)` and `WHERE ch0.fts MATCH …` both fail
+  with *no such column*. One ranked query cannot span attached files at all.
+- So cross-channel search becomes **N queries merged in application code**, with `bm25` scores
+  computed against N different corpora — scores that are not comparable, which is exactly the
+  ranking problem <doc:Design> § *Combining the two indexes* exists to avoid.
+
+Splitting the store would trade a contention problem we can bound for a ranking problem we
+cannot. It also multiplies the WAL files, the migrations and the integrity checks by the number
+of channels. **One file, one writer, bounded waiting.**
+
+**What single-flight does and does not solve.** An actor keyed by channel identity is the right
+shape *within* one process, and will matter when sync crawls channels concurrently. It cannot see
+another process: two `tgkb sync` commands share no memory, and `Task(name:)` (Swift 6.2) is a
+debugging label, not an identity — verified: two tasks with the same name run side by side. A
+cross-process guard therefore has to live where both processes can see it, which means the
+database itself: a lease row carrying the channel identity, a pid and a heartbeat, taken in the
+same transaction discipline as everything else. No lock file. That is `TD-21`'s discharge.
+
+## Channel identity is `rawChannelID`, not the username
+
+**Decision (2026-09-16).** The immutable identity of a channel is its `rawChannelID` — the bare
+id from `data-view`, which also yields the TDLib `chat_id`. The username is a **label**: a
+public alias that its owner can change, that Telegram compares case-insensitively, and that a
+channel may not have at all.
+
+The store contradicts this today: `channel.username` is the primary key and `post.channelUsername`
+its foreign key, so a rename would orphan an entire channel's history, and a second crawl under
+the new name would look like a new channel. Three review findings have already circled this —
+username casing breaking the foreign key, the identity placeholder `0`, and trusting the first
+`data-view` on a page.
+
+**The cost of the pivot, stated rather than waved away.** The id is not known until the first page
+is parsed, so a row must exist before it can be identified. That is acceptable: a crawl always
+fetches a page before it writes a post, and `ensureChannel` already writes a placeholder row.
+
+**The plan** is a schema migration (`v4`) that makes `rawChannelID` the key, keeps `username` as a
+unique-when-present label with its own lookup, and rewrites `post`'s foreign key. Permalinks still
+render from the username, because `t.me/<username>/<id>` is what a human follows — and a post
+whose channel has no username needs the `t.me/c/<rawChannelID>/<id>` form anyway, which Phase 2
+will need regardless. Scheduled as `S7` in <doc:Roadmap>, before Phase 2, because TDLib
+reconciliation joins on exactly this id.
 
 ## SQLite + GRDB stays — no challenger cleared the bar
 

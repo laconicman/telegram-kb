@@ -479,3 +479,84 @@ extension StoreTests {
         #expect(stored == ["https://a.example"], "the malformed row must not be imported as fresh")
     }
 }
+
+/// Round-6 review findings on the store.
+extension StoreTests {
+
+    /// 🟡 A non-string, non-integer `http_status` decoded as `""`, which read as "checked and
+    /// failed" — so the import overwrote a good resolution with a failed observation.
+    @Test("a resolution whose http_status is neither string nor number is unreadable, not failed")
+    func malformedStatusIsSkipped() throws {
+        let (store, _) = try Self.seeded()
+        let good = #"{"url_canonical":"https://a.example","final_url":"https://a.example/x","http_status":200,"hops":1,"resolved_at":"2026-09-05T22:50:59.691197+00:00"}"#
+        let bad = #"{"url_canonical":"https://a.example","final_url":"https://a.example","http_status":{"code":500},"hops":0,"resolved_at":"2026-09-05T22:51:00.000000+00:00"}"#
+        func importing(_ jsonl: String) throws -> Store.ImportReport {
+            let path = FileManager.default.temporaryDirectory
+                .appendingPathComponent("res-\(UUID().uuidString).jsonl").path
+            try jsonl.write(toFile: path, atomically: true, encoding: .utf8)
+            return try store.importResolutions(fromJSONLAt: path)
+        }
+        #expect(try importing(good).imported == 1)
+        let report = try importing(bad)
+        #expect(report.imported == 0 && report.skipped == 1)
+        #expect(try store.effectiveURL(forCanonical: "https://a.example") == "https://a.example/x",
+                "the valid resolution must survive a malformed row for the same URL")
+    }
+
+    /// 🔍 Integrity materialised every id between the bounds, so its cost tracked the id RANGE.
+    /// TDLib ids are spaced by 2^20, which would make that unusable.
+    @Test("integrity cost follows the number of posts, not the width of the id range")
+    func integrityDoesNotScanTheIDSpan() throws {
+        let (store, _) = try Self.seeded()
+        // Three posts spread over a billion ids — the old implementation inserted 10^9 ids.
+        try store.upsert(posts: [Self.post(1, "first"), Self.post(500_000_000, "middle"),
+                                 Self.post(1_000_000_000, "last")])
+        let clock = ContinuousClock()
+        let elapsed = try clock.measure {
+            let i = try #require(try store.integrity(forChannel: "iosgr"))
+            #expect(i.posts == 3 && i.covered == 3 && i.lowest == 1 && i.highest == 1_000_000_000)
+            // Two gaps: 2…499,999,999 and 500,000,001…999,999,999. The second is one longer.
+            #expect(i.longestGap == 499_999_999 && i.longestGapStart == 500_000_001)
+        }
+        #expect(elapsed < .seconds(1), "a span-sized scan would take far longer than this")
+    }
+
+    /// 🔍 `search` read every hit from both indexes to report `total`, so a 20-row page held
+    /// thousands of rows.
+    @Test("a small page reads a small page, and still reports the true total")
+    func searchPageIsBounded() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: (1...50).map { Self.post($0, "swift post \($0)") }
+                       + [Self.post(51, "SwiftUI only")])
+        let page = try store.search("swift", mode: .both, limit: 5)
+        #expect(page.hits.count == 5)
+        #expect(page.total == 51, "50 word hits plus the substring-only SwiftUI post")
+        // The substring-only tail is still reachable by asking for more.
+        let all = try store.search("swift", mode: .both, limit: 100)
+        #expect(all.hits.count == 51 && all.hits.last?.id.messageID == 51)
+        #expect(try store.search("swift", mode: .words, limit: 5).total == 50)
+        #expect(try store.search("swiftui", mode: .substring, limit: 5).total == 1)
+    }
+}
+
+extension StoreTests {
+    /// Two `tgkb sync` processes are two writers on one file. Without a busy timeout the second
+    /// fails the instant the first holds the lock, rather than waiting out a page commit.
+    @Test("a second writer waits for the lock instead of failing immediately")
+    func secondWriterWaitsForTheLock() async throws {
+        let path = Self.tempPath()
+        let first = try Store.openForWriting(at: path)
+        let second = try Store.openForWriting(at: path)
+
+        let holding = Task.detached {
+            try first.dbPool.write { db in
+                try db.execute(sql: "INSERT INTO channel (username, rawChannelID, reachability) VALUES ('held', 1, 'webPreview')")
+                Thread.sleep(forTimeInterval: 0.4)   // hold the write lock
+            }
+        }
+        try await Task.sleep(for: .milliseconds(120))
+        try second.ensureChannel(username: "waited", reachability: .webPreview)   // must not throw
+        try await holding.value
+        #expect(try second.channelUsernames() == ["held", "waited"])
+    }
+}

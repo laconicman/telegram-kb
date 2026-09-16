@@ -394,6 +394,61 @@ from `lowestMessageID`. Deferred at the time because it added a column and a sta
 that had already produced four review rounds of bugs — and then made unnecessary by seeing that
 the existing resume state already describes the case.
 
+## TD-19 — The channel's identity is a label its owner can change
+
+**Status: Open** — the decision is made (<doc:Design> § *Channel identity is `rawChannelID`, not
+the username*), the migration is scheduled as `S7` in <doc:Roadmap>.
+
+`channel.username` is the primary key and `post.channelUsername` the foreign key. A Telegram
+username is a public alias: the owner can change it, Telegram matches it case-insensitively, and
+a channel need not have one at all. `rawChannelID` — already stored, already the basis of the
+TDLib `chat_id` — is the immutable identity.
+
+**Cost.** A rename orphans a channel's entire history, and the next crawl writes what looks like a
+new channel. Three review findings have circled this already: a casing mismatch breaking the
+foreign key, the `0` placeholder overwriting a learned id, and identity taken from the first
+`data-view` on a page. None of those are separate bugs; they are the same wrong key.
+
+**Discharge.** Schema `v4` as described in `S7`: key on `rawChannelID`, keep `username` as a
+unique-when-present label, render permalinks from the label with a `t.me/c/<rawChannelID>/<id>`
+fallback.
+
+## TD-20 — Column names are repeated as string literals
+
+**Status: Partly discharged** — 2026-09-16, review round 6. `Store.integrity` now decodes a typed
+`Span` record instead of `row["messageID"]`, and `backfillComplete` is read with a typed fetch.
+
+Column names still appear three times: in `Schema.swift`, in the `INSERT`/`SELECT` SQL, and in
+`Row` subscripts such as `row["viewsIsApproximate"]` in `Store.loadPost`. That is one piece of
+knowledge in three places — the DRY failure Hunt and Thomas describe, where a schema change
+compiles cleanly and fails at run time.
+
+**Cost.** A renamed column is caught by a test, if one covers that field, rather than by the
+compiler. `loadPost` carries fourteen such subscripts; the write path spells the same names again
+in SQL.
+
+**Discharge.** GRDB `Codable` records (`FetchableRecord`/`PersistableRecord`) for `post` and its
+relations, so property names generate the SQL and decode the rows. Do it with `S7`, which rewrites
+these tables anyway — two migrations of the same code, not one.
+
+## TD-21 — Two syncs of the same channel are not prevented
+
+**Status: Open** — the writer's busy timeout (2026-09-16) bounds the *symptom*, not the cause.
+
+`busyMode = .timeout(10)` makes a second writer wait rather than fail instantly, which is right
+for two syncs of *different* channels sharing one file. Two syncs of the *same* channel still
+interleave: each reads the crawl state at its own start, so the second can write back a state
+older than the first's progress. That costs re-crawling, not lost posts — but it is unproven
+either way, which is the objection.
+
+**Cost.** Wasted requests, and a state machine whose invariants were reasoned about for one writer.
+
+**Discharge.** A lease row in the database — channel identity, pid, heartbeat, taken in a
+transaction — so both processes can see it without a lock file. Within a process, an actor keyed
+by channel identity gives the same guarantee for concurrent channel crawls; it cannot help across
+processes, and `Task(name:)` is a debugging label, not an identity (verified: two tasks may share
+a name).
+
 ## See Also
 
 - <doc:Design>
