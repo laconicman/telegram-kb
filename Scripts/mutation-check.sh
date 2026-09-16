@@ -11,9 +11,14 @@
 # whose check is not a Swift test — a CLI exit status, a shell script — carries
 # `Scripts/mutants/<name>.verify` instead: a script that exits 0 when the behaviour is CORRECT.
 #
-# A mutant passes the check when the verification FAILS under it. Anything else is a finding:
-#   still green  -> the test does not guard the fix
-#   won't build  -> the mutant is invalid and proves nothing (this is not a pass)
+# A mutant passes the check when the verification FAILS under it *and* passed before it. Anything
+# else is a finding:
+#   red at baseline -> the check was already failing, so its red under the mutant proves nothing
+#   still green     -> the test does not guard the fix
+#   won't build     -> the mutant is invalid and proves nothing (this is not a pass)
+#
+# The baseline matters: on the run that introduced it, five checks were red before any mutation and
+# would have been reported as proofs.
 #
 # Usage: Scripts/mutation-check.sh [name ...]      (default: every mutant)
 set -uo pipefail
@@ -32,6 +37,17 @@ if ! git diff --quiet; then
   exit 2
 fi
 
+# Baseline first. A mutant's red means nothing unless the same check is green with the fix in
+# place, and the cheapest way to establish that for every Swift test at once is to run the suite.
+echo "baseline: running the test suite before mutating anything..."
+if ! swift test >/tmp/mutation-baseline.log 2>&1; then
+  echo "refusing to run: the test suite is RED before any mutation, so no mutant could prove anything." >&2
+  grep -m3 'recorded an issue' /tmp/mutation-baseline.log | sed 's/^/    /' >&2
+  exit 2
+fi
+echo "baseline: $(grep -o 'Test run with [0-9]* tests' /tmp/mutation-baseline.log | tail -1) pass"
+echo
+
 names=("$@")
 if [ ${#names[@]} -eq 0 ]; then
   for p in "$MUTANTS_DIR"/*.patch; do names+=("$(basename "$p" .patch)"); done
@@ -41,6 +57,12 @@ pass=0; fail=0
 for name in "${names[@]}"; do
   patch="$MUTANTS_DIR/$name.patch"
   if [ ! -f "$patch" ]; then echo "no such mutant: $name" >&2; fail=$((fail + 1)); continue; fi
+
+  verify="$MUTANTS_DIR/$name.verify"
+  if [ -f "$verify" ] && ! bash "$verify" >/tmp/mutation-baseline-verify.log 2>&1; then
+    printf '%-42s %s\n' "$name" "ERROR — its check already fails with the fix in place"
+    fail=$((fail + 1)); continue
+  fi
 
   if ! git apply "$patch" 2>/dev/null; then
     printf '%-42s %s\n' "$name" "ERROR — patch does not apply; the code moved under it"
@@ -54,7 +76,6 @@ for name in "${names[@]}"; do
     restore; fail=$((fail + 1)); continue
   fi
 
-  verify="$MUTANTS_DIR/$name.verify"
   if [ -f "$verify" ]; then bash "$verify" >/tmp/mutation-verify.log 2>&1
   else swift test --filter "$name" >/tmp/mutation-verify.log 2>&1; fi
   status=$?

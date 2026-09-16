@@ -61,12 +61,12 @@ struct CrawlerTests {
     @Test("stops when a page yields no progress, rather than looping")
     func noProgressStops() async throws {
         // A page whose lowest id is not below the cursor means the walk is stuck.
-        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/x")
+        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev")
         let stub = StubFetcher(routes: [
-            "https://t.me/s/x": same,
-            "https://t.me/s/x?before=262": same,   // same page again
+            "https://t.me/s/swiftui_dev": same,
+            "https://t.me/s/swiftui_dev?before=262": same,   // same page again
         ])
-        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "x", maxPages: 50)
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev", maxPages: 50)
         #expect(result.pagesFetched == 2, "must not keep re-requesting the same page")
         #expect(result.posts.count == 20)
     }
@@ -168,13 +168,13 @@ extension CrawlerTests {
     @Test("an HTTP error during pagination fails loudly instead of looking like exhaustion")
     func httpErrorIsNotExhaustion() async throws {
         let stub = StubFetcher(routes: [
-            "https://t.me/s/x": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/x"),
+            "https://t.me/s/swiftui_dev": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"),
             // Page two is rate-limited and empty — exactly the shape of a finished history.
-            "https://t.me/s/x?before=262": FetchResult(body: "", statusCode: 429,
-                                                       finalURL: URL(string: "https://t.me/s/x")!),
+            "https://t.me/s/swiftui_dev?before=262": FetchResult(body: "", statusCode: 429,
+                                                       finalURL: URL(string: "https://t.me/s/swiftui_dev")!),
         ])
         await #expect(throws: WebPreviewSource.CrawlError.self) {
-            _ = try await WebPreviewSource(fetcher: stub).crawl(channel: "x")
+            _ = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev")
         }
     }
 
@@ -185,11 +185,11 @@ extension CrawlerTests {
         // Every page yields posts and always makes progress, so only the cap stops the walk.
         var routes: [String: FetchResult] = [:]
         let page = try Self.fixture("swiftui_dev")
-        routes["https://t.me/s/y"] = Self.ok(page, "https://t.me/s/y")
-        routes["https://t.me/s/y?before=262"] = Self.ok(try Self.fixture("page-before-262"),
-                                                        "https://t.me/s/y?before=262")
+        routes["https://t.me/s/swiftui_dev"] = Self.ok(page, "https://t.me/s/swiftui_dev")
+        routes["https://t.me/s/swiftui_dev?before=262"] = Self.ok(try Self.fixture("page-before-262"),
+                                                        "https://t.me/s/swiftui_dev?before=262")
         let result = try await WebPreviewSource(fetcher: StubFetcher(routes: routes))
-            .crawl(channel: "y", maxPages: 2)
+            .crawl(channel: "swiftui_dev", maxPages: 2)
         #expect(result.pagesFetched == 2)
         #expect(!result.watermark.isBackfillComplete,
                 "a capped walk has not seen the whole history and must not say it has")
@@ -199,12 +199,13 @@ extension CrawlerTests {
     @Test("an unfinished backfill resumes from the saved cursor")
     func resumeFromCursor() async throws {
         let stub = StubFetcher(routes: [
-            "https://t.me/s/z?before=262": Self.ok(try Self.fixture("page-before-262"),
-                                                   "https://t.me/s/z?before=262"),
+            "https://t.me/s/swiftui_dev?before=262": Self.ok(try Self.fixture("page-before-262"),
+                                                   "https://t.me/s/swiftui_dev?before=262"),
         ])
-        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "z", resumeFrom: 262)
+        let result = try await WebPreviewSource(fetcher: stub)
+            .crawl(channel: "swiftui_dev", resumeFrom: 262)
         // It must start at the cursor, not at the newest page.
-        #expect(await stub.urls().first == "https://t.me/s/z?before=262")
+        #expect(await stub.urls().first == "https://t.me/s/swiftui_dev?before=262")
         #expect(result.postCount == 14)
     }
 
@@ -235,12 +236,12 @@ extension CrawlerTests {
     /// existed. Stopping was never the claim at risk; completion was.
     @Test("a repeated page stops the walk but does not mark the backfill complete")
     func repeatedPageIsNotCompletion() async throws {
-        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/x")
+        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev")
         let stub = StubFetcher(routes: [
-            "https://t.me/s/x": same,
-            "https://t.me/s/x?before=262": same,   // Telegram hands back the same page
+            "https://t.me/s/swiftui_dev": same,
+            "https://t.me/s/swiftui_dev?before=262": same,   // Telegram hands back the same page
         ])
-        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "x", maxPages: 50)
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev", maxPages: 50)
         #expect(result.pagesFetched == 2, "still stops rather than looping")
         #expect(!result.watermark.isBackfillComplete,
                 "posts below 262 were never visited, so the backfill must stay open to resume")
