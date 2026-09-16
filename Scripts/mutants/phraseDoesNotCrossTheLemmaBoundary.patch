@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBStore/QueryParser.swift b/Sources/TelegramKBStore/QueryParser.swift
+index e4cfd8e..320a945 100644
+--- a/Sources/TelegramKBStore/QueryParser.swift
++++ b/Sources/TelegramKBStore/QueryParser.swift
+@@ -93,9 +93,7 @@ public enum QueryParser {
+ 
+         func widened(_ text: String, _ lemma: String?, qualified: Bool) -> String {
+             guard let lemma, !lemma.isEmpty, lemma != text else { return quoted(text) }
+-            return qualified
+-                ? "(content:\(quoted(text)) OR lemmas:\(quoted(lemma)))"
+-                : "(\(quoted(text)) OR \(quoted(lemma)))"
++            return "(\(quoted(text)) OR \(quoted(lemma)))"
+         }
+ 
+         var parts: [String] = []

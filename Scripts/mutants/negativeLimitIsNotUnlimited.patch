@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index bb69137..5d384a5 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -19,7 +19,7 @@ extension Store {
+     ///   clamped to zero rather than passed through: SQLite reads a negative `LIMIT` as unlimited,
+     ///   so `-1` would quietly return the whole corpus to a caller asking for less than nothing.
+     public func searchWords(_ query: String, limit: Int? = 50) throws -> [Hit] {
+-        try dbPool.read { db in try Self.wordHits(query, limit: limit.map { max(0, $0) }, in: db) }
++        try dbPool.read { db in try Self.wordHits(query, limit: limit, in: db) }
+     }
+ 
+     /// Takes a `Database`, not the pool, so it cannot open a snapshot of its own — callers that

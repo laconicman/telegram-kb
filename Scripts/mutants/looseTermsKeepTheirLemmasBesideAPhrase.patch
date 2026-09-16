@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBStore/QueryParser.swift b/Sources/TelegramKBStore/QueryParser.swift
+index e4cfd8e..c2760cd 100644
+--- a/Sources/TelegramKBStore/QueryParser.swift
++++ b/Sources/TelegramKBStore/QueryParser.swift
+@@ -103,10 +103,7 @@ public enum QueryParser {
+             parts.append(widened(phrase, index < phraseLemmas.count ? phraseLemmas[index] : nil,
+                                  qualified: true))
+         }
+-        for (index, token) in parsed.tokens.enumerated() {
+-            parts.append(widened(token, index < tokenLemmas.count ? tokenLemmas[index] : nil,
+-                                 qualified: false))
+-        }
++        for token in parsed.tokens { parts.append(quoted(token)) }
+         return parts.joined(separator: " AND ")
+     }
+ }

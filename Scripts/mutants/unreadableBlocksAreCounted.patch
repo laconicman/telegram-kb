@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewParser.swift b/Sources/TelegramKBIngest/WebPreviewParser.swift
+index 3c8d3f0..7a59a64 100644
+--- a/Sources/TelegramKBIngest/WebPreviewParser.swift
++++ b/Sources/TelegramKBIngest/WebPreviewParser.swift
+@@ -35,7 +35,7 @@ public enum WebPreviewParser {
+         // poll, forward, reply and album are all embeds, which is how this surfaced.
+         let blocks = try doc.select("div.tgme_widget_message[data-post]")
+         let posts = try blocks.compactMap(post(from:))
+-        return Page(posts: posts, skippedBlocks: blocks.count - posts.count)
++        return Page(posts: posts, skippedBlocks: 0)
+     }
+ 
+     public static func parse(html: String) throws -> [Post] { try page(html: html).posts }
