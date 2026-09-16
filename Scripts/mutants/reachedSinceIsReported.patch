@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
+index 64ebf39..cb1bc5b 100644
+--- a/Sources/TelegramKBIngest/WebPreviewSource.swift
++++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
+@@ -124,7 +124,7 @@ public struct WebPreviewSource: Sendable {
+                     lowestMessageID: lowestSeen ?? 0, updatedAt: Date(), isBackfillComplete: false))
+             }
+ 
+-            if let since, ids.allSatisfy({ $0 <= since }) { reachedSince = true; break }
++            if let since, ids.allSatisfy({ $0 <= since }) { break }
+ 
+             // Page by the ids actually returned, never by a stride: ids are non-contiguous
+             // (an album occupies several while rendering as one post), so a decrementing cursor

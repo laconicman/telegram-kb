@@ -3,7 +3,17 @@
 Numbered `TD-n`, each with what it costs and what discharges it. Reference from code as
 `// TODO(TD-n): …`.
 
+Every entry opens with a **Status** line: *Open*, *Partly discharged*, *Mitigated* (the cause
+cannot be removed, only watched), *Discharged* or *Superseded*, with the date and commit that
+changed it. Entries are never deleted or renumbered: the history below a status line is the
+reasoning, and existing references must keep resolving.
+
 ## TD-1 — `t.me/s/` HTML has no stability contract
+
+**Status: Mitigated** — 2026-09-06, `a0540d4` (S3). SwiftSoup with the precise `js-message_text`
+selector; every extracted field pinned by fixture tests, plus a test comparing it against an independent
+implementation. Still open: `tgkb doctor --check-parser`, the live drift check. The
+markup itself will never have a contract, so this entry stays open by nature.
 
 The class names we parse (`tgme_widget_message_*`) are internal to Telegram's web front end and
 carry no compatibility guarantee. Markup can change without notice or version.
@@ -20,6 +30,10 @@ every extracted field with a fixture-based parser test against the committed HTM
 field-by-field, so drift surfaces as a failed check rather than as quietly worse answers.
 
 ## TD-2 — Large binary dependency in the package graph
+
+**Status: Partly discharged** — 2026-08-30, `e8cb32e` (scaffold). The TDLib dependency is
+trait-gated and verified not to download with the trait off. Still open: the Xcode resolver, and a
+macOS-only slim artifact (Phase 2).
 
 **The brief's "~300 MB" was low, and the number that matters is a different one.** Measured from
 the shipped artifact's zip central directory (`research/Swiftgram-TDLibFramework.md`):
@@ -48,6 +62,9 @@ Remaining, in order of value:
 
 ## TD-3 — Reaction counts go stale between syncs
 
+**Status: Open.** Reaction counts are stored, but no per-post observation time yet — the only
+`observedAt` column belongs to link previews.
+
 There is no reaction-based search in the Telegram API outside Saved Messages tags (Premium), so
 reactions must be indexed locally — and a count is a snapshot at crawl time.
 
@@ -60,6 +77,13 @@ hiding it. Re-crawl recent history more often than deep history. In Phase 2, sub
 documented **bots-only** and are not available to a user session.
 
 ## TD-4 — Russian morphology is not handled by FTS5
+
+**Status: Discharged** — 2026-09-06, `c42455b` (S2), earlier than the Phase 3 planned below. The
+`unicode61` index holds folded surface text *and* `NLTagger` lemmas, and queries are lemmatised the
+same way (`TextNormalizer`, `Store.searchWords`). `G1` passes: 108 hits for `навигация`. One
+divergence from the plan: language is detected per text with `NLLanguageRecognizer` and then set
+explicitly, not stored on the row. A single-word query that cannot be identified falls back to its
+surface form, which still matches the lemmas indexed for every post.
 
 **Now measured rather than suspected**, and the finding inverts the naive assumption: on
 inflected Russian, Telegram's own search is *better* than a plain FTS5 prefix index. SQLite has
@@ -84,6 +108,9 @@ Track recall against `evals/golden-queries.md` so the improvement is measured, n
 
 ## TD-5 — TDLib version pinning drift
 
+**Status: Open.** `TDLibKit` is pinned `exact:` in `Package.swift`; the `doctor` version check and
+the upstream-tag check are not built (Phase 2).
+
 TDLibKit and TDLibFramework version independently while both track upstream TDLib, and
 TDLibKit's tags are **pre-release-shaped** (`1.5.2-tdlib-1.8.66-022d6020`).
 
@@ -95,6 +122,11 @@ to forget. The same hazard applies to `duckdb-swift`, which has no stable tag at
 against the runtime `getOption("version")`, and a scheduled check for newer upstream tags.
 
 ## TD-6 — Read-only open of a WAL database is conditionally fragile
+
+**Status: Discharged**, as planned below — 2026-09-06, `c42455b` (S2): the writer sets
+`SQLITE_FCNTL_PERSIST_WAL`; 2026-09-09, `e810b45` (S5): `tgkb doctor` reports directory writability
+in plain language. A DeepWiki second opinion (2026-09-15, <doc:Research>) confirms this is GRDB's
+documented multi-process pattern.
 
 A `mode=ro` connection must still create the `-shm` file, so it fails with
 `attempt to write a readonly database` when the containing directory is not writable — despite
@@ -109,6 +141,9 @@ trades a loud failure for silently stale reads.
 
 ## TD-7 — Views are captured lossily
 
+**Status: Discharged for the web source** — 2026-09-06, `b0d54de` (S1, `ViewCount.isApproximate`)
+and `c42455b` (S2, the `viewsIsApproximate` column). Exact counts arrive with TDLib in Phase 2.
+
 `tgme_widget_message_views` renders abbreviated ("1.4K", "1.67K"), so exact view counts are not
 recoverable from the web source.
 
@@ -120,6 +155,8 @@ reactions as the engagement signal — 164,747 of them across the corpus, and ex
 exact view counts in Phase 2 for channels reachable that way.
 
 ## TD-8 — No end-to-end proof of ID reconciliation
+
+**Status: Open** — the Phase 2 gate.
 
 The transform between web `data-post` numbers and TDLib `message_id` is verified from TDLib
 source and corroborated by TDLib's own link builder, but has not been executed against a live
@@ -138,12 +175,21 @@ missing data.
 Relatedly: **a missing message id is not evidence of deletion.** Albums consume consecutive ids
 that never appear as posts, which is a large part of the 54% id gap in the crawled corpus.
 
+**Corrected 2026-09-09.** That "54%" counts ids with no *post row*, which is the misleading
+framing: an album occupies several consecutive ids while rendering as one post, so most of those
+ids are accounted for by `mediaCount`. Measured across the four synced channels with album spans
+included, **86–95% of each channel's id range is accounted for**, and the longest run of
+genuinely unexplained ids is 4–9 — consistent with scattered deletions and service messages,
+not with missed pages. `tgkb doctor` reports this per channel.
+
 **Discharge.** The first Phase 2 task, before any backfill: fetch one post from a channel already
 crawled from the web and assert the rows reconcile — **including an album**, which is the case
 that actually fails. Group TDLib messages by `media_group_id` before writing, take the first id
 as identity. Keep it as a permanent integration test.
 
 ## TD-9 — Semantic retrieval over Russian needs care (partly superseded)
+
+**Status: Open**, not owed until Phase 3.
 
 **Originally filed as "no on-device embedding model exists for Russian". That was wrong**, and
 the correction is worth keeping visible: it was a claim about `NLEmbedding` generalised into a
@@ -177,6 +223,12 @@ solve. **Do not** ship semantics for English and lemma-only for Russian.
 
 ## TD-10 — Cyrillic ё is not folded to е
 
+**Status: Discharged** — 2026-09-06, `c42455b` (S2). `TextNormalizer.foldYo` runs at index and
+query time. The test `вёрстка and верстка are the same word` pins it, and `G3` covers it in the
+evals. **The folding works; the inflections of folded words often do not** — an `е`-spelled query
+still misses most ё-written posts, because the lemmatiser emits nothing for the inflected form.
+That is `TD-23`, not a folding failure.
+
 `unicode61 remove_diacritics 2` does **not** fold ё→е — ё is a distinct Cyrillic letter, not an
 accented е. Verified directly: index `вёрстка`, query `верстка`, zero hits.
 
@@ -187,6 +239,8 @@ contain ё** — roughly 200 posts in one channel. Telegram's own search folds t
 must be applied symmetrically or it makes things worse. Add a golden query covering it.
 
 ## TD-11 — Telegram's search reaches content we do not extract
+
+**Status: Open.**
 
 While reconciling our index against Telegram's results, two posts matched on Telegram with no
 occurrence of the term in the body, preview title, or preview description we captured.
@@ -208,6 +262,8 @@ better than Telegram here rather than merely matching it.
 
 ## TD-12 — Link content will outweigh post text 15–25× and pollute ranking
 
+**Status: Open**, Phase 3.
+
 Extracted link text is estimated at **50–80 MB against 3.38 MB of post bodies**
 (`research/link-content-fetching.md`).
 
@@ -223,6 +279,8 @@ extracted text per document.
 
 ## TD-13 — SUPERSEDED: extraction moved to `artanl`
 
+**Status: Superseded** — 2026-09-03, `1600de4`.
+
 Originally: `mrowlinson/jusText-swift` is unlicensed and cannot be vendored, so the boilerplate
 classifier must be ported from the BSD-2-Clause Python original.
 
@@ -233,6 +291,10 @@ travels: **an unlicensed repository cannot be vendored no matter how convenient 
 (`LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING` all 404; the GitHub API reports no licence).
 
 ## TD-14 — SUPERSEDED: coverage is the ladder's problem, and it has a floor
+
+**Status: Superseded** — 2026-09-03, `1600de4`. Of the three obligations it leaves, two were met
+in `c42455b` (S2): a preview with `previewObservedAt` on every link, and `urlCanonical` stored at
+ingest. `contentProvenance` is owed once fetched content reaches this store.
 
 Originally: ~8% link rot, ~10% bot-walled, ~7% YouTube — roughly 30% of URLs yielding no useful
 text.
@@ -252,6 +314,9 @@ nothing. What survives as *our* obligation is narrow and concrete:
 
 ## TD-15 — `robots.txt` compliance is deferred, deliberately
 
+**Status: Open, deliberately.** Note for publication: `tgkb` fetches only `t.me`, which has no
+`robots.txt`; `Scripts/resolve_urls.py` does request third-party sites.
+
 The engine currently plans to fetch without consulting `robots.txt`. This is the author's
 explicit decision, recorded rather than silently assumed: the priority is retrieval quality, and
 restricting scope later is the easy direction — particularly relevant if any of this is ever
@@ -270,6 +335,10 @@ those unnecessary, which is the strongest argument against them.
 
 ## TD-16 — `url_canonical` can silently diverge between two repos
 
+**Status: Discharged** — 2026-09-03, `3be0eb2` (S0); spec v3 on 2026-09-06, `2f1de8d`. The other
+implementation is tested against the same fixture list. The two implementations remain, so a new rule is a new
+fixture, never a local fix.
+
 The join key between `telegram-kb` and `artanl` is a **canonicalisation algorithm implemented
 twice, in two languages**. Redirect following, `http`→`https` upgrade (529 corpus URLs),
 `utm_*`/`ssource`/`share`/fragment stripping — each is a place the two can drift.
@@ -286,6 +355,11 @@ enumerable from it.
 
 ## TD-17 — Roughly a fifth of URLs will never resolve
 
+**Status: Partly discharged** — 2026-09-06, `6a6f4c0` (S3.5). `httpStatus` and `resolvedAt` are
+recorded per row, so a failure is distinguishable from "never checked" (and since 2026-09-15,
+`6e3aff7`, a row with an unreadable timestamp is rejected rather than stamped fresh). Still open:
+periodic re-resolution of failures.
+
 Measured on a 50-URL sample: 6 unreachable (`URLError`), 3 × 404, 2 × 403 and 1 × 418 — about
 **18% not resolving cleanly**, consistent with the ~8% link rot plus ~10% bot-walled estimate in
 `research/link-content-fetching.md`.
@@ -299,6 +373,140 @@ because neither side can discover the destination. The join silently under-match
 rather than indistinguishable from "not yet checked". Re-resolve NULLs periodically — some are
 transient. Resolve **early**: every day a shortener stays unresolved is a day it might die, and
 the corpus already reaches back to 2016.
+
+## TD-18 — An incremental gap wider than the page cap never closes
+
+**Status: Discharged** — 2026-09-15, `6e3aff7` (PR #1, review round 5), without the second cursor
+planned below. What a capped incremental walk covered is contiguous from the newest page down, so
+`Store.CrawlState.afterWalk` now records it as an unfinished backfill. The next run resumes through
+the gap, at the price of re-walking stored history below it. Test:
+`cappedIncrementalResumesThroughTheGap`.
+
+An incremental walk records nothing until it reaches the stored mark (see Design, *A failed fetch
+is never exhaustion*). If more than `maxPages` pages (500, about 10,000 posts) appeared since the
+last sync, every run walked the newest 500 pages, stopped short, kept the old mark, and started
+again from the top — the posts were written, but the gap below them was never reached.
+
+**Cost.** None at current volumes: the busiest synced channel posts a few times a day. It would
+have bitten a channel synced for the first time in years through a stale mark, or a much larger
+channel.
+
+**Discharge, as first planned.** A second cursor for the gap, resumed the way a backfill resumes
+from `lowestMessageID`. Deferred at the time because it added a column and a state to a machine
+that had already produced four review rounds of bugs — and then made unnecessary by seeing that
+the existing resume state already describes the case.
+
+## TD-19 — The channel's identity is a label its owner can change
+
+**Status: Open** — the decision is made (<doc:Design> § *Channel identity is `rawChannelID`, not
+the username*), the migration is scheduled as `S7` in <doc:Roadmap>.
+
+`channel.username` is the primary key and `post.channelUsername` the foreign key. A Telegram
+username is a public alias: the owner can change it, Telegram matches it case-insensitively, and
+a channel need not have one at all. `rawChannelID` — already stored, already the basis of the
+TDLib `chat_id` — is the immutable identity.
+
+**Cost.** A rename orphans a channel's entire history, and the next crawl writes what looks like a
+new channel. Three review findings have circled this already: a casing mismatch breaking the
+foreign key, the `0` placeholder overwriting a learned id, and identity taken from the first
+`data-view` on a page. None of those are separate bugs; they are the same wrong key.
+
+**Discharge.** Schema `v4` as described in `S7`: key on `rawChannelID`, keep `username` as a
+unique-when-present label, render permalinks from the label with a `t.me/c/<rawChannelID>/<id>`
+fallback.
+
+## TD-20 — Column names are repeated as string literals
+
+**Status: Partly discharged** — 2026-09-16, review round 6. `Store.integrity` now decodes a typed
+`Span` record instead of `row["messageID"]`, and `backfillComplete` is read with a typed fetch.
+
+Column names still appear three times: in `Schema.swift`, in the `INSERT`/`SELECT` SQL, and in
+`Row` subscripts such as `row["viewsIsApproximate"]` in `Store.loadPost`. That is one piece of
+knowledge in three places — the DRY failure Hunt and Thomas describe, where a schema change
+compiles cleanly and fails at run time.
+
+**Cost.** A renamed column is caught by a test, if one covers that field, rather than by the
+compiler. `loadPost` carries fourteen such subscripts; the write path spells the same names again
+in SQL.
+
+**Discharge.** GRDB `Codable` records (`FetchableRecord`/`PersistableRecord`) for `post` and its
+relations, so property names generate the SQL and decode the rows. Do it with `S7`, which rewrites
+these tables anyway — two migrations of the same code, not one.
+
+## TD-21 — Two syncs of the same channel are not prevented
+
+**Status: Open** — the writer's busy timeout (2026-09-16) bounds the *symptom*, not the cause.
+
+`busyMode = .timeout(10)` makes a second writer wait rather than fail instantly, which is right
+for two syncs of *different* channels sharing one file. Two syncs of the *same* channel still
+interleave: each reads the crawl state at its own start, so the second can write back a state
+older than the first's progress. That costs re-crawling, not lost posts — but it is unproven
+either way, which is the objection.
+
+**Cost.** Wasted requests, and a state machine whose invariants were reasoned about for one writer.
+
+**Discharge.** A lease row in the database — channel identity, pid, heartbeat, taken in a
+transaction — so both processes can see it without a lock file. Within a process, an actor keyed
+by channel identity gives the same guarantee for concurrent channel crawls; it cannot help across
+processes, and `Task(name:)` is a debugging label, not an identity (verified: two tasks may share
+a name).
+
+**How to write it, from a DeepWiki consult on GRDB (2026-09-16, <doc:Research>).** GRDB has no
+lease primitive, and none is needed: it begins every write transaction as `IMMEDIATE`, so the
+write lock is taken before the lease row is read. Put the staleness check and the claim in **one**
+`dbPool.write` — never read the row in one access and claim it in another, because a read that
+later escalates to a write is the one `SQLITE_BUSY` a timeout cannot prevent. Do not reach for
+`BEGIN EXCLUSIVE`: it would block WAL readers, which is `tgkb-mcp`. One constraint that falls out
+of our own settings: **the staleness threshold must be comfortably larger than `busyMode`'s 10
+seconds**, or two processes contending for a takeover fail on the timeout instead of cleanly
+losing the race.
+
+## TD-22 — WAL growth during a long backfill is unmanaged and unmeasured
+
+**Status: Open** — named after a DeepWiki consult on GRDB (2026-09-16, <doc:Research>) turned a
+vague worry in the Research ledger into a specific mechanism.
+
+GRDB runs no background checkpointing. The only checkpoints are SQLite's own automatic one, which
+fires after a commit that leaves the WAL at 1,000+ pages and runs in `PASSIVE` mode, and whatever
+the application calls itself. A `PASSIVE` checkpoint can only reclaim frames no reader snapshot
+still pins.
+
+**Cost.** Our shape is exactly the one that starves it: a writer committing a small transaction per
+page for the length of a backfill, and `tgkb-mcp` reading in another process. Individually short
+reads are fine; *continuously overlapping* ones are not, because some snapshot is then always
+pinned near the start of the WAL and the file grows for the whole backfill. Nobody has measured
+ours — a 116-page backfill is short, and the reader has not been built yet.
+
+**Discharge.** Measure first: watch the `-wal` file during a full backfill with a reader looping
+against it. If it grows without bound, call `db.checkpoint(.passive)` from the writer on a cadence
+(every N pages), and a `.truncate` once at the end to give the space back. Do **not** use
+`.full`/`.restart`/`.truncate` mid-backfill: they block until readers release.
+
+
+
+## TD-23 — `NLTagger` gives no lemma for roughly a fifth of Russian words
+
+**Status: Open** — found 2026-09-16, following a review finding that the golden checks were weaker
+than their own criteria (PR #1, round 11). Measured, not suspected.
+
+`NLTagger` with `.lemma` and the language set explicitly to Russian returns **no tag at all** for
+`верстку`, even in the clean sentence *"Сегодня я хотел бы рассказать про верстку в нашем
+приложении"*. Across post `iosgr/2081`, 10 of 43 tagged words came back with no lemma.
+
+**Cost, measured on the synced corpus.** The word index holds folded surface text plus whatever
+lemmas the tagger produced, so a word the tagger skips is reachable only by its exact form. The
+trigram index cannot rescue it either: `верстка` is not a substring of `верстку`. Of the **8 posts
+written with `вёрст…`, an `е`-spelled query returns 1**. `TD-4` is therefore discharged for the
+words Apple's lexicon knows and no further — a narrower claim than this register made before.
+
+This also corrects `evals/golden-queries.md`: `iosgr/2081` was described as the canonical ё case,
+and it is not currently returned at all. `iosdev/530` is, and `G3` now asserts that specific post
+rather than a bare non-zero count.
+
+**Discharge — decide on eval evidence, not preference.** Candidates, in the order worth measuring:
+add a prefix term per Cyrillic query token (FTS5 `верстк*`) alongside the lemma path and measure
+`G1`/`G3` before and after; or vendor a Russian stemmer and index the stem as a third field. Both
+widen recall and can cost precision, which is exactly what the golden queries exist to arbitrate.
 
 ## See Also
 

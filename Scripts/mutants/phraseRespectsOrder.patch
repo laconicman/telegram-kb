@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/QueryParser.swift b/Sources/TelegramKBStore/QueryParser.swift
+index 40ecde4..142500e 100644
+--- a/Sources/TelegramKBStore/QueryParser.swift
++++ b/Sources/TelegramKBStore/QueryParser.swift
+@@ -42,7 +42,7 @@ public enum QueryParser {
+                 } else {
+                     current.append(character)
+                 }
+-            } else if let expected = quotePairs[character] {
++            } else if false, let expected = quotePairs[character] {
+                 endToken()
+                 closing = expected
+             } else if character.isWhitespace {

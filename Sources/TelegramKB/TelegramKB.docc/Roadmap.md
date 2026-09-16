@@ -25,7 +25,7 @@ The `url_canonical` spec and its shared fixture list.
   links shared across channels.
 - Implement it in `TelegramKBModel`. `artanl` implements the same list independently.
 
-**Delivered, now at spec v2 after cross-implementation review.** `Spec/url-canonical/SPEC.md` and `Spec/url-canonical/fixtures.json` (**42** cases) plus
+**Delivered, now at spec v3 after cross-implementation review.** `Spec/url-canonical/SPEC.md` and `Spec/url-canonical/fixtures.json` (**49** cases) plus
 `corpus-canonical.tsv` (**11,773** rows, self-checking), implemented in
 `TelegramKBModel.URLCanonicaliser` and run by `TelegramKBModelTests`. Validated against all **11,665** unique corpus URLs: 100% canonicalised,
 zero tracking parameters surviving, idempotent throughout, **1,995 raw forms collapsed (17%)**.
@@ -93,13 +93,16 @@ rather than a dedupe one** (<doc:Design>).
 Page by returned ids, never a stride. Polite by default. Per-channel watermarks so a re-run is
 incremental. The four-way channel classifier for `doctor`.
 
-**Checkpoint atomically** — write to a temp file, then rename. `Scripts/resolve_urls.py` appends
-and flushes, which is *not* atomic: a kill mid-write can truncate a line. It survived two session
-deaths by luck (`research/skills-landscape.md`). Handle interruption deliberately rather than
-relying on append-as-you-go.
+**Crawl state lives in the database, not a side file.** A separate watermark file was built
+first, with atomic writes — and then deleted, because the file itself was the problem: it drifts
+from the store. Deleting the database while the file survived left a channel with 17 posts and a
+mark of 181, and sync "resumed" from it, skipping the backfill. Deriving the mark from the store
+does not help — the gap is *below* the mark. Only `backfillComplete`, written beside the posts it
+describes, distinguishes "up to date" from "never finished".
 
 **Delivered.** `WebPreviewSource` pages by returned ids with per-channel watermarks;
-`ChannelClassifier` implements the four-way `doctor` check; `CheckpointStore` writes atomically.
+`ChannelClassifier` implements the four-way `doctor` check; crawl state lives on the channel
+row, in the same database as the posts, so the two cannot drift.
 Nine hermetic tests over committed fixtures, plus an env-gated live suite
 (`TGKB_LIVE=1 swift test --filter LiveCrawl`) that verifies the done-criterion directly: a full
 backfill returns **136 posts spanning ids 1–297**, exactly reproducing the independent Python
@@ -109,11 +112,19 @@ crawl, and a re-run fetches one page.
 
 ## Track C — retrieval *(after B, not alongside it)*
 
-### S5 — `tgkb query`
+### S5 — `tgkb sync`, `query`, `doctor` ✅ *(done)*
 CLI search over the store. Exists before the MCP server because it is how the evals run without
 an MCP client in the loop.
 
 **Done:** `G1`–`G10` in `evals/golden-queries.md` are runnable and produce numbers.
+
+**Delivered in PR #1, through nine Devin review rounds: 40 findings, 1 false positive.** Every one
+of those rounds found a bug in crawl-state handling, and in two of them some findings were bugs
+the previous round's fixes had introduced. So the state decisions now live in `Store.CrawlState` as pure,
+tested functions, and every fix gets a mutation check: the fix is reverted and its test must fail.
+Those checks stopped being hand-run in round 8 — `Scripts/mutation-check.sh` replays 19 of them
+from `Scripts/mutants/*.patch`, each patch putting one fixed bug back. The review lessons are encoded
+in `REVIEW.md`.
 
 ### S6 — `tgkb-mcp`
 **Load the `mcp-builder` skill first** — it is from `anthropics/skills`, already installed, and
@@ -125,9 +136,38 @@ every row, `find_links` keyed on `url_canonical`. Annotations set explicitly —
 are `destructive: true`, `openWorld: true`. All diagnostics to stderr; fd 1 redirected at
 startup.
 
+**Carried in from S5 and a DeepWiki second opinion** (2026-09-15, <doc:Research>):
+
+- `search_posts` calls `Store.search(_:mode:limit:)` and never merges indexes itself; it
+  returns `total` beside the cursor, so a truncated list is never silent (<doc:Design>).
+- The MCP protocol, and so the MCP Swift SDK, paginates **list** operations (`tools/list`,
+  `resources/list`) but has **no cursor for `tools/call`** results: pagination of search results
+  is ours, as a `cursor` tool parameter and a `next_cursor` output field. (Not TDLib, which
+  paginates its own history and search calls.)
+- Records go in `structuredContent` with a declared `outputSchema`, plus a short text
+  `content` for clients that render only text.
+- Set all four annotations, `destructiveHint: false` and `idempotentHint: true` included.
+- Arguments are not validated against `inputSchema` by the SDK: decode and reject with
+  `invalidParams` ourselves.
+- Keep `strict` initialisation on, check `Task.isCancelled` in handlers, and keep each
+  `dbPool.read` short. A long read holds a stale snapshot and blocks WAL checkpoints.
+
 **Done:** Claude answers "what has anyone shared about X" with cited `t.me` links.
 
 ---
+
+### S7 — channel identity by `rawChannelID`
+Schema `v4`. `rawChannelID` becomes the channel key and `post`'s foreign key; `username` becomes a
+unique-when-present label with its own index. Permalinks keep rendering from the username, falling
+back to the `t.me/c/<rawChannelID>/<id>` form when there is none. Rationale, including what it
+costs, is in <doc:Design> § *Channel identity is `rawChannelID`, not the username*.
+
+Comes **before Phase 2**: TDLib reconciliation joins on this id (`TD-8`), and a username rename
+would otherwise orphan a channel's whole history (`TD-19`).
+
+**Done:** a channel renamed between two syncs keeps one row and one history, proven by a test that
+renames the username and re-crawls; `doctor` still reports per-channel integrity; permalinks
+resolve for a channel with no username.
 
 ## The Phase-1 exit
 
@@ -150,7 +190,7 @@ Unlocks the two channels the web preview cannot reach: `@iosmmcresources` (previ
 
 ## Next — Phase 3: retrieval quality
 
-Lemma column via `NLTagger` (`TD-4`). Links promoted to first-class entities with cross-channel
+(Lemmatisation, once planned here, shipped in S2 — `TD-4`.) Links promoted to first-class entities with cross-channel
 dedupe. Reactions as a ranking signal. The `artanl` join on `url_canonical`, and its extracted
 text in a **separate FTS table** (`TD-12`). Dual search — local index and Telegram's live `?q=`
 merged, since theirs caps at ~22 and ours is a crawl-time snapshot. Semantic search decided from
@@ -162,6 +202,32 @@ Send, forward-to-Saved-with-tag, drafts. Human confirmation on every one. Settle
 TDLib lives once MCP needs it — the four options are in <doc:Design>, unanswered on purpose.
 
 ---
+
+## Publication
+
+**Public since 2026-09-16.** Decisions taken before that, recorded so they are not re-asked:
+
+| Question | Decision |
+|---|---|
+| Licence | **Apache-2.0** (`LICENSE`, 2026-09-15). Every dependency is MIT, Apache-2.0 or Boost. |
+| `t.me/+…` invite links in the golden URL files and fixtures | **Kept.** Scraped from public channels, mostly dead; not worth rewriting history over. |
+| Working notes (`SYNC-*.md`, `OPEN-QUESTIONS.md`) | **Kept in the repository** as the record of how decisions were reached. |
+| DeepWiki | Badge added ahead of publication so the wiki indexes and auto-refreshes. |
+| Captured third-party content | Fixtures and corpus URLs are other people's posts, included as test data and excluded from the licence grant — said in `README.md`. |
+
+Still open now that it is public:
+
+- Check the first generated DeepWiki against `.devin/wiki.json` — steering has no success signal.
+  **It indexes the default branch**: asked on 2026-09-16 it correctly reported no `Store.CrawlState`
+  and no `Sources/tgkb/Sync.swift`, because `main` is still the Phase 0 scaffold while the work sits
+  on the PR branch. The wiki is worth nothing as a review aid until this merges — the same root
+  cause as the licence detection above.
+- GitHub's licence detection reports none, because it reads the **default branch** and `LICENSE`
+  currently exists only on the PR branch. It resolves on merge — the file itself is byte-identical
+  to `apache.org/licenses/LICENSE-2.0.txt` (sha256 `cfc7749b…`), verified against the source.
+- `TD-15` (`robots.txt`) stays deferred by the maintainer's decision until this is production
+  ready. `tgkb` itself fetches only `t.me`, which publishes no `robots.txt`;
+  `Scripts/resolve_urls.py` is the part that requests third-party hosts.
 
 ## Working in parallel
 

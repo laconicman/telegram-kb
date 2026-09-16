@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..b06d033 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -492,7 +492,10 @@ extension Store.CrawlState {
+     /// skip those posts permanently. The page's posts are still written; re-walking them after an
+     /// interruption costs requests, not data.
+     public func afterPage(lowest: Int, highest: Int, full: Bool) -> Store.CrawlState {
+-        if since(full: full) != nil { return self }
++        if since(full: full) != nil {
++            let b = merged(lowest: lowest, highest: highest, full: full)
++            return Store.CrawlState(lowest: b.lowest, highest: b.highest, backfillComplete: backfillComplete)
++        }
+         // A backfill or full walk is contiguous from wherever it started, so its bounds are safe
+         // to record page by page. Completion is left as it was: false for a backfill, which only
+         // the finished walk may change; and for `--full` over a finished channel, still true —

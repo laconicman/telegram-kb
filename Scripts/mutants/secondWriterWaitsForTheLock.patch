@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..1fb7540 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -23,7 +23,7 @@ public struct Store: Sendable {
+         // timeout, and a wait-then-succeed with one. Page commits last milliseconds, so waiting
+         // is the honest behaviour. It bounds the wait; it does not remove SQLITE_BUSY, and it is
+         // NOT a substitute for keeping one writer per channel (see Design).
+-        config.busyMode = .timeout(10)
++        config.busyMode = .immediateError
+         config.prepareDatabase { db in
+             // Keeps -wal and -shm on disk after the writer closes.
+             //

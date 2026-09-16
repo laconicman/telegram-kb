@@ -61,12 +61,12 @@ struct CrawlerTests {
     @Test("stops when a page yields no progress, rather than looping")
     func noProgressStops() async throws {
         // A page whose lowest id is not below the cursor means the walk is stuck.
-        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/x")
+        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev")
         let stub = StubFetcher(routes: [
-            "https://t.me/s/x": same,
-            "https://t.me/s/x?before=262": same,   // same page again
+            "https://t.me/s/swiftui_dev": same,
+            "https://t.me/s/swiftui_dev?before=262": same,   // same page again
         ])
-        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "x", maxPages: 50)
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev", maxPages: 50)
         #expect(result.pagesFetched == 2, "must not keep re-requesting the same page")
         #expect(result.posts.count == 20)
     }
@@ -125,44 +125,8 @@ struct CrawlerTests {
         #expect(try await ChannelClassifier(fetcher: stub).classify("x") == .group)
     }
 
-    // MARK: - Checkpointing
 
-    @Test("checkpoints round-trip and are written atomically")
-    func checkpointRoundTrip() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ckpt-\(UUID().uuidString)")
-        let store = CheckpointStore(at: dir.appendingPathComponent("watermarks.json"))
-        #expect(try store.load().isEmpty, "a missing checkpoint is empty, not an error")
 
-        let mark = WebPreviewSource.Watermark(channelUsername: "iosgr", highestMessageID: 4744,
-                                              lowestMessageID: 1, updatedAt: Date(),
-                                              isBackfillComplete: true)
-        try store.update(mark)
-        #expect(try store.load()["iosgr"]?.highestMessageID == 4744)
-
-        try store.update(.init(channelUsername: "iosdev", highestMessageID: 1659,
-                               lowestMessageID: 1, updatedAt: Date(), isBackfillComplete: false))
-        #expect(try store.load().count == 2, "updating one channel must not drop the others")
-
-        // Checks CLEANUP, not atomicity. Atomicity is a property of FileManager.replaceItemAt
-        // and cannot be asserted without killing a process mid-write; verified by construction
-        // (temp file in the destination's own directory, so the replace is a rename). The test
-        // that carries real weight is `truncatedCheckpoint` below.
-        let leftovers = try FileManager.default.contentsOfDirectory(atPath: dir.path)
-            .filter { $0.hasSuffix(".tmp") }
-        #expect(leftovers.isEmpty, "the replace must leave no debris: \(leftovers)")
-    }
-
-    @Test("a truncated checkpoint is rejected rather than read as valid")
-    func truncatedCheckpoint() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ckpt-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let file = dir.appendingPathComponent("watermarks.json")
-        // What an append-and-flush writer leaves behind when killed mid-write.
-        try #"{"iosgr":{"channelUsername":"iosgr","highestMes"#.write(to: file, atomically: true, encoding: .utf8)
-        #expect(throws: (any Error).self) { try CheckpointStore(at: file).load() }
-    }
 }
 
 /// Hits the live network, so it is gated. Run with:
@@ -193,5 +157,192 @@ struct LiveCrawlTests {
         let source = WebPreviewSource(fetcher: URLSessionPageFetcher(delay: .seconds(1)))
         let result = try await source.crawl(channel: "swiftui_dev", since: 297)
         #expect(result.pagesFetched == 1)
+    }
+}
+
+/// Round-2 review findings. Each asserts the failure the reviewer described, not merely the fix.
+extension CrawlerTests {
+
+    /// 🔴 A 429 or 5xx parses as an empty page, which is indistinguishable from real exhaustion —
+    /// and marking a truncated crawl complete stops every later sync from recovering the history.
+    @Test("an HTTP error during pagination fails loudly instead of looking like exhaustion")
+    func httpErrorIsNotExhaustion() async throws {
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"),
+            // Page two is rate-limited and empty — exactly the shape of a finished history.
+            "https://t.me/s/swiftui_dev?before=262": FetchResult(body: "", statusCode: 429,
+                                                       finalURL: URL(string: "https://t.me/s/swiftui_dev")!),
+        ])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            _ = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev")
+        }
+    }
+
+    /// 🔴 A page-capped walk has not reached the end, so it must not claim completion — otherwise
+    /// the next sync trusts the mark and the remaining history is never fetched.
+    @Test("hitting the page cap does not mark the backfill complete")
+    func pageCapIsNotCompletion() async throws {
+        // Every page yields posts and always makes progress, so only the cap stops the walk.
+        var routes: [String: FetchResult] = [:]
+        let page = try Self.fixture("swiftui_dev")
+        routes["https://t.me/s/swiftui_dev"] = Self.ok(page, "https://t.me/s/swiftui_dev")
+        routes["https://t.me/s/swiftui_dev?before=262"] = Self.ok(try Self.fixture("page-before-262"),
+                                                        "https://t.me/s/swiftui_dev?before=262")
+        let result = try await WebPreviewSource(fetcher: StubFetcher(routes: routes))
+            .crawl(channel: "swiftui_dev", maxPages: 2)
+        #expect(result.pagesFetched == 2)
+        #expect(!result.watermark.isBackfillComplete,
+                "a capped walk has not seen the whole history and must not say it has")
+    }
+
+    /// 🔴 Without a resume cursor a channel larger than the cap re-walks its newest pages forever.
+    @Test("an unfinished backfill resumes from the saved cursor")
+    func resumeFromCursor() async throws {
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev?before=262": Self.ok(try Self.fixture("page-before-262"),
+                                                   "https://t.me/s/swiftui_dev?before=262"),
+        ])
+        let result = try await WebPreviewSource(fetcher: stub)
+            .crawl(channel: "swiftui_dev", resumeFrom: 262)
+        // It must start at the cursor, not at the newest page.
+        #expect(await stub.urls().first == "https://t.me/s/swiftui_dev?before=262")
+        #expect(result.postCount == 14)
+    }
+
+    /// 🔍 Retaining every post defeats the point of committing per page.
+    /// An actor rather than a captured `var`: the callback is `@Sendable`, so Swift 6 rejects
+    /// mutating captured state from it — the same rule that shaped `CheckpointStore.update`.
+    actor Counter {
+        private(set) var total = 0
+        func add(_ n: Int) { total += n }
+    }
+
+    @Test("pages are not retained when a callback consumes them")
+    func streamingDoesNotRetain() async throws {
+        let counter = Counter()
+        let result = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev") { posts, _ in await counter.add(posts.count) }
+        #expect(await counter.total == 34, "every post still reaches the caller")
+        #expect(result.postCount == 34, "and is counted")
+        #expect(result.posts.isEmpty, "but none is held for a final rewrite")
+    }
+}
+
+/// Round-3 review findings on the crawler.
+extension CrawlerTests {
+
+    /// 🔴 A repeated page ends the loop but proves nothing about older history. The earlier
+    /// `noProgressStops` test asserted only that the walk STOPPED — so it passed while this bug
+    /// existed. Stopping was never the claim at risk; completion was.
+    @Test("a repeated page stops the walk but does not mark the backfill complete")
+    func repeatedPageIsNotCompletion() async throws {
+        let same = Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev")
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev": same,
+            "https://t.me/s/swiftui_dev?before=262": same,   // Telegram hands back the same page
+        ])
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev", maxPages: 50)
+        #expect(result.pagesFetched == 2, "still stops rather than looping")
+        #expect(!result.watermark.isBackfillComplete,
+                "posts below 262 were never visited, so the backfill must stay open to resume")
+    }
+
+    /// Proven exhaustion is still recognised — the fix must not make completion unreachable.
+    @Test("an empty successful page still marks the backfill complete")
+    func emptyPageIsCompletion() async throws {
+        let result = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev")
+        #expect(result.watermark.isBackfillComplete, "reaching an empty page proves the end")
+    }
+}
+
+extension WebPreviewParserTests {
+    /// 🟡 Telegram resolves usernames case-insensitively; SQLite compares keys exactly. A mixed-
+    /// case channel identifier must reach the store in the same form the CLI stores it under.
+    @Test("channel usernames are lowercased at the parser boundary")
+    func channelIsLowercased() throws {
+        let html = try Self.html("swiftui_dev")
+            .replacingOccurrences(of: "data-post=\"swiftui_dev/", with: "data-post=\"SwiftUI_Dev/")
+        let posts = try WebPreviewParser.parse(html: html)
+        #expect(!posts.isEmpty)
+        #expect(posts.allSatisfy { $0.id.channelUsername == "swiftui_dev" },
+                "a mixed-case data-post must not produce a key that fails the channel foreign key")
+    }
+}
+
+/// Round-4 review findings on ingestion.
+extension CrawlerTests {
+
+    /// 🟡 A 429 or 5xx page holds no classification markers, so it read as "not publicly
+    /// resolvable" and `sync` skipped a live channel with exit status 0.
+    @Test("an HTTP failure while classifying is an error, not an unresolvable channel",
+          arguments: [429, 502, 503])
+    func classifierThrowsOnHTTPError(status: Int) async throws {
+        let failing = { (u: String) in
+            FetchResult(body: "<html>error</html>", statusCode: status, finalURL: URL(string: u)!)
+        }
+        // On the preview request itself.
+        let direct = StubFetcher(routes: ["https://t.me/s/iosgr": failing("https://t.me/s/iosgr")])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            try await ChannelClassifier(fetcher: direct).classify("iosgr")
+        }
+        // On the plain page, after `/s/` redirected away.
+        let redirected = StubFetcher(routes: [
+            "https://t.me/s/iosgr": Self.ok("", "https://t.me/iosgr"),
+            "https://t.me/iosgr": failing("https://t.me/iosgr"),
+        ])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            try await ChannelClassifier(fetcher: redirected).classify("iosgr")
+        }
+    }
+
+    /// The signal `afterWalk` needs to tell "arrived at the mark" from "stopped short".
+    @Test("a walk reports whether it reached the incremental mark")
+    func reachedSinceIsReported() async throws {
+        let arrived = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev", since: 297)
+        #expect(arrived.reachedSince && !arrived.reachedEnd)
+        let capped = try await WebPreviewSource(fetcher: try Self.twoPageStub())
+            .crawl(channel: "swiftui_dev", since: 100, maxPages: 1)
+        #expect(!capped.reachedSince, "one page of a longer walk has not reached 100")
+    }
+}
+
+/// Round-10 review findings on the crawler.
+extension CrawlerTests {
+
+    /// 🔴 A preview that vanishes mid-walk redirects to the plain page, which answers 200 and
+    /// parses as zero posts — the same false completion as an error page, wearing a success code.
+    @Test("a redirect away from /s/ is an error, not the end of history")
+    func redirectMidWalkIsNotExhaustion() async throws {
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"),
+            // The owner disables the preview between pages: 302 → plain page → 200.
+            "https://t.me/s/swiftui_dev?before=262":
+                Self.ok(try Self.fixture("plain-subscribers"), "https://t.me/swiftui_dev"),
+        ])
+        await #expect(throws: WebPreviewSource.CrawlError.self) {
+            try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev")
+        }
+    }
+
+    /// The filter added in round 9 opened a second false-completion path: a page full of someone
+    /// else's blocks is not an empty page.
+    @Test("a page whose blocks all belong to another channel does not prove the end")
+    func allForeignPageIsNotExhaustion() async throws {
+        let foreign = #"""
+        <div class="tgme_widget_message" data-post="someone_else/7" data-view="eyJjIjotOTk5fQ">
+          <div class="tgme_widget_message_text js-message_text">not ours</div>
+          <a class="tgme_widget_message_date"><time datetime="2026-01-01T00:00:00+00:00"></time></a>
+        </div>
+        """#
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"),
+            "https://t.me/s/swiftui_dev?before=262": Self.ok(foreign, "https://t.me/s/swiftui_dev?before=262"),
+        ])
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev")
+        #expect(result.foreignBlocks == 1)
+        #expect(!result.watermark.isBackfillComplete,
+                "history below 262 was never visited, so the backfill must stay open")
     }
 }

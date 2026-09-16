@@ -39,15 +39,15 @@ index. Beating Telegram on recall is not the bar — it is the floor.
 
 | # | Query | Kind | Expectation | Guards |
 |---|---|---|---|---|
-| **G1** | `навигация` | Russian inflection | ≥36 posts in `@iosgr`. Prefix-only finds 11 — **that is a fail.** Must match `навигации`, `навигацию`, `навигацией`. | `TD-4` |
+| **G1** | `навигация` | Russian inflection | ≥36 posts **in `@iosgr`**, counted per channel — the runner filters to that channel, because hits from the other three once covered for a regression in this one. Prefix-only finds 11 — **that is a fail.** Must match `навигации`, `навигацию`, `навигацией`. | `TD-4` |
 | **G2** | `imation` | substring | Non-empty. Telegram returns 0; `unicode61` returns 0; only the `trigram` index can serve this. | — |
-| **G3** | `верстка` | **ё/е folding** | Must also return posts written `вёрстка`. Post `iosgr/2081` is the canonical case — and its only match is in the **link-preview description**, not the body. | `TD-10`, `TD-11` |
+| **G3** | `верстка` | **ё/е folding** | Must return a post *written* with `вёрстка` for an `е`-spelled query; asserted on `iosdev/530`. **Corrected 2026-09-16:** `iosgr/2081` was named here as the canonical case and is **not returned at all** — its match sits in the link-preview description as `вёрстку`, for which `NLTagger` emits no lemma, so neither index reaches it. Of 8 ё-written posts, 1 comes back. See `TD-23`. | `TD-10`, `TD-11`, `TD-23` |
 | **G4** | `архитектура` | **cap-beating recall** | ≥150 posts corpus-wide (369 contain the stem). Returning ~22 means we have reimplemented Telegram's limitation. | — |
 | **G5** | "what did anyone share about app startup time" | natural language → link | Should surface `emergetools.com/blog/…improve-popular-iOS-app-startup`, shared in **3 channels**. Answer must cite `t.me` links. | — |
 | **G6** | `swift-build` | cross-channel dedupe | `github.com/swiftlang/swift-build` was shared in **all 4 channels**. Phase 3 must return it **once**, listing all four sharings — not four near-identical rows. | — |
 | **G7** | "which SPM did we settle on for X" | decision retrieval | The motivating use case. No fixed answer; judged by whether the cited posts actually contain a recommendation. | — |
 | **G8** | most-reacted posts about SwiftUI | reaction ranking | 948 posts match `swiftui`. Ranking must use reaction counts (164,747 available), not recency alone. | `TD-3` |
-| **G9** | `корутин` | sparse term | Only **4** posts corpus-wide. Must return all 4 and not pad with near-misses. | — |
+| **G9** | `корутин` | sparse term | Only **4** posts corpus-wide. Must return **exactly** 4 — padding fails as surely as a miss. Re-baseline this number when the corpus grows. | — |
 | **G10** | `гравитационные волны` | **no good answer** | Must return nothing, or say so. **Confabulation here is a worse failure than G1–G9 combined** — a knowledge base that invents citations is not usable. | — |
 
 ## Deliberately not yet covered

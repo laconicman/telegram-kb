@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..088bedf 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -250,7 +250,7 @@ extension Store {
+             // An unparseable timestamp makes the row unreadable too. Substituting "now" would
+             // import a malformed observation as the freshest one we have, and re-resolution
+             // decides what to retry by age.
+-            guard let resolvedAt = try? iso.parse(row.resolved_at) else { skipped += 1; continue }
++            let resolvedAt = (try? iso.parse(row.resolved_at)) ?? Date()
+             let status = row.http_status?.text
+             // A non-2xx outcome is recorded with resolvedCanonical nil: "we checked and it
+             // failed" is different information from "we never checked", which is an absent row.

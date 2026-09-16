@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index bb69137..fb767f4 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -50,7 +50,7 @@ extension Store {
+         // Substring search is literal by nature, so the quote characters are noise: match what was
+         // inside them, in the order they were typed. `«вёрстка»` and `вёрстка` are the same
+         // substring request; `swift "чистая архитектура"` is not the same as the phrase first.
+-        let literal = parsed.pieces.joined(separator: " ")
++        let literal = (parsed.phrases + parsed.tokens).joined(separator: " ")
+         let substring = literal.count >= 3 ? FTS5Pattern(matchingPhrase: literal) : nil
+         return (word, substring)
+     }

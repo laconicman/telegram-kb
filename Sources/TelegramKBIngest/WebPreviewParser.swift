@@ -16,21 +16,40 @@ public enum WebPreviewParser {
     ///
     /// SwiftSoup's `Document`/`Element` are deliberately not `Sendable`, so parsing and
     /// extraction happen in one isolation domain and only `Sendable` structs escape.
-    public static func parse(html: String) throws -> [Post] {
+    /// A parsed page: the posts, and how many message blocks were unreadable.
+    ///
+    /// The count exists because dropping a block is not free. The crawler records the highest id
+    /// it *did* read, so a block skipped below that mark is never revisited by a later
+    /// incremental run — it would be missing from the index with nothing to say so.
+    public struct Page: Sendable {
+        public var posts: [Post]
+        /// Blocks carrying `data-post` that could not be read as `channel/id`.
+        public var skippedBlocks: Int
+    }
+
+    public static func page(html: String) throws -> Page {
         let doc = try SwiftSoup.parse(html)
         // Select the message element itself, not its wrapper. A listing page nests it in
         // `tgme_widget_message_wrap`, but a single-post `?embed=1` page has no wrapper at all —
         // selecting the wrapper silently parses zero posts from every embed. The fixtures for
         // poll, forward, reply and album are all embeds, which is how this surfaced.
-        return try doc.select("div.tgme_widget_message[data-post]").compactMap(post(from:))
+        let blocks = try doc.select("div.tgme_widget_message[data-post]")
+        let posts = try blocks.compactMap(post(from:))
+        return Page(posts: posts, skippedBlocks: blocks.count - posts.count)
     }
+
+    public static func parse(html: String) throws -> [Post] { try page(html: html).posts }
 
     static func post(from message: Element) throws -> Post? {
         let dataPost = try message.attr("data-post")
         guard !dataPost.isEmpty else { return nil }
         let parts = dataPost.split(separator: "/")
         guard parts.count == 2, let messageID = Int(parts[1]) else { return nil }
-        let channel = String(parts[0])
+        // Lowercased at the parser boundary. Telegram resolves usernames case-insensitively but
+        // SQLite compares keys exactly, so `tgkb sync IOSGR` stored channel `IOSGR` while posts
+        // arrived as `iosgr` — and the first page failed its foreign key against a channel that
+        // plainly exists. The CLI normalises the same way; the two must agree.
+        let channel = String(parts[0]).lowercased()
 
         // The BODY is `js-message_text`. The sibling `js-message_reply_text` is the quoted
         // reply preview, which Telegram truncates to ~256 chars — selecting on the shared
@@ -70,6 +89,36 @@ public enum WebPreviewParser {
             reactions: try reactions(in: message),
             poll: poll,
             views: try views(in: message))
+    }
+
+    /// The channel's **bare** id, decoded from the `data-view` payload.
+    ///
+    /// `data-view` is base64 JSON — `{"c":-1492664793,"p":268,"t":…,"h":…}` — where `c` is the
+    /// raw channel id (negative there) and `p` the post id. `t` is the *request* time, part of a
+    /// signed view-tracking token, and is not the post's date.
+    ///
+    /// This is what lets a web-crawled channel produce a TDLib `chat_id`
+    /// (`Channel.tdlibChatID`), so the two sources can reconcile (`TD-8`).
+    ///
+    /// Only a block whose `data-post` names `channel` is trusted. Every page observed so far —
+    /// eight fixtures and live `@iosgr` / `@ios_broadcast` listings, forwards included — carries
+    /// the host channel's id on every block, so this never rejects real markup; it keeps a
+    /// foreign block, should Telegram ever render one first, from becoming this channel's identity.
+    public static func rawChannelID(html: String, channel: String) throws -> Int64? {
+        let doc = try SwiftSoup.parse(html)
+        for element in try doc.select("div.tgme_widget_message[data-view][data-post]") {
+            let owner = try element.attr("data-post").split(separator: "/").first.map(String.init)
+            guard owner?.lowercased() == channel.lowercased() else { continue }
+            let encoded = try element.attr("data-view")
+            let padded = encoded.padding(toLength: ((encoded.count + 3) / 4) * 4,
+                                         withPad: "=", startingAt: 0)
+            guard let data = Data(base64Encoded: padded),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let c = json["c"] as? Int64 ?? (json["c"] as? Int).map(Int64.init)
+            else { continue }
+            return abs(c)
+        }
+        return nil
     }
 
     // MARK: - Pieces

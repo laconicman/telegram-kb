@@ -27,12 +27,11 @@ should start instantly. It also puts credentials in the process most exposed to 
 **Cost accepted:** no live search until a `search_live` tool arrives in Phase 3, and the user
 must run `tgkb sync` periodically.
 
-**MVP concurrency: an explicit lock.** Rather than relying on SQLite's own locking alone, the
-writer takes an advisory file lock for the duration of a sync and the reader tolerates its
-absence. This is a deliberate MVP choice, not a permanent one — it trades some concurrency for a
-failure mode that is easy to reason about while the schema is still moving. **The wider question
-— whether SQLite/GRDB is the right engine at all for a two-process design — is open and worth a
-dedicated research pass** rather than an assumption inherited from the brief.
+**Superseded — there is no advisory file lock.** This section once said the writer takes one for
+the duration of a sync. It never did, and the storage question it deferred has since been
+answered: SQLite and GRDB stay (§ *SQLite + GRDB stays*), the writer waits on a bounded busy
+timeout, and the store is one file (§ *One writer per store*). Two syncs of the same channel are
+still unguarded; that is `TD-21`, not a lock that exists.
 
 **Caveat that must be designed for, not discovered.** GRDB's own `DatabaseSharing.md` opens by
 discouraging database sharing, and its concrete hazard for us is that
@@ -152,6 +151,144 @@ prefixes (`навига`: 0 → 3) — and Phase 3 lemmatisation closes the morp
 
 Untrusted query text is converted with GRDB's failable `FTS5Pattern.matching…` initialisers,
 which discard FTS5 operator characters. Only `rawPattern` throws, and it takes no user input.
+
+## Phrase search: quotes make word order part of the query
+
+**Decision.** A quoted run of words is matched as an ordered phrase; everything else is an
+implicit AND of terms, as before. `"…"`, `«…»` and `“…”` all quote: `«…»` are the Russian
+quotation marks and `“…”` is what smart-quote substitution produces, so a searcher who types the
+quotes their keyboard or editor gives them gets the phrase they meant.
+
+Word search ANDs its terms, so until now `адаптивная вёрстка` and `вёрстка адаптивная` were the
+same query. Measured on the corpus after the change: `чистая архитектура` matches **12** posts
+unquoted and **2** quoted, and the reversed phrase matches **0**. Case and ё/е still never matter —
+both indexes fold them, verified directly against `unicode61` and `trigram`.
+
+**The lemma line makes inflected phrases work.** A document stores its folded text followed by its
+lemmas *in reading order*, so a phrase of lemmas matches the same adjacency. Each quoted phrase is
+therefore searched as `("surface" OR "lemmas")`: the query `"чистой архитектуры"` finds posts
+written *чистая архитектура*. Where the lemmatiser emits nothing (`TD-23`) a phrase falls back to
+its surface form, which is the honest outcome rather than a silent miss.
+
+**Nothing a searcher types becomes an operator.** Each phrase and term is quoted into the FTS5
+expression with embedded quotes doubled, so `OR`, `NOT`, `NEAR` and `*` are literal text. The
+assembled expression goes through `FTS5Pattern(rawPattern:)`, which SQLite itself validates —
+relevant because these queries arrive from an LLM tool call, not a person.
+
+**Rejected: treating any multi-word argument as a phrase.** It reads well in a shell and is wrong
+in an MCP call, where a model passes a sentence and means "these words". The searcher should have
+to say which they mean, and quoting is the convention every search box already teaches.
+
+**A shell gotcha worth documenting rather than fixing.** `tgkb query "адаптивная вёрстка"` loses
+its quotes to the shell and arrives as two terms; the quotes must be nested:
+`tgkb query '"адаптивная вёрстка"'`. `tgkb query --help` says so.
+
+**What Telegram itself does, measured where it can be measured.** Probed against the `?q=` oracle
+on `@iosgr`, 2026-09-16: unquoted `чистая архитектура` returns 6 posts and **all six contain both
+words**, so that endpoint is AND-like, as we are. Quoting it returns **0** — the web endpoint has
+no phrase syntax and searches the quote characters literally. The maintainer reports that the iOS
+app behaves differently: `"…"` matches a phrase there, and an unquoted query can return posts
+carrying only *some* of the words. That is a different search path (MTProto server-side, not this
+endpoint) and cannot be probed from here, so it is recorded as testimony in <doc:Research> rather
+than as a measurement. If it holds, our unquoted AND is the stricter of the two — a precision
+choice, with `both` mode and `total` as the recall escape hatch.
+
+## Combining the two indexes: word hits first, and never a silent cut
+
+**Decision.** `Store.search(_:mode:limit:)` returns word hits by bm25, then substring-only hits by
+bm25, truncated to `limit`, with `total` counting every match. One policy, in the store, so
+`tgkb` and `tgkb-mcp` cannot diverge.
+
+The earlier merge lived in the CLI and cut at `limit` — so whenever word search filled the limit,
+every substring-only hit disappeared unreported (PR #1, round 4). Measured on the 7,444-post
+corpus before choosing a replacement:
+
+| query | words | substring | substring only | words only |
+|---|---:|---:|---:|---:|
+| `swift` | 2932 | 3740 | **808** | 0 |
+| `concurrency` | 236 | 239 | 3 | 0 |
+| `imation` | 0 | 66 | 66 | 0 |
+| `навигация` | 108 | 47 | 0 | **61** |
+| `архитектура` | 1280 | 1137 | 1 | **144** |
+
+For Latin text the word hits are **almost exactly a subset** of the substring hits; for Russian
+the lemma path finds inflections the trigram phrase cannot.
+
+**Rejected: reciprocal rank fusion.** The textbook hybrid merge scores a document by the sum of
+its reciprocal ranks — so everything *both* indexes find scores double. On this corpus that is
+nearly every Latin word hit, which pushes the Russian lemma-only matches (the point of `TD-4`)
+below exact-form ones and still buries `SwiftUI` under `swift`. Fusion would look principled and
+reproduce words-first ordering with worse Russian recall.
+
+**Rejected: a reserved quota for substring-only hits.** A number with no data behind it; it trades
+precise hits for partial-token ones at a ratio nobody has measured.
+
+**Both indexes are read in one snapshot.** Two reads are two snapshots, and a sync committing
+between them makes the lists disagree about which posts exist (PR #1 round 5). The per-index
+queries take a `Database` rather than the pool, so they cannot open a snapshot of their own.
+
+**What `total` buys.** Truncation stops being loss: the CLI prints `3 of 3741`, and the MCP surface
+will carry `total` beside an opaque cursor, so the tail is reachable rather than silently gone.
+
+## One writer per store: a busy timeout now, single-flight next
+
+**Decision.** The writer sets `busyMode = .timeout(10)`. One database file stays. A second
+`tgkb sync` on the same channel is still not prevented — that is recorded as `TD-21`.
+
+SQLite allows **one writer per database file, across processes**, and GRDB's default is
+`.immediateError`. Measured with one process holding the write lock for three seconds: without a
+timeout the second writer failed **after 0.00 s** with `database is locked`; with a five-second
+timeout it waited 2.41 s and succeeded. Page commits last milliseconds, so waiting is both honest
+and nearly always invisible. A timeout **bounds** `SQLITE_BUSY`; it does not remove it.
+
+**Rejected: one database file per channel.** The appeal is obvious — contention would almost
+vanish, and a per-channel lock or single-flight would be natural. The reads make it wrong.
+Every interesting query in this project is cross-channel ("what has anyone shared about X"), and
+measured on this machine's SQLite:
+
+- `PRAGMA compile_options` reports **`MAX_ATTACHED=10`**. A tenth channel is a hard wall, and the
+  channel list is meant to grow.
+- FTS5 rejects a schema-qualified table: `bm25(ch0.fts)` and `WHERE ch0.fts MATCH …` both fail
+  with *no such column*. One ranked query cannot span attached files at all.
+- So cross-channel search becomes **N queries merged in application code**, with `bm25` scores
+  computed against N different corpora — scores that are not comparable, which is exactly the
+  ranking problem <doc:Design> § *Combining the two indexes* exists to avoid.
+
+Splitting the store would trade a contention problem we can bound for a ranking problem we
+cannot. It also multiplies the WAL files, the migrations and the integrity checks by the number
+of channels. **One file, one writer, bounded waiting.**
+
+**What single-flight does and does not solve.** An actor keyed by channel identity is the right
+shape *within* one process, and will matter when sync crawls channels concurrently. It cannot see
+another process: two `tgkb sync` commands share no memory, and `Task(name:)` (Swift 6.2) is a
+debugging label, not an identity — verified: two tasks with the same name run side by side. A
+cross-process guard therefore has to live where both processes can see it, which means the
+database itself: a lease row carrying the channel identity, a pid and a heartbeat, taken in the
+same transaction discipline as everything else. No lock file. That is `TD-21`'s discharge.
+
+## Channel identity is `rawChannelID`, not the username
+
+**Decision (2026-09-16).** The immutable identity of a channel is its `rawChannelID` — the bare
+id from `data-view`, which also yields the TDLib `chat_id`. The username is a **label**: a
+public alias that its owner can change, that Telegram compares case-insensitively, and that a
+channel may not have at all.
+
+The store contradicts this today: `channel.username` is the primary key and `post.channelUsername`
+its foreign key, so a rename would orphan an entire channel's history, and a second crawl under
+the new name would look like a new channel. Three review findings have already circled this —
+username casing breaking the foreign key, the identity placeholder `0`, and trusting the first
+`data-view` on a page.
+
+**The cost of the pivot, stated rather than waved away.** The id is not known until the first page
+is parsed, so a row must exist before it can be identified. That is acceptable: a crawl always
+fetches a page before it writes a post, and `ensureChannel` already writes a placeholder row.
+
+**The plan** is a schema migration (`v4`) that makes `rawChannelID` the key, keeps `username` as a
+unique-when-present label with its own lookup, and rewrites `post`'s foreign key. Permalinks still
+render from the username, because `t.me/<username>/<id>` is what a human follows — and a post
+whose channel has no username needs the `t.me/c/<rawChannelID>/<id>` form anyway, which Phase 2
+will need regardless. Scheduled as `S7` in <doc:Roadmap>, before Phase 2, because TDLib
+reconciliation joins on exactly this id.
 
 ## SQLite + GRDB stays — no challenger cleared the bar
 
@@ -423,6 +560,116 @@ Both sides join on `effective_url`. Either may populate `url_resolution` — we 
 URL first, we are already doing network I/O, and a `HEAD` is not a fetch. Only the destination of
 the result changed.
 
+## Edits are not refreshed; deletions are kept
+
+**Decision.** An incremental sync writes a post only if it is not already stored. `--full`
+overwrites.
+
+A citation should keep saying what it said when it was indexed. An edit is usually a corrected
+link rather than a change of meaning, and re-fetching the newest page on every run would
+otherwise rewrite recent posts continuously. Deleted posts are simply never removed — the
+crawler only ever inserts.
+
+**The cost, stated rather than hidden:** a post captured mid-edit, or with a preview Telegram had
+not yet resolved, stays wrong until someone runs `--full`. That is why `--full` refreshes rather
+than being merely a re-walk.
+
+**`--full` refreshes content; it does not reconcile.** It overwrites every post it sees and removes
+none it does not. A full walk cannot tell a deleted post from one it failed to reach, and an index
+whose citations vanish when their source does would break the promise above. Asked in review
+(PR #1, round 4) and kept; the flag's help text now says so.
+
+## A failed fetch is never exhaustion
+
+**Decision.** `crawl` checks the HTTP status and throws on anything outside 2xx. A walk that
+ended in an error can never set `backfillComplete`.
+
+The failure this prevents is quiet and permanent. A 429 or 5xx returns a body that parses as
+**zero posts** — byte-for-byte the same signal as reaching the end of a channel's history. The
+crawler would record the backfill as finished, and because a finished backfill is never
+re-walked, the truncated history would stay missing through every later sync. Nothing would ever
+report it.
+
+Two related rules, same principle — **only a walk that actually reached the end may say so**:
+
+- **The page cap is not completion.** A crawl stopped by `maxPages` has not seen the whole
+  history, so it leaves `backfillComplete` false.
+- **An unfinished backfill resumes from its saved `lowestMessageID`.** Without a resume cursor a
+  channel with more pages than the cap re-walks its newest pages on every run and never reaches
+  its own history — the mark would advance forever while the gap stayed put.
+- **An incremental walk records nothing until it arrives.** It descends from the newest page
+  toward the stored `highestMessageID`. Committing a page's maximum as the new mark — or clearing
+  `backfillComplete` — before the walk reaches the old mark let an interruption skip everything
+  in between, permanently. Posts are still written page by page; only the state waits.
+- **An incremental walk that stops short becomes an unfinished backfill.** Keeping the old mark
+  after the page cap meant a gap wider than 500 pages was never reached: every run walked the same
+  newest pages again. What a capped walk did cover is contiguous from the newest page down, which
+  is exactly an unfinished backfill, so it is recorded as one and the next run resumes through
+  the gap. The price is re-walking stored history below it — requests, never posts. (PR #1
+  round 5; this was `TD-18`.)
+- **An interrupted `--full` over a finished channel stays finished.** A refresh removes nothing,
+  so every older post is still stored; clearing the flag would send the next plain sync on a
+  full historical re-walk for no gain.
+- **Classification is subject to the same rule.** A throttled `t.me/<name>` page carries no
+  channel markers, so it read as "not publicly resolvable" and `sync` skipped a live channel
+  with exit status 0. The classifier now throws on non-2xx as well. (t.me answers 200 even for
+  a name that does not exist, so the throw never replaces a real classification.)
+
+These decisions live in `Store.CrawlState` — `since`, `resumeFrom`, `afterPage`, `afterWalk` —
+as pure functions, and the loop that sequences them lives in `TelegramKBSync.ChannelSync`. Both
+moved out of the `tgkb` executable for the same reason: six review rounds of crawl-state bugs, in
+code no test could import. `tgkb sync` is now argument parsing and printing.
+
+**Pages are also not retained when a callback consumes them.** Accumulating the whole channel to
+hand back at the end would defeat the per-page commit it exists alongside; `postCount` carries
+the tally instead.
+
+## Integrity: ids are dense, posts are not
+
+Message ids form a dense sequence; posts do not fill it. **Most absences are albums** — a media
+group occupies several consecutive ids while rendering as one post — so `mediaCount` explains
+them, and only what remains is deletions, service messages, or a page we failed to fetch.
+
+`tgkb doctor` reports per channel: ids covered (counting album spans), unexplained ids, and the
+**longest unexplained run**. The run length is the discriminating signal — scattered deletions
+produce short runs, a missed page produces a long one.
+
+Measured across the four synced channels:
+
+| channel | posts | id range | accounted for | longest run |
+|---|---:|---|---:|---:|
+| `@iosgr` | 4,402 | 1–4762 | **94.5%** | 8 |
+| `@ios_broadcast` | 1,214 | 1–2835 | **90.2%** | 8 |
+| `@prefire_ios` | 154 | 1–181 | **89.5%** | 4 |
+| `@iosdev` | 1,674 | 1–2118 | **86.6%** | 9 |
+
+**This corrects a figure repeated throughout the earlier notes.** "54% of the id space is absent"
+counted ids with no post row, which is the wrong denominator once albums are understood. The
+honest number is 5–13% unexplained, in short runs — which is what a channel with ordinary
+deletions should look like, and which means a long run is a genuine alarm rather than noise.
+
+## Crawl state belongs in the database, not beside it
+
+**Decision.** A channel's `lowestMessageID`, `highestMessageID` and `backfillComplete` live on the
+`channel` row, in the same database as the posts they describe.
+
+A separate checkpoint file was built first — with atomic writes, temp-file-then-rename, the lot —
+and then deleted, because atomicity was never the problem. **The second store was.**
+
+The failure, on the first real run: the database was deleted while the watermark file survived.
+Sync read a mark of 181, "resumed" from it, and left the channel with 17 posts and no backfill.
+Nothing errored.
+
+**Deriving the mark from the store does not fix it either** — the store's `MAX(messageID)` is
+*also* 181, because the gap is **below** the mark, not above it. High-water marks cannot express
+"complete". Only `backfillComplete`, written in the same transaction scope as the posts,
+distinguishes *up to date* from *never finished* — and now `sync` self-heals: a channel whose
+backfill never completed is re-crawled in full regardless of its mark.
+
+**Rejected: a side file with better write discipline.** Atomic writes make a file harder to
+corrupt; they do nothing about two stores disagreeing. Removing the second store removes the
+failure class rather than narrowing it.
+
 ## Bot-walled content: try a mirror, and mark its provenance
 
 **Decision, revised.** The earlier position — "where a site is closed to automated fetch, index
@@ -589,6 +836,13 @@ Two things I had recorded earlier are wrong or incomplete because of this:
    *N* messages sharing a `media_group_id`. The ID transform is still correct — but a naive
    reconciler would create N rows from TDLib against 1 from the web and treat the difference as
    missing data. Folded into `TD-8`, which is already the Phase 2 gate.
+
+**Corrected 2026-09-09.** That "54%" counts ids with no *post row*, which is the misleading
+framing: an album occupies several consecutive ids while rendering as one post, so most of those
+ids are accounted for by `mediaCount`. Measured across the four synced channels with album spans
+included, **86–95% of each channel's id range is accounted for**, and the longest run of
+genuinely unexplained ids is 4–9 — consistent with scattered deletions and service messages,
+not with missed pages. `tgkb doctor` reports this per channel.
 
 **Decision:** the album's **first message id is the post identity**, `mediaCount` records the
 span, and TDLib ingestion must group by `media_group_id` before writing rather than after.

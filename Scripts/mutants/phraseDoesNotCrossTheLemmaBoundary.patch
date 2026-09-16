@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBStore/TextNormalizer.swift b/Sources/TelegramKBStore/TextNormalizer.swift
+index e829697..c864b64 100644
+--- a/Sources/TelegramKBStore/TextNormalizer.swift
++++ b/Sources/TelegramKBStore/TextNormalizer.swift
+@@ -59,7 +59,8 @@ public enum TextNormalizer {
+     public static func indexed(text: String, extras: [String] = []) -> (surface: String, lemmas: String) {
+         let joined = ([text] + extras.filter { !$0.isEmpty }).joined(separator: "\n")
+         let folded = foldYo(joined)
+-        return (folded, lemmas(folded) ?? "")
++        // MUTANT: both sections back in one column, separated by a newline FTS5 tokenises away.
++        return (folded + "\n" + (lemmas(folded) ?? ""), "")
+     }
+ 
+     /// Normalises a user query the same way the index was built. Never skip this.

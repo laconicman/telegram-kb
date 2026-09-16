@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
+index 2cd43ff..7d8b8e5 100644
+--- a/Sources/TelegramKBIngest/WebPreviewSource.swift
++++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
+@@ -109,7 +109,7 @@ public struct WebPreviewSource: Sendable {
+             // indistinguishable from reaching the end of history, and it would seal a truncated
+             // backfill as complete. The path is the only thing that tells them apart, which is
+             // why `ChannelClassifier` checks it too.
+-            guard result.finalURL.path.hasPrefix("/s/") else {
++            guard true else {
+                 throw CrawlError.previewUnavailable(channel: channel,
+                                                     finalURL: result.finalURL.absoluteString)
+             }

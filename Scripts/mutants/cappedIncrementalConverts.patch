@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
+index 9778a72..8d0eeba 100644
+--- a/Sources/TelegramKBSync/ChannelSync.swift
++++ b/Sources/TelegramKBSync/ChannelSync.swift
+@@ -77,7 +77,7 @@ public struct ChannelSync: Sendable {
+         let final = state.afterWalk(lowest: fetched ? result.watermark.lowestMessageID : nil,
+                                     highest: fetched ? result.watermark.highestMessageID : nil,
+                                     full: full, reachedEnd: result.reachedEnd,
+-                                    reachedSince: result.reachedSince)
++                                    reachedSince: true)
+         try store.recordCrawlState(channel: channel, lowest: final.lowest, highest: final.highest,
+                                    backfillComplete: final.backfillComplete)
+ 

@@ -24,6 +24,13 @@ Probed directly, 2026-08-23. Reproducible via `research/probe.sh`.
 - Server-side search has **no substring matching**; its normalisation is **opaque** —
   `anim`≡`animation`≡`animations` (15 hits) but `animat`≡`Animatable` (a different 2).
 
+**Corrected 2026-09-09.** That "54%" counts ids with no *post row*, which is the misleading
+framing: an album occupies several consecutive ids while rendering as one post, so most of those
+ids are accounted for by `mediaCount`. Measured across the four synced channels with album spans
+included, **86–95% of each channel's id range is accounted for**, and the longest run of
+genuinely unexplained ids is 4–9 — consistent with scattered deletions and service messages,
+not with missed pages. `tgkb doctor` reports this per channel.
+
 ### Search quality, measured — `research/web-preview-probe.md`
 - FTS5 `trigram` solves substring (`imation`: 0 → 14) and short prefixes (`навига`: 0 → 3).
 - **FTS5 loses to Telegram on Russian inflection**: `навигация*` misses a post containing
@@ -39,6 +46,15 @@ Probed directly, 2026-08-23. Reproducible via `research/probe.sh`.
   on our own built binary. The FTS5 measured on this machine is the FTS5 GRDB gets.
 - `trigram` needs no custom build: `FTS5TokenizerDescriptor(components: ["trigram"])`.
 - A connection lacking a custom tokenizer fails at *step* time with `no such tokenizer`.
+- **Second opinion, DeepWiki on `groue/GRDB.swift`, 2026-09-15 — agrees with the design.** The
+  writer's `PERSIST_WAL` plus a `readonly` `DatabasePool` that checks `hasCompletedMigrations` is
+  GRDB's own `DatabaseSharing` sample. Filling plain FTS5 tables by hand in the content
+  transaction is the *right* choice for derived text, because `synchronize(withTable:)` copies
+  columns verbatim and cannot lemmatise. A pooled reader sees each new commit on its next `read`
+  without reopening. One gap it names: the writer sets no `busyMode`, so a second concurrent
+  `tgkb sync` fails with `SQLITE_BUSY` immediately rather than waiting. That is acceptable under
+  the MVP's one-writer rule, but it should be a deliberate choice.
+  [Conversation](https://deepwiki.com/search/second-opinion-on-a-two-proces_743b448a-1dae-4f2d-8bfb-1cae6fad3065?mode=deep).
 
 ### Packaging — `research/spm-traits-binarytarget.md`
 - **SwiftPM traits gate `binaryTarget` downloads.** Trait off: no download, and
@@ -71,6 +87,20 @@ Probed directly, 2026-08-23. Reproducible via `research/probe.sh`.
 - swift-docc-plugin 1.5.0; a docs-only target needs only a comments-only source file — **no
   dummy public symbol**. Confirmed by our own building scaffold.
 - SwiftSoup 2.13.7 (2026-07-23); ~26 ms per 159 KB page. **`text()` silently drops `<br/>`.**
+- **An incremental build can leave a test target linked against a type's OLD layout**, and the
+  result is a SIGSEGV in a test that has nothing to do with the change. Observed 2026-09-16 on
+  Swift 6.3.3: adding a second payload case to `WebPreviewSource.CrawlError` segfaulted one test
+  in another target, and bisecting *within* incremental builds confirmed a false cause (the
+  payload) because every variant shared the stale objects. `swift package clean` then passed all
+  92 tests unchanged. The tell is in the linker diagnostic: a symbol mangled `CrawlErrorO` (enum)
+  referenced from an object built before the type changed. **When a test crashes after a type's
+  layout changes, clean before believing any bisect.**
+- **Second opinion, DeepWiki on `modelcontextprotocol/swift-sdk`, 2026-09-15**, for the S6 tool
+  design. It confirms the annotation defaults and the stdout rule above. It adds that
+  `tools/call` has no protocol cursor, that `CallTool.Result(structuredContent:)` encodes any
+  `Codable` value, and that `StdioTransport(logger:)` accepts a stderr `StreamLogHandler`.
+  Folded into S6 in <doc:Roadmap>.
+  [Conversation](https://deepwiki.com/search/i-am-about-to-build-a-read-onl_a94e89e4-6ce5-453c-b199-99706ad4f70d?mode=deep).
 
 ### Binary artifact — `research/Swiftgram-TDLibFramework.md`
 Measured from the shipped zip's central directory via an HTTP range request — actual bytes.
@@ -230,7 +260,15 @@ Carried forward deliberately. Do not build on these without probing first.
   of four channels — 7,406 posts over ~480 page requests at a 1 s delay — completed with no
   throttling, no 429s, no challenges. Still not a probe *for* the limit, but casual crawling at
   real corpus scale is now demonstrated rather than extrapolated.
-- **Whether `?q=` is stable or supported.** Undocumented; used as a test oracle only.
+- **Whether `?q=` is stable or supported.** Undocumented; used as a test oracle only. Measured
+  2026-09-16: it is **AND-like for unquoted multi-word queries** (`чистая архитектура` → 6 posts,
+  6 of 6 containing both words) and has **no phrase syntax** — the quoted form returns 0, matching
+  the quote characters literally.
+- **How Telegram's iOS app searches, as against the web endpoint.** Maintainer's testimony,
+  2026-09-16: in the app a `"…"` query matches a phrase, and an unquoted query may return posts
+  containing only some of the words. Not probed here — it is a different code path (server-side
+  MTProto search) and needs a client to test. It matters because it sets what a user expects of
+  our unquoted queries, which are AND.
 - **HTML stability over time** — single point in time, no churn estimate. `TD-1`.
 - **Trait gating under Xcode's resolver**, as opposed to the SwiftPM CLI.
 - **Whether a macOS-only slim TDLibFramework build actually produces a usable artifact.** Read
@@ -241,8 +279,13 @@ Carried forward deliberately. Do not build on these without probing first.
   myself. A pass over them would now be confirmatory rather than decisive. Flagged as a
   conscious omission, not an oversight.
 - **Scale.** Storage results are from 60-row samples; retrieval results now come from a real
-  7,406-post corpus. Nothing yet speaks to WAL growth during a long backfill or checkpoint
-  starvation under a concurrent reader.
+  7,406-post corpus. WAL growth under a long backfill is **no longer a vague worry but still
+  unmeasured**: a DeepWiki consult on GRDB (2026-09-16) established the mechanism — GRDB does no
+  background checkpointing, SQLite's automatic checkpoint is `PASSIVE` and fires at 1,000 WAL
+  pages, and it can only reclaim frames no reader snapshot pins, so continuously overlapping reads
+  starve it. Ours is exactly that shape once `tgkb-mcp` exists. Filed as `TD-22`; the number to
+  watch is the `-wal` file during a backfill.
+  [Conversation](https://deepwiki.com/search/two-questions-about-multi-proc_352cb065-96b1-4eca-88f7-970e3d0cabaa?mode=deep).
 - **Whether mean-centering helps or hurts embedding rank quality.** The storage research measured
   raw cosine inverting and centering fixing it; my own probe measured the opposite sign. My mean
   was over 8 sentences — far too few to be representative. Unresolved; settle on the real corpus.
@@ -252,8 +295,16 @@ Carried forward deliberately. Do not build on these without probing first.
   the body, preview title, or preview description we captured. Candidates: linked-page content,
   semantic expansion, or media metadata we drop. Load-bearing for how much link-target content
   Phase 3 ingests.
-- **No build of any dependency under Swift 6.3 strict concurrency beyond the scaffold**, which
-  has no real code in it yet.
+- ~~No build of any dependency under Swift 6.3 strict concurrency beyond the scaffold.~~
+  **Answered** — GRDB, SwiftSoup and swift-argument-parser now carry real code through S1–S5
+  under Swift 6.3 strict concurrency, with 69 tests. The MCP SDK compiles into `tgkb-mcp` but is
+  not exercised until S6.
+- **Claims from the 2026-09-15 DeepWiki second opinions that no probe of ours has exercised.**
+  Each is cited to source but not tested here: GRDB readers default to
+  `readonlyBusyMode = .timeout(10)`; GRDB 7 begins every write transaction `IMMEDIATE`; GRDB's
+  `DatabaseSharing` guide wraps database *creation* in `NSFileCoordinator`, which we do not; the
+  MCP SDK does not validate arguments against `inputSchema`, and it suppresses the response to a
+  cancelled request.
 
 ## See Also
 
