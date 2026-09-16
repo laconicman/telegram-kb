@@ -35,6 +35,9 @@ public struct ChannelSync: Sendable {
         /// Blocks dropped because they belonged to another channel. Always zero so far; a
         /// non-zero value is worth reporting rather than swallowing.
         public var foreignBlocks = 0
+        /// Blocks the parser could not read. Non-zero means posts are missing from the index
+        /// below the recorded mark, where no later incremental run will look for them.
+        public var unreadableBlocks = 0
     }
 
     /// - Parameter full: re-walk from the newest page, overwriting stored copies. Never removes.
@@ -86,6 +89,7 @@ public struct ChannelSync: Sendable {
 
         return Outcome(channel: channel, skipped: nil, postCount: result.postCount,
                        pagesFetched: result.pagesFetched, since: since,
-                       foreignBlocks: result.foreignBlocks)
+                       foreignBlocks: result.foreignBlocks,
+                       unreadableBlocks: result.unreadableBlocks)
     }
 }

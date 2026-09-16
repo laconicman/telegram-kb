@@ -185,3 +185,21 @@ extension WebPreviewParserTests {
         #expect(try WebPreviewParser.rawChannelID(html: html, channel: "nobody") == nil)
     }
 }
+
+extension WebPreviewParserTests {
+    /// 🔴 A block the parser cannot read was dropped silently, while the walk still recorded the
+    /// highest id it *could* read — so the skipped post sat below the mark where no later
+    /// incremental run would look for it.
+    @Test("an unreadable message block is counted, not silently dropped")
+    func unreadableBlocksAreCounted() throws {
+        let broken = #"""
+        <div class="tgme_widget_message" data-post="not-a-post-id">
+          <div class="tgme_widget_message_text js-message_text">who knows</div>
+        </div>
+        """#
+        let html = try Self.html("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(broken)<div hidden")
+        let page = try WebPreviewParser.page(html: html)
+        #expect(page.skippedBlocks == 1)
+        #expect(page.posts.count == 20, "the readable blocks on the same page still parse")
+    }
+}

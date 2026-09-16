@@ -191,3 +191,18 @@ extension SyncTests {
         #expect(try store.channelUsernames() == ["swiftui_dev"])
     }
 }
+
+extension SyncTests {
+    /// The count has to reach the operator: these posts are missing from the index, below a mark
+    /// later runs start above.
+    @Test("a sync reports blocks it could not read")
+    func syncReportsUnreadableBlocks() async throws {
+        let store = try Self.store()
+        let broken = #"<div class="tgme_widget_message" data-post="rubbish"><div class="tgme_widget_message_text js-message_text">x</div></div>"#
+        let page = try Self.fixture("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(broken)<div hidden")
+        let stub = StubFetcher(["https://t.me/s/swiftui_dev": Self.ok(page, "https://t.me/s/swiftui_dev")])
+        let outcome = try await ChannelSync(store: store, fetcher: stub).sync(channel: "swiftui_dev")
+        #expect(outcome.unreadableBlocks == 1)
+        #expect(outcome.postCount == 20)
+    }
+}

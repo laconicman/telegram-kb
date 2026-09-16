@@ -51,11 +51,15 @@ public enum TextNormalizer {
 
     /// The blob indexed for word search: folded text plus its lemmas, so both an exact form and
     /// an inflected one match.
-    public static func indexContent(text: String, extras: [String] = []) -> String {
+    /// The two things a post contributes to the word index, kept apart.
+    ///
+    /// They used to be one string with a newline between them, and FTS5 tokenises a newline
+    /// away — so a quoted phrase could match the last word of the text followed by the first
+    /// lemma, a post that contains the phrase in neither form. They live in separate columns now.
+    public static func indexed(text: String, extras: [String] = []) -> (surface: String, lemmas: String) {
         let joined = ([text] + extras.filter { !$0.isEmpty }).joined(separator: "\n")
         let folded = foldYo(joined)
-        if let lem = lemmas(folded) { return folded + "\n" + lem }
-        return folded
+        return (folded, lemmas(folded) ?? "")
     }
 
     /// Normalises a user query the same way the index was built. Never skip this.

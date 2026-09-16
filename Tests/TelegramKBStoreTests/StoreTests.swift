@@ -660,3 +660,52 @@ extension StoreTests {
                     .hits.map(\.id.messageID) == [1])
     }
 }
+
+/// Round-12 and 13 findings on search.
+extension StoreTests {
+
+    /// 🟡 Surface text and lemmas shared one column separated by a newline, which FTS5 tokenises
+    /// away — so a phrase could match the last word of the text beside the first lemma, in a post
+    /// containing that phrase in neither form.
+    @Test("a phrase cannot straddle the text and the lemmas")
+    func phraseDoesNotCrossTheLemmaBoundary() throws {
+        let (store, _) = try Self.seeded()
+        // Indexed as text "кошка сидела на окне" and lemmas "кошка сидеть на окно".
+        try store.upsert(posts: [Self.post(1, "Кошка сидела на окне")])
+        #expect(try store.search("\"окне кошка\"", mode: .words, limit: 10).hits.isEmpty,
+                "the last word of the text is not adjacent to the first lemma")
+        #expect(try store.search("\"кошка сидела\"", mode: .words, limit: 10).hits.count == 1,
+                "a phrase within the text still matches")
+    }
+
+    /// 🟡 A query carrying any phrase stopped lemmatising its loose terms, so it found less than
+    /// the same words unquoted.
+    @Test("loose terms beside a phrase are still lemmatised")
+    func looseTermsKeepTheirLemmasBesideAPhrase() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "Вопросы навигации в SwiftUI сегодня")])
+        #expect(try store.search("\"в swiftui\" навигация", mode: .words, limit: 10).hits.count == 1,
+                "навигация must still reach навигации while a phrase is present")
+    }
+
+    /// 🟡 Substring search is literal, and grouping the phrases first searched a sequence the
+    /// searcher never typed.
+    @Test("a substring query keeps the order it was typed in")
+    func substringKeepsTypedOrder() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "swift чистая архитектура в проекте")])
+        #expect(try store.search("swift \"чистая архитектура\"", mode: .substring, limit: 10)
+                    .hits.count == 1, "the literal text runs in the typed order")
+    }
+
+    /// 🔍 SQLite reads a negative LIMIT as unlimited, so a caller asking for less than nothing
+    /// received the whole corpus.
+    @Test("a negative limit returns nothing, not everything")
+    func negativeLimitIsNotUnlimited() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: (1...5).map { Self.post($0, "swift \($0)") })
+        #expect(try store.searchWords("swift", limit: -1).isEmpty)
+        #expect(try store.searchSubstring("swift", limit: -1).isEmpty)
+        #expect(try store.searchWords("swift", limit: nil).count == 5, "nil still means every match")
+    }
+}

@@ -52,9 +52,28 @@ run() {
 LIMIT=5000
 q()  { run $TGKB query --db "$DB" --quiet --limit $LIMIT "$@"; }
 qm() { local m="$1"; shift; run $TGKB query --db "$DB" --quiet --limit $LIMIT --mode "$m" "$@"; }
-# The ids themselves, for criteria that name a specific post rather than a count.
-qids() { $TGKB query --db "$DB" --quiet --limit $LIMIT "$@" 2>/dev/null | tail -n +2; }
-returns() { qids "$2" | grep -qx "$1" && echo yes || echo no; }
+# The ids themselves, for criteria that name a post or a channel rather than a bare count.
+#
+# Both of these check the query's EXIT STATUS first. Reading ids from a failed query and counting
+# them yields 0 — a failure that reads as a measurement, which is the bug class this whole script
+# exists to avoid. It bit here: a store one migration behind made every query fail, and the
+# channel filter reported "0 hits in @iosgr" rather than ERR.
+qids() {
+  local out status
+  out=$($TGKB query --db "$DB" --quiet --limit $LIMIT "$@" 2>/dev/null); status=$?
+  [ $status -ne 0 ] && { echo "ERR"; return 1; }
+  printf '%s' "$out" | tail -n +2
+}
+returns() { # <id> <query…>
+  local ids; ids=$(qids "${@:2}") || { echo ERR; return; }
+  echo "$ids" | grep -qx "$1" && echo yes || echo no
+}
+# G1's criterion is "36 posts in @iosgr", and the query searches the whole store: hits from the
+# other three channels were covering for a regression in the one the criterion is about.
+qin() { # <channel> <query…>
+  local ids; ids=$(qids "${@:2}") || { echo ERR; return; }
+  echo "$ids" | grep -c "^$1/"
+}
 
 # PASS only when the query actually ran AND met its expectation.
 verdict() { # <hits> <test> <pass-text> <fail-text>
@@ -78,23 +97,28 @@ row() {
 printf "%-5s %-28s %6s  %s\n" "ID" "QUERY" "HITS" "EXPECTATION"
 printf -- "-%.0s" {1..92}; echo
 
-h=$(q навигация)
-row G1 "навигация (inflection)" "$h" "$(verdict "$h" "-ge 36" "PASS — matches навигации too" "FAIL — TD-4 regression; the criterion is >= 36, prefix-only finds 11")"
+h=$(qin iosgr навигация)
+row G1 "навигация in @iosgr" "$h" "$(verdict "$h" "-ge 36" "PASS — matches навигации too" "FAIL — TD-4 regression; the criterion is >= 36 in @iosgr, prefix-only finds 11")"
 h=$(qm substring imation)
 row G2 "imation (substring)" "$h" "$(verdict "$h" "-ge 1" "PASS — trigram only; Telegram returns 0" "FAIL")"
 # G3 names a post, not a count: the criterion is that a ё-WRITTEN post comes back for an е-spelled
 # query. `iosdev/530` is the case that holds today; `iosgr/2081`, which golden-queries.md called
 # canonical, does NOT — see TD-23, and read that entry before weakening this check.
 h=$(q верстка)
-if [ "$(returns iosdev/530 верстка)" = yes ]; then g3="PASS — returns the ё-written iosdev/530"
-else g3="FAIL — TD-10: an е-spelled query no longer returns the ё-written iosdev/530"; fi
+case "$(returns iosdev/530 верстка)" in
+  yes) g3="PASS — returns the ё-written iosdev/530" ;;
+  ERR) g3="ERR — the query failed; this is NOT a folding failure" ;;
+  *)   g3="FAIL — TD-10: an е-spelled query no longer returns the ё-written iosdev/530" ;;
+esac
 row G3 "верстка (ё folding)" "$h" "$g3"
 h=$(q архитектура)
 row G4 "архитектура (cap-beating)" "$h" "$(verdict "$h" "-ge 150" "PASS — beats Telegram's ~22 cap" "FAIL — the criterion is >= 150 corpus-wide")"
 h=$(q swiftui)
 row G8 "swiftui (volume)" "$h" "$(verdict "$h" "-ge 0" "ranking signal available" "-")"
 h=$(q корутин)
-row G9 "корутин (sparse term)" "$h" "$(verdict "$h" "-ge 4" "all 4 corpus-wide, no padding" "-")"
+# Exactly four, not "at least": the criterion is the complete corpus set, so padding is as much
+# a failure as a miss. Re-baseline the number in golden-queries.md when the corpus grows.
+row G9 "корутин (sparse term)" "$h" "$(verdict "$h" "-eq 4" "all 4 corpus-wide, no padding" "FAIL — expected exactly 4 corpus-wide")"
 h=$(q гравитационные волны)
 row G10 "гравитационные волны (none)" "$h" "$(verdict "$h" "-eq 0" "PASS — says nothing rather than confabulating" "FAIL — matched an absent topic")"
 

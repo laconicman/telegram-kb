@@ -84,6 +84,14 @@ struct Sync: AsyncParsableCommand {
                 FileHandle.standardError.write(Data("\(outcome.channel): \(Self.explain(skipped))\n".utf8))
                 continue
             }
+            if outcome.unreadableBlocks > 0 {
+                // Loud, and not a warning to skim: these posts are absent from the index, below
+                // a mark that later incremental runs will start above. `--full` is the repair.
+                let warning = "\(outcome.channel): \(outcome.unreadableBlocks) message block(s) "
+                            + "could not be read and are MISSING from the index — re-run with "
+                            + "--full to repair, and check the parser against the live page\n"
+                FileHandle.standardError.write(Data(warning.utf8))
+            }
             if outcome.foreignBlocks > 0 {
                 let warning = "\(outcome.channel): \(outcome.foreignBlocks) block(s) belonged to "
                             + "another channel and were skipped — the page layout may have changed\n"

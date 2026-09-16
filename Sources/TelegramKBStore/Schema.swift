@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import TelegramKBModel
 
 /// The database schema, as an ordered set of migrations.
 ///
@@ -147,6 +148,29 @@ public enum Schema {
                 t.add(column: "highestMessageID", .integer)
                 t.add(column: "backfillComplete", .boolean).notNull().defaults(to: false)
                 t.add(column: "lastSyncedAt", .datetime)
+            }
+        }
+
+        m.registerMigration("v4-lemmas-in-their-own-column") { db in
+            // A phrase must not be able to straddle the surface text and the lemmas.
+            //
+            // Both were stored in ONE column separated by a newline, and FTS5 tokenises a
+            // newline away: for "кошка сидела на окне" + lemmas "кошка сидеть на окно", the
+            // phrase "окне кошка" matched — the last word of the text next to the first lemma.
+            // Verified directly before the change. Columns cannot be straddled, so the lemmas
+            // move into one of their own, and every indexed post is rebuilt through the same
+            // code that writes new ones.
+            try db.execute(sql: "DROP TABLE IF EXISTS postFTS")
+            try db.create(virtualTable: "postFTS", using: FTS5()) { t in
+                t.tokenizer = .unicode61(diacritics: .remove)
+                t.column("content")
+                t.column("lemmas")
+            }
+            let ids = try Row.fetchAll(db, sql: "SELECT channelUsername, messageID FROM ftsMap")
+            for row in ids {
+                let id = Post.ID(channelUsername: row["channelUsername"], messageID: row["messageID"])
+                guard let post = try Store.loadPost(id, from: db) else { continue }
+                try Store.indexForSearch(post, into: db)
             }
         }
 

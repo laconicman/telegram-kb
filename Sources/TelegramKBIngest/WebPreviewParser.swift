@@ -16,14 +16,29 @@ public enum WebPreviewParser {
     ///
     /// SwiftSoup's `Document`/`Element` are deliberately not `Sendable`, so parsing and
     /// extraction happen in one isolation domain and only `Sendable` structs escape.
-    public static func parse(html: String) throws -> [Post] {
+    /// A parsed page: the posts, and how many message blocks were unreadable.
+    ///
+    /// The count exists because dropping a block is not free. The crawler records the highest id
+    /// it *did* read, so a block skipped below that mark is never revisited by a later
+    /// incremental run — it would be missing from the index with nothing to say so.
+    public struct Page: Sendable {
+        public var posts: [Post]
+        /// Blocks carrying `data-post` that could not be read as `channel/id`.
+        public var skippedBlocks: Int
+    }
+
+    public static func page(html: String) throws -> Page {
         let doc = try SwiftSoup.parse(html)
         // Select the message element itself, not its wrapper. A listing page nests it in
         // `tgme_widget_message_wrap`, but a single-post `?embed=1` page has no wrapper at all —
         // selecting the wrapper silently parses zero posts from every embed. The fixtures for
         // poll, forward, reply and album are all embeds, which is how this surfaced.
-        return try doc.select("div.tgme_widget_message[data-post]").compactMap(post(from:))
+        let blocks = try doc.select("div.tgme_widget_message[data-post]")
+        let posts = try blocks.compactMap(post(from:))
+        return Page(posts: posts, skippedBlocks: blocks.count - posts.count)
     }
+
+    public static func parse(html: String) throws -> [Post] { try page(html: html).posts }
 
     static func post(from message: Element) throws -> Post? {
         let dataPost = try message.attr("data-post")

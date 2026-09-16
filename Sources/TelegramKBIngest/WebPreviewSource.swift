@@ -47,6 +47,10 @@ public struct WebPreviewSource: Sendable {
         /// Counted, never silently discarded: none have ever been observed, so a non-zero value
         /// means the page layout changed and the parser's assumptions want re-checking.
         public var foreignBlocks: Int = 0
+        /// Message blocks the parser could not read at all. These are worse than foreign ones:
+        /// the walk still records the highest id it read, so a skipped block below that mark is
+        /// never revisited. A non-zero count means posts are missing from the index.
+        public var unreadableBlocks: Int = 0
     }
 
     public enum CrawlError: Error, CustomStringConvertible {
@@ -88,7 +92,7 @@ public struct WebPreviewSource: Sendable {
         // about older history. Conflating the two let a single repeated page seal a partial
         // backfill as complete, and a completed backfill is never re-walked.
         var reachedEnd = false, reachedSince = false
-        var foreignBlocks = 0
+        var foreignBlocks = 0, unreadableBlocks = 0
         var rawChannelID: Int64?
 
         while pages < maxPages {
@@ -114,7 +118,9 @@ public struct WebPreviewSource: Sendable {
                                                     finalURL: result.finalURL.absoluteString)
             }
 
-            let parsed = try WebPreviewParser.parse(html: result.body)
+            let page = try WebPreviewParser.page(html: result.body)
+            unreadableBlocks += page.skippedBlocks
+            let parsed = page.posts
             // Keep only this channel's blocks. A foreign block carries another channel's
             // `data-post`, so writing it would fail the post → channel foreign key and take the
             // whole sync down with it — the page would be unreadable rather than partly useful.
@@ -170,7 +176,8 @@ public struct WebPreviewSource: Sendable {
             rawChannelID: rawChannelID,
             reachedEnd: reachedEnd,
             reachedSince: reachedSince,
-            foreignBlocks: foreignBlocks)
+            foreignBlocks: foreignBlocks,
+            unreadableBlocks: unreadableBlocks)
     }
 
 }

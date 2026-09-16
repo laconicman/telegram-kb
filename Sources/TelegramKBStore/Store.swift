@@ -177,11 +177,14 @@ public struct Store: Sendable {
         }
         if let a = post.authorName { extras.append(a) }
 
-        let word = TextNormalizer.indexContent(text: post.text, extras: extras)
+        let indexed = TextNormalizer.indexed(text: post.text, extras: extras)
         // Trigram serves substring, so it gets the folded surface text without lemmas —
         // lemmas would add noise to substring matching without helping it.
         let sub = TextNormalizer.foldYo(([post.text] + extras).joined(separator: "\n"))
-        try db.execute(sql: "INSERT INTO postFTS (rowid, content) VALUES (?,?)", arguments: [rowid, word])
+        // Separate columns: a phrase cannot straddle the surface text and the lemmas, which it
+        // could when a newline was the only thing between them (see Schema, v4).
+        try db.execute(sql: "INSERT INTO postFTS (rowid, content, lemmas) VALUES (?,?,?)",
+                       arguments: [rowid, indexed.surface, indexed.lemmas])
         try db.execute(sql: "INSERT INTO postTrigram (rowid, content) VALUES (?,?)", arguments: [rowid, sub])
     }
 

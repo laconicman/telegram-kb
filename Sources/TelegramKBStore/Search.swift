@@ -15,8 +15,11 @@ extension Store {
     /// The query is normalised the same way the index was — folded, then lemmatised — so an
     /// inflected query matches an inflected post in either direction. Skipping either step makes
     /// recall *worse* than Telegram's own search on Russian, which is the whole of `TD-4`.
+    /// - Parameter limit: the most hits to return, or `nil` for every match. A NEGATIVE limit is
+    ///   clamped to zero rather than passed through: SQLite reads a negative `LIMIT` as unlimited,
+    ///   so `-1` would quietly return the whole corpus to a caller asking for less than nothing.
     public func searchWords(_ query: String, limit: Int? = 50) throws -> [Hit] {
-        try dbPool.read { db in try Self.wordHits(query, limit: limit, in: db) }
+        try dbPool.read { db in try Self.wordHits(query, limit: limit.map { max(0, $0) }, in: db) }
     }
 
     /// Takes a `Database`, not the pool, so it cannot open a snapshot of its own — callers that
@@ -38,14 +41,16 @@ extension Store {
             let terms = TextNormalizer.lemmas(folded) ?? folded
             word = try? FTS5Pattern(matchingAllTokensIn: terms)
         } else {
-            let lemmatised = parsed.phrases.map { TextNormalizer.lemmas($0) }
-            word = QueryParser.expression(parsed, lemmatised: lemmatised)
-                .flatMap { try? FTS5Pattern(rawPattern: $0) }
+            word = QueryParser.expression(parsed,
+                                          phraseLemmas: parsed.phrases.map { TextNormalizer.lemmas($0) },
+                                          tokenLemmas: parsed.tokens.map { TextNormalizer.lemmas($0) })
+                .flatMap { try? FTS5Pattern(rawPattern: $0, allowedColumns: ["content", "lemmas"]) }
         }
 
         // Substring search is literal by nature, so the quote characters are noise: match what was
-        // inside them. `«вёрстка»` and `вёрстка` are the same substring request.
-        let literal = (parsed.phrases + parsed.tokens).joined(separator: " ")
+        // inside them, in the order they were typed. `«вёрстка»` and `вёрстка` are the same
+        // substring request; `swift "чистая архитектура"` is not the same as the phrase first.
+        let literal = parsed.pieces.joined(separator: " ")
         let substring = literal.count >= 3 ? FTS5Pattern(matchingPhrase: literal) : nil
         return (word, substring)
     }
@@ -61,8 +66,10 @@ extension Store {
 
     /// Substring search over the `trigram` index — the thing Telegram's search cannot do at all
     /// (`imation` returns 0 there, 14 here).
+    /// - Parameter limit: as ``searchWords(_:limit:)`` — `nil` means every match, and a negative
+    ///   value is clamped to zero rather than read by SQLite as unlimited.
     public func searchSubstring(_ query: String, limit: Int? = 50) throws -> [Hit] {
-        try dbPool.read { db in try Self.substringHits(query, limit: limit, in: db) }
+        try dbPool.read { db in try Self.substringHits(query, limit: limit.map { max(0, $0) }, in: db) }
     }
 
     static func substringHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
