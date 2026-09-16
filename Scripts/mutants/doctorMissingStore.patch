@@ -1,0 +1,15 @@
+diff --git a/Sources/tgkb/Doctor.swift b/Sources/tgkb/Doctor.swift
+index e7a89cc..491a6b1 100644
+--- a/Sources/tgkb/Doctor.swift
++++ b/Sources/tgkb/Doctor.swift
+@@ -40,8 +40,8 @@ struct Doctor: AsyncParsableCommand {
+         // machine where that file has been cleaned up, which is the whole of TD-6.
+ 
+         guard FileManager.default.fileExists(atPath: path) else {
+-            print("  exists:            false  <- nothing to check; run `tgkb sync` first")
+-            return false
++            print("  exists:            false")
++            return true
+         }
+         print("  exists:            true")
+ 

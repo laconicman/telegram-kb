@@ -121,8 +121,10 @@ an MCP client in the loop.
 **Delivered in PR #1, through seven Devin review rounds: 37 findings, 0 false positives.** Every one
 of those rounds found a bug in crawl-state handling, and in two of them some findings were bugs
 the previous round's fixes had introduced. So the state decisions now live in `Store.CrawlState` as pure,
-tested functions, and every fix gets a mutation check: the fix is reverted and its test must
-fail. The review lessons are encoded in `REVIEW.md`.
+tested functions, and every fix gets a mutation check: the fix is reverted and its test must fail.
+Those checks stopped being hand-run in round 8 — `Scripts/mutation-check.sh` replays them from
+`Scripts/mutants/*.patch`, each patch putting one fixed bug back. The review lessons are encoded
+in `REVIEW.md`.
 
 ### S6 — `tgkb-mcp`
 **Load the `mcp-builder` skill first** — it is from `anthropics/skills`, already installed, and

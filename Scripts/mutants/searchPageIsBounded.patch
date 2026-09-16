@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 881f55a..60df046 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -93,7 +93,7 @@ extension Store {
+                     if hits.count == cap { break }
+                 }
+             }
+-            return SearchResults(hits: hits, total: try Self.matchCount(query, mode: mode, in: db))
++            return SearchResults(hits: hits, total: hits.count)
+         }
+     }
+ 

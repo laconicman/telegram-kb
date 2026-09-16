@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewParser.swift b/Sources/TelegramKBIngest/WebPreviewParser.swift
+index a8d321e..5068ee2 100644
+--- a/Sources/TelegramKBIngest/WebPreviewParser.swift
++++ b/Sources/TelegramKBIngest/WebPreviewParser.swift
+@@ -93,7 +93,7 @@ public enum WebPreviewParser {
+         let doc = try SwiftSoup.parse(html)
+         for element in try doc.select("div.tgme_widget_message[data-view][data-post]") {
+             let owner = try element.attr("data-post").split(separator: "/").first.map(String.init)
+-            guard owner?.lowercased() == channel.lowercased() else { continue }
++            _ = owner
+             let encoded = try element.attr("data-view")
+             let padded = encoded.padding(toLength: ((encoded.count + 3) / 4) * 4,
+                                          withPad: "=", startingAt: 0)

@@ -96,9 +96,16 @@ swift build --traits TDLib       # adds the TDLib ingestion source
 
 ## Reviewing
 
-`REVIEW.md` lists what a reviewer here should look hardest at. It was built from the bug classes
-that five rounds of automated review actually found. `Scripts/check-invariants.sh` must pass
-before every commit.
+`REVIEW.md` lists what a reviewer here should look hardest at, built from the bug classes that
+eight rounds of automated review actually found. `Scripts/check-invariants.sh` must pass before
+every commit.
+
+```bash
+./Scripts/mutation-check.sh    # puts each fixed bug back, and proves its test fails
+```
+
+Every regression test here is expected to fail when its fix is reverted; a test that passes either
+way is not one. The mutants in `Scripts/mutants/` are those proofs, replayable.
 
 ## Licence
 

@@ -560,3 +560,23 @@ extension StoreTests {
         #expect(try second.channelUsernames() == ["held", "waited"])
     }
 }
+
+/// Round-8: the claim that a combined page can come back short of `limit` while more
+/// substring-only matches exist. The bound that decides it: substring candidates are fetched
+/// only when the word page did NOT fill, and that is exactly when the word set is complete — so
+/// at most `words.count` of those candidates can be duplicates.
+extension StoreTests {
+    @Test("a combined page is never short while more matches exist",
+          arguments: [1, 2, 3, 5, 9, 10, 11, 20, 31, 40, 50])
+    func combinedPageIsNeverShort(limit: Int) throws {
+        let (store, _) = try Self.seeded()
+        // Heavy overlap on purpose: 30 posts match both indexes, 5 match only the trigram one.
+        try store.upsert(posts: (1...30).map { Self.post($0, "swift core swift \($0)") }
+                       + (31...35).map { Self.post($0, "SwiftUI layout \($0)") })
+        let page = try store.search("swift", mode: .both, limit: limit)
+        #expect(page.total == 35)
+        #expect(page.hits.count == min(limit, page.total),
+                "a page must fill while matches remain (limit \(limit))")
+        #expect(Set(page.hits.map(\.id)).count == page.hits.count, "no duplicates across indexes")
+    }
+}
