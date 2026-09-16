@@ -118,7 +118,7 @@ an MCP client in the loop.
 
 **Done:** `G1`–`G10` in `evals/golden-queries.md` are runnable and produce numbers.
 
-**Delivered in PR #1, through five Devin review rounds: 27 findings, 0 false positives.** Every one
+**Delivered in PR #1, through seven Devin review rounds: 37 findings, 0 false positives.** Every one
 of those rounds found a bug in crawl-state handling, and in two of them some findings were bugs
 the previous round's fixes had introduced. So the state decisions now live in `Store.CrawlState` as pure,
 tested functions, and every fix gets a mutation check: the fix is reverted and its test must
@@ -203,8 +203,7 @@ TDLib lives once MCP needs it — the four options are in <doc:Design>, unanswer
 
 ## Publication
 
-The repository is private and **goes public only when the maintainer says so**. Decisions already
-taken, so they are not re-asked:
+**Public since 2026-09-16.** Decisions taken before that, recorded so they are not re-asked:
 
 | Question | Decision |
 |---|---|
@@ -214,9 +213,12 @@ taken, so they are not re-asked:
 | DeepWiki | Badge added ahead of publication so the wiki indexes and auto-refreshes. |
 | Captured third-party content | Fixtures and corpus URLs are other people's posts, included as test data and excluded from the licence grant — said in `README.md`. |
 
-Open at publication time:
+Still open now that it is public:
 
 - Check the first generated DeepWiki against `.devin/wiki.json` — steering has no success signal.
+- GitHub's licence detection reports none for this repository despite `LICENSE` holding the
+  canonical Apache-2.0 text; re-check, and if it persists the file may need to be the only thing
+  GitHub looks at (name, or a stray trailing edit).
 - `TD-15` (`robots.txt`) stays deferred by the maintainer's decision until this is production
   ready. `tgkb` itself fetches only `t.me`, which publishes no `robots.txt`;
   `Scripts/resolve_urls.py` is the part that requests third-party hosts.

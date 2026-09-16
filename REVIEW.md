@@ -10,8 +10,8 @@ there rather than re-arguing the decision.
 - Flag a change to `Store.CrawlState` in `Sources/TelegramKBStore/Store.swift` that is not traced
   through four walks interrupted after one page: first backfill, resumed backfill, incremental,
   `--full`.
-- Flag any path in `Sources/tgkb/Sync.swift` that stores a `highestMessageID` above an id the
-  walk has not yet fetched.
+- Flag any path in `Sources/TelegramKBSync/ChannelSync.swift` that stores a `highestMessageID`
+  above an id the walk has not yet fetched.
 - Flag `backfillComplete` becoming true from anything but `reachedEnd` in
   `Sources/TelegramKBIngest/WebPreviewSource.swift` — not the page cap, a repeated page, or `since`.
 - Flag a non-2xx response that is parsed instead of thrown in
@@ -20,8 +20,8 @@ there rather than re-arguing the decision.
   `Sources/TelegramKBIngest/ChannelClassifier.swift`; it reads as an unresolvable channel.
 - Flag a post write and a crawl-state write in separate `dbPool.write` calls; both belong in one
   `Store.commitPage` transaction. One exception, and only this one: the final state write in
-  `Sources/tgkb/Sync.swift` after a walk ends, because completion is knowable only once the walk
-  stops — a crash before it costs a re-crawl, never a false completion.
+  `Sources/TelegramKBSync/ChannelSync.swift` after a walk ends, because completion is knowable
+  only once the walk stops — a crash before it costs a re-crawl, never a false completion.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
@@ -32,10 +32,12 @@ there rather than re-arguing the decision.
 
 ## Conventions
 
-- Require a test that fails without the fix for every fix in `Sources/`. Flag a test asserting
+- Require a test that fails without the fix for every fix in `Sources/`, and require the test to
+  FAIL when the fix is reverted — a repro that fails for another reason proves nothing. Flag a test asserting
   only that a walk stopped, without asserting the `Store.CrawlState` it left.
-- Flag a channel username reaching `Store` without `.lowercased()` in `Sources/tgkb/Sync.swift`,
-  `Sources/tgkb/Doctor.swift` or `Sources/TelegramKBIngest/WebPreviewParser.swift`.
+- Flag a channel username reaching `Store` without `.lowercased()` in
+  `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
+  `Sources/TelegramKBIngest/WebPreviewParser.swift`.
 - Require `Store.ensureChannel` before the first `commitPage` for a channel; `post` has a foreign
   key to `channel`.
 - Flag `upsert(channel:)` with a placeholder `rawChannelID` of 0; it overwrites a learned id.

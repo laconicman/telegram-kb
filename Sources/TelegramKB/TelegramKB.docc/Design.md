@@ -575,8 +575,9 @@ Two related rules, same principle — **only a walk that actually reached the en
   a name that does not exist, so the throw never replaces a real classification.)
 
 These decisions live in `Store.CrawlState` — `since`, `resumeFrom`, `afterPage`, `afterWalk` —
-as pure functions, because four review rounds of watermark bugs all lived in the sync loop of an
-executable no test could reach.
+as pure functions, and the loop that sequences them lives in `TelegramKBSync.ChannelSync`. Both
+moved out of the `tgkb` executable for the same reason: six review rounds of crawl-state bugs, in
+code no test could import. `tgkb sync` is now argument parsing and printing.
 
 **Pages are also not retained when a callback consumes them.** Accumulating the whole channel to
 hand back at the end would defeat the per-page commit it exists alongside; `postCount` carries

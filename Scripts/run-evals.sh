@@ -22,6 +22,7 @@ TGKB="${TGKB:-./.build/release/tgkb}"
 # fix. Count the ERR values instead, where they are actually visible.
 errors=0
 failures=0
+misses=0
 ERRLOG=$(mktemp)
 trap 'rm -f "$ERRLOG"' EXIT
 
@@ -55,11 +56,16 @@ verdict() { # <hits> <test> <pass-text> <fail-text>
   elif eval "[ $1 $2 ]"; then echo "$3"
   else echo "$4"; fi
 }
+# The acceptance criteria, named here rather than inferred from the verdict text: G1 guards TD-4's
+# discharge (Russian lemmas), G3 guards TD-10's (ё folding), G10 is the confabulation bar. The rest
+# are measurements — a miss is reported loudly and does not fail the run.
+REQUIRED="G1 G3 G10"
 row() {
   [ "$3" = "ERR" ] && errors=$((errors + 1))
-  # A verdict beginning FAIL belongs to a query with a REQUIRED threshold (G1, G3, G10). It
-  # printed FAIL and changed nothing, so the run exited 0 while missing its acceptance criteria.
-  case "$4" in FAIL*) failures=$((failures + 1)) ;; esac
+  case " $REQUIRED " in
+    *" $1 "*) case "$4" in FAIL*) failures=$((failures + 1)) ;; esac ;;
+    *)        case "$4" in FAIL*) misses=$((misses + 1)) ;; esac ;;
+  esac
   printf "%-5s %-28s %6s  %s\n" "$1" "$2" "$3" "$4"
 }
 
@@ -87,7 +93,10 @@ if [ "$errors" -gt 0 ]; then
   [ -s "$ERRLOG" ] && echo "last error: $(tail -1 "$ERRLOG")" >&2
 fi
 if [ "$failures" -gt 0 ]; then
-  echo "$failures required quer(y|ies) MISSED their threshold — this is a FAIL, not a note." >&2
+  echo "$failures REQUIRED quer(y|ies) ($REQUIRED) missed their threshold — this is a FAIL." >&2
+fi
+if [ "$misses" -gt 0 ]; then
+  echo "note: $misses measured quer(y|ies) missed their target; not required, but worth reading." >&2
 fi
 if [ "$errors" -gt 0 ] || [ "$failures" -gt 0 ]; then exit 1; fi
 echo "G5/G6/G7 are natural-language and cross-channel cases; they need the MCP surface (S6)."

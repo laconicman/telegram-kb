@@ -1,7 +1,9 @@
 # Upstream draft — pagination for `tools/call`
 
-**Status: DRAFT, not posted.** Target: [modelcontextprotocol#229 — *Pagination for tool/call*](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/229),
-open since 2025-03-26, five comments, still unresolved. Post only on the maintainer's say-so.
+**Status: POSTED 2026-09-16** as [issue comment 5695663852](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/229#issuecomment-5695663852)
+on [modelcontextprotocol#229 — *Pagination for tool/call*](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/229),
+open since 2025-03-26. This file is the working draft; the posted comment is the edited version of
+it. Anything further on that thread is a reply, not a new comment.
 
 ## Why we have something to add
 

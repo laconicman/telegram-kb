@@ -35,6 +35,9 @@ struct Doctor: AsyncParsableCommand {
         let writable = FileManager.default.isWritableFile(atPath: directory.path)
         print("  directory writable: \(writable)"
             + (writable ? "" : "  <- a read-only open will fail with 'attempt to write a readonly database'"))
+        // Not an early return: an existing -shm file lets today's open succeed, so the remaining
+        // checks still carry information. It is still a failure — `tgkb-mcp` will fail on a
+        // machine where that file has been cleaned up, which is the whole of TD-6.
 
         guard FileManager.default.fileExists(atPath: path) else {
             print("  exists:            false  <- nothing to check; run `tgkb sync` first")
@@ -57,7 +60,7 @@ struct Doctor: AsyncParsableCommand {
         print("  read-only open:    ok (queryable)")
 
         try reportIntegrity(db)
-        return true
+        return writable
     }
 
     /// Integrity: ids are a dense sequence, posts are not dense within it. An album covers

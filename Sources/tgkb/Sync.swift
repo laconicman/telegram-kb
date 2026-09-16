@@ -3,6 +3,7 @@ import Foundation
 import TelegramKBIngest
 import TelegramKBModel
 import TelegramKBStore
+import TelegramKBSync
 
 /// Crawls channels and writes them to the store.
 struct Sync: AsyncParsableCommand {
@@ -36,6 +37,19 @@ struct Sync: AsyncParsableCommand {
         }
     }
 
+    /// Why a channel was not crawled, in the words the person running it needs.
+    static func explain(_ reachability: Channel.Reachability) -> String {
+        switch reachability {
+        case .previewDisabled:
+            // Its embeds still render a frame, but body text and media are withheld, so there is
+            // nothing worth indexing until TDLib.
+            "web preview disabled by the owner — needs TDLib (Phase 2)"
+        case .group:      "a group, not a broadcast channel — needs TDLib (Phase 2)"
+        case .unresolvable: "not publicly resolvable"
+        case .webPreview: "crawlable"
+        }
+    }
+
     func run() async throws {
         try store.ensureDirectory()
         let db = try Store.openForWriting(at: store.databasePath)
@@ -60,80 +74,18 @@ struct Sync: AsyncParsableCommand {
         }
 
         let fetcher = URLSessionPageFetcher(delay: .seconds(delay))
-        let source = WebPreviewSource(fetcher: fetcher)
+        let sync = ChannelSync(store: db, fetcher: fetcher)
 
-        // Same normalisation as WebPreviewParser: Telegram usernames are case-insensitive ASCII,
-        // and a mismatch with the parsed `data-post` fails the post→channel foreign key.
-        for channel in channels.map({ $0.lowercased() }) {
-            switch try await ChannelClassifier(fetcher: fetcher).classify(channel) {
-            case .webPreview:
-                break
-            case .previewDisabled:
-                // Its embeds still render a frame, but body text and media are withheld, so
-                // there is nothing worth indexing until TDLib.
-                FileHandle.standardError.write(Data(
-                    "\(channel): web preview disabled by the owner — needs TDLib (Phase 2)\n".utf8))
-                continue
-            case .group:
-                FileHandle.standardError.write(Data(
-                    "\(channel): a group, not a broadcast channel — needs TDLib (Phase 2)\n".utf8))
-                continue
-            case .unresolvable:
-                FileHandle.standardError.write(Data(
-                    "\(channel): not publicly resolvable\n".utf8))
+        // The loop itself lives in `TelegramKBSync`, where tests can drive it. What stays here is
+        // what a CLI owns: arguments, and words on a terminal.
+        for channel in channels {
+            let outcome = try await sync.sync(channel: channel, full: full)
+            if let skipped = outcome.skipped {
+                FileHandle.standardError.write(Data("\(outcome.channel): \(Self.explain(skipped))\n".utf8))
                 continue
             }
-
-            // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign
-            // key, and writing per page means posts now arrive during the crawl rather than
-            // after it. `rawChannelID` is only known once a page has been parsed, so this row is
-            // written twice — placeholder first, real id after. The upsert makes that free.
-            // Insert-if-absent, NOT upsert: an upsert would overwrite a previously-learned
-            // rawChannelID with the placeholder, and a crawl that then failed would leave the
-            // false identity stored.
-            try db.ensureChannel(username: channel, reachability: .webPreview)
-
-            // One source of truth: the channel row, in the same database as the posts.
-            //
-            // A side watermark file drifts. Deleting the store while the file survived left a
-            // channel with 17 posts and a mark of 181, and sync dutifully "resumed" — skipping
-            // the backfill entirely. Deriving the mark from the store does not help either,
-            // because the gap is *below* the mark. Only `backfillComplete`, written beside the
-            // posts it describes, distinguishes "up to date" from "never finished".
-            // What each page and the finished walk may record is decided by `CrawlState` in the
-            // store, where it is unit-tested — three review rounds of watermark bugs all lived in
-            // this loop, which no test could reach.
-            let state = try db.crawlState(forChannel: channel)
-            let since = state.since(full: full)
-
-            let result = try await source.crawl(channel: channel, since: since,
-                                                resumeFrom: state.resumeFrom(full: full)) { posts, mark in
-                // One transaction per page: posts and the state that describes them commit
-                // together, so an interruption cannot leave a mark for posts never written.
-                // Edits are not refreshed on an incremental run: what was cached is what the
-                // citation said when it was indexed. `--full` overwrites, so a deliberate
-                // re-crawl still repairs anything captured wrong.
-                let next = state.afterPage(lowest: mark.lowestMessageID,
-                                           highest: mark.highestMessageID, full: full)
-                try db.commitPage(posts, channel: channel, lowest: next.lowest,
-                                  highest: next.highest, backfillComplete: next.backfillComplete,
-                                  policy: full ? .replace : .keepExisting)
-            }
-            if let raw = result.rawChannelID {
-                try db.updateIdentity(channel: channel, rawChannelID: raw, reachability: .webPreview)
-            }
-            // No final rewrite of posts: every page was committed by the callback above, and
-            // `crawl` does not retain them when one is given.
-            let fetched = result.postCount > 0
-            let final = state.afterWalk(
-                lowest: fetched ? result.watermark.lowestMessageID : nil,
-                highest: fetched ? result.watermark.highestMessageID : nil, full: full,
-                reachedEnd: result.reachedEnd, reachedSince: result.reachedSince)
-            try db.recordCrawlState(channel: channel, lowest: final.lowest,
-                                   highest: final.highest, backfillComplete: final.backfillComplete)
-
-            print("\(channel): \(result.postCount) posts, \(result.pagesFetched) pages"
-                + (since.map { ", since \($0)" } ?? ", full backfill"))
+            print("\(outcome.channel): \(outcome.postCount) posts, \(outcome.pagesFetched) pages"
+                + (outcome.since.map { ", since \($0)" } ?? ", full backfill"))
         }
     }
 }
