@@ -216,9 +216,9 @@ TDLib lives once MCP needs it — the four options are in <doc:Design>, unanswer
 Still open now that it is public:
 
 - Check the first generated DeepWiki against `.devin/wiki.json` — steering has no success signal.
-- GitHub's licence detection reports none for this repository despite `LICENSE` holding the
-  canonical Apache-2.0 text; re-check, and if it persists the file may need to be the only thing
-  GitHub looks at (name, or a stray trailing edit).
+- GitHub's licence detection reports none, because it reads the **default branch** and `LICENSE`
+  currently exists only on the PR branch. It resolves on merge — the file itself is byte-identical
+  to `apache.org/licenses/LICENSE-2.0.txt` (sha256 `cfc7749b…`), verified against the source.
 - `TD-15` (`robots.txt`) stays deferred by the maintainer's decision until this is production
   ready. `tgkb` itself fetches only `t.me`, which publishes no `robots.txt`;
   `Scripts/resolve_urls.py` is the part that requests third-party hosts.
