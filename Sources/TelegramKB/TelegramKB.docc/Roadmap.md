@@ -152,6 +152,26 @@ startup.
 - Keep `strict` initialisation on, check `Task.isCancelled` in handlers, and keep each
   `dbPool.read` short. A long read holds a stale snapshot and blocks WAL checkpoints.
 
+**Settled before writing any of it, after a prospective DeepWiki review of this plan**
+([conversation](https://deepwiki.com/search/i-am-planning-the-next-slice-s_fb2c1572-dfc1-45e4-aab6-30dabe7e8750?mode=deep),
+2026-09-20 — it reads the default branch, so it judged the plan against the code and the docs,
+which is exactly what a prospective ask is for):
+
+- **This slice needs new `TelegramKBStore` API** — channel, date and kind filters, a cursor, a
+  count — and the track table below says Track C never touches that target. The boundary wins over
+  the convenience: those additions are **Track A work, done first and separately**, and S6 consumes
+  them. Discovering this mid-slice would have been scope creep wearing a deadline.
+- **`find_links` keys on `url_canonical` AND searches `effective_url`.** The Roadmap said the
+  former and Design says the join key is the latter; a tool that searched only the canonical form
+  would silently miss the 17% of URLs whose key changes on resolution — the very failure
+  `S3.5` existed to remove. It returns `url_canonical`, because that is the form the maintainer
+  asked to see, with the resolved target beside it.
+- **Channel parameters take one round-trippable string**, the same literal the record emits
+  (`@username`), per Design § *MCP tool surface*. No id/hash/type triple, no resolve call inside
+  the model's loop.
+- **`Scripts/check-invariants.sh` is part of this slice's done test**, not a habit: `tgkb-mcp`'s
+  closure is the one invariant a new target can break silently.
+
 **Done:** Claude answers "what has anyone shared about X" with cited `t.me` links.
 
 ---
