@@ -118,11 +118,12 @@ an MCP client in the loop.
 
 **Done:** `G1`–`G10` in `evals/golden-queries.md` are runnable and produce numbers.
 
-**Delivered in PR #1, through nine Devin review rounds: 40 findings, 1 false positive.** Every one
+**Delivered in PR #1, through thirteen Devin review rounds: 34 inline findings, exactly one of
+which did not reproduce.** Every one
 of those rounds found a bug in crawl-state handling, and in two of them some findings were bugs
 the previous round's fixes had introduced. So the state decisions now live in `Store.CrawlState` as pure,
 tested functions, and every fix gets a mutation check: the fix is reverted and its test must fail.
-Those checks stopped being hand-run in round 8 — `Scripts/mutation-check.sh` replays 19 of them
+Those checks stopped being hand-run in round 8 — `Scripts/mutation-check.sh` replays 29 of them
 from `Scripts/mutants/*.patch`, each patch putting one fixed bug back. The review lessons are encoded
 in `REVIEW.md`.
 
