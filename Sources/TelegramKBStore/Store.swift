@@ -149,6 +149,30 @@ public struct Store: Sendable {
         try indexForSearch(post, into: db)
     }
 
+    /// Re-indexes every mapped post, and drops mappings that no longer point at one.
+    ///
+    /// Used by the `v4` migration, which recreates `postFTS` and so must refill it. A mapping
+    /// whose post has gone is deleted rather than skipped: skipping leaves a row pointing at
+    /// nothing and a post absent from the index, with nothing anywhere saying so.
+    ///
+    /// - Returns: how many posts were re-indexed, and how many stale mappings were removed.
+    @discardableResult
+    static func rebuildWordIndex(in db: Database) throws -> (indexed: Int, staleRemoved: Int) {
+        let rows = try Row.fetchAll(db, sql: "SELECT rowid, channelUsername, messageID FROM ftsMap")
+        var indexed = 0, stale = 0
+        for row in rows {
+            let id = Post.ID(channelUsername: row["channelUsername"], messageID: row["messageID"])
+            guard let post = try loadPost(id, from: db) else {
+                try db.execute(sql: "DELETE FROM ftsMap WHERE rowid = ?", arguments: [row["rowid"] as Int64])
+                stale += 1
+                continue
+            }
+            try indexForSearch(post, into: db)
+            indexed += 1
+        }
+        return (indexed, stale)
+    }
+
     /// Populates both FTS tables.
     ///
     /// Indexed content is **derived** — folded, lemmatised, and widened with poll text, hashtags

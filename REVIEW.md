@@ -1,7 +1,7 @@
 # Review Guidelines
 
-Every rule below comes from a bug that automated review actually found on this repository (PR #1,
-five rounds, 27 findings, none false). Rationale lives in
+Every rule below comes from a bug that automated review actually found on this repository (PR #1:
+thirteen rounds, 34 inline findings, exactly one of which did not reproduce). Rationale lives in
 `Sources/TelegramKB/TelegramKB.docc/Design.md`: flag a change that contradicts a decision recorded
 there rather than re-arguing the decision.
 
@@ -37,8 +37,8 @@ there rather than re-arguing the decision.
 - Require a mutant in `Scripts/mutants/` — a patch putting the bug back, named after the test it
   must break — for any fix whose failure mode is **silent**: lost posts, a false completion, a
   check that cannot fail, a skipped row, a stale identity. `Scripts/mutation-check.sh` replays
-  them. Fixes to wording, formatting or argument validation do not need one: they fail loudly. Flag a test asserting
-  only that a walk stopped, without asserting the `Store.CrawlState` it left.
+  them. Fixes to wording, formatting or argument validation do not need one: they fail loudly.
+- Flag a test asserting only that a walk stopped, without asserting the `Store.CrawlState` it left.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
   `Sources/TelegramKBIngest/WebPreviewParser.swift`.
@@ -50,8 +50,11 @@ there rather than re-arguing the decision.
 - Flag `try?` around `Store.openForReading` or `Store.openForWriting` in `Sources/tgkb/`.
 - Flag an import path in `Sources/TelegramKBStore/Store.swift` that skips bad rows without
   returning the count.
-- Require a change to `indexContent` in `Sources/TelegramKBStore/TextNormalizer.swift` to carry
-  the matching change to `normalizeQuery`.
+- Require a change to `TextNormalizer.indexed` in `Sources/TelegramKBStore/TextNormalizer.swift`
+  to carry the matching change to `normalizeQuery`: what the index folds, the query must fold.
+- Flag surface text and lemmas written to the same FTS5 column in
+  `Sources/TelegramKBStore/Store.swift`; a phrase would straddle the join and match a post that
+  contains it in neither form.
 - Flag `NLTagger` use without an explicit `setLanguage` in `Sources/TelegramKBStore/`.
 
 ## Anti-patterns to Flag

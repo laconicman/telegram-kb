@@ -711,3 +711,26 @@ extension StoreTests {
         #expect(try store.searchWords("swift", limit: nil).count == 5, "nil still means every match")
     }
 }
+
+/// The `v4` migration recreates `postFTS` and refills it through `rebuildWordIndex`. Found by
+/// self-review: the first version skipped a mapping whose post had gone, leaving a row pointing
+/// at nothing and a post missing from the index with nothing saying so.
+extension StoreTests {
+    @Test("rebuilding the word index re-indexes posts and drops mappings pointing at nothing")
+    func rebuildDropsStaleMappings() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "адаптивная вёрстка"), Self.post(2, "swift concurrency")])
+
+        let report: (indexed: Int, staleRemoved: Int) = try store.dbPool.write { db in
+            // A mapping whose post is gone — what the migration has to cope with.
+            try db.execute(sql: "DELETE FROM post WHERE messageID = 2")
+            return try Store.rebuildWordIndex(in: db)
+        }
+        #expect(report == (indexed: 1, staleRemoved: 1))
+
+        #expect(try store.searchWords("вёрстка").count == 1, "the surviving post is still findable")
+        #expect(try store.dbPool.read { db in
+            try Int.fetchOne(db, sql: "SELECT count(*) FROM ftsMap") } == 1,
+                "the mapping pointing at nothing is gone, not left behind")
+    }
+}

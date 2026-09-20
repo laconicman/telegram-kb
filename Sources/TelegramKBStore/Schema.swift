@@ -166,12 +166,7 @@ public enum Schema {
                 t.column("content")
                 t.column("lemmas")
             }
-            let ids = try Row.fetchAll(db, sql: "SELECT channelUsername, messageID FROM ftsMap")
-            for row in ids {
-                let id = Post.ID(channelUsername: row["channelUsername"], messageID: row["messageID"])
-                guard let post = try Store.loadPost(id, from: db) else { continue }
-                try Store.indexForSearch(post, into: db)
-            }
+            try Store.rebuildWordIndex(in: db)
         }
 
         return m
