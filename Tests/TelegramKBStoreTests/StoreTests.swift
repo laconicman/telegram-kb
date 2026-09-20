@@ -741,3 +741,97 @@ extension StoreTests {
                 "the deleted post must not survive in either index, in the page or in the count")
     }
 }
+
+/// Track A for S6: filters, an opaque cursor, and a `total` that counts what the page can return.
+extension StoreTests {
+
+    static func filterStore() throws -> Store {
+        let (store, _) = try seeded()
+        try store.upsert(channel: Channel(username: "iosdev", rawChannelID: 2))
+        func post(_ channel: String, _ mid: Int, _ text: String, kind: PostKind, day: Int) -> Post {
+            Post(id: .init(channelUsername: channel, messageID: mid),
+                 date: Date(timeIntervalSince1970: 1_700_000_000 + Double(day) * 86_400),
+                 kind: kind, formatSource: .web, mediaCount: 1, text: text)
+        }
+        try store.upsert(posts: (1...12).map { post("iosgr", $0, "swift concurrency \($0)", kind: .text, day: $0) }
+                       + [post("iosgr", 20, "swift photo post", kind: .photo, day: 20)]
+                       + (1...5).map { post("iosdev", $0, "swift elsewhere \($0)", kind: .text, day: $0) })
+        return store
+    }
+
+    @Test("a channel filter narrows the page AND the count together")
+    func filterByChannel() throws {
+        let store = try Self.filterStore()
+        let all = try store.search("swift", mode: .both, limit: 100)
+        #expect(all.total == 18)
+
+        let one = try store.search("swift", mode: .both, filter: .init(channel: "iosdev"), limit: 100)
+        #expect(one.total == 5, "the count must not promise posts the filter excludes")
+        #expect(one.hits.allSatisfy { $0.id.channelUsername == "iosdev" })
+        // Casing is folded at the boundary, as everywhere else.
+        #expect(try store.search("swift", mode: .both, filter: .init(channel: "IOSDev"), limit: 100).total == 5)
+    }
+
+    @Test("kind and date filters narrow to what they name")
+    func filterByKindAndDate() throws {
+        let store = try Self.filterStore()
+        #expect(try store.search("swift", mode: .both, filter: .init(kind: .photo), limit: 100)
+                    .hits.map(\.id.messageID) == [20])
+
+        let firstWeek = Date(timeIntervalSince1970: 1_700_000_000 + 5 * 86_400)
+        let early = try store.search("swift", mode: .both,
+                                     filter: .init(channel: "iosgr", to: firstWeek), limit: 100)
+        #expect(early.total == 5 && early.hits.count == 5, "days 1 to 5 in that channel")
+    }
+
+    /// The page must walk the result set once: no gaps, no repeats, and a cursor that stops.
+    @Test("paging with the cursor covers every hit exactly once")
+    func cursorPagesWithoutGapsOrRepeats() throws {
+        let store = try Self.filterStore()
+        let everything = try store.search("swift", mode: .both, limit: 100)
+
+        var collected: [Post.ID] = []
+        var cursor: String? = nil
+        var pages = 0
+        repeat {
+            let page = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+            #expect(page.total == everything.total, "the total does not drift between pages")
+            collected += page.hits.map(\.id)
+            cursor = page.nextCursor
+            pages += 1
+            #expect(pages < 10, "pagination must terminate")
+        } while cursor != nil
+
+        #expect(collected.count == everything.total)
+        #expect(Set(collected).count == collected.count, "no post appears on two pages")
+        #expect(collected == everything.hits.map(\.id), "and in the same order as one big page")
+    }
+
+    @Test("a cursor belongs to its query, and a foreign or broken one is refused")
+    func cursorIsBoundToItsQuery() throws {
+        let store = try Self.filterStore()
+        let first = try store.search("swift", mode: .both, limit: 5)
+        let cursor = try #require(first.nextCursor)
+
+        // Same cursor, different query — a silent slice of another result set if accepted.
+        #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
+            try store.search("concurrency", mode: .both, limit: 5, cursor: cursor)
+        }
+        // Same query, different filter.
+        #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
+            try store.search("swift", mode: .both, filter: .init(channel: "iosgr"), limit: 5, cursor: cursor)
+        }
+        #expect(throws: Store.SearchError.cursorMalformed) {
+            try store.search("swift", mode: .both, limit: 5, cursor: "not-a-cursor")
+        }
+    }
+
+    @Test("the last page carries no cursor")
+    func lastPageEndsPagination() throws {
+        let store = try Self.filterStore()
+        let onePage = try store.search("swift", mode: .both, limit: 100)
+        #expect(onePage.nextCursor == nil, "everything fitted, so there is nothing to continue")
+        let empty = try store.search("гравитационные волны", mode: .both, limit: 5)
+        #expect(empty.hits.isEmpty && empty.total == 0 && empty.nextCursor == nil)
+    }
+}

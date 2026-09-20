@@ -55,13 +55,15 @@ extension Store {
         return (word, substring)
     }
 
-    static func wordHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
+    static func wordHits(_ query: String, limit: Int?, filter: SearchFilter = .init(),
+                         in db: Database) throws -> [Hit] {
         guard let pattern = patterns(for: query).word else { return [] }
+        let (join, condition, filterArguments) = filter.sql()
         return try Hit.fetchAll(db, sql: """
             SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postFTS) AS rank
-            FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid
-            WHERE postFTS MATCH ? ORDER BY rank LIMIT ?
-            """, arguments: [pattern, limit ?? -1])   // SQLite: a negative LIMIT is no limit
+            FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid \(join)
+            WHERE postFTS MATCH ?\(condition) ORDER BY rank LIMIT ?
+            """, arguments: StatementArguments([pattern] + filterArguments + [limit ?? -1]))
     }
 
     /// Substring search over the `trigram` index — the thing Telegram's search cannot do at all
@@ -72,13 +74,15 @@ extension Store {
         try dbPool.read { db in try Self.substringHits(query, limit: limit.map { max(0, $0) }, in: db) }
     }
 
-    static func substringHits(_ query: String, limit: Int?, in db: Database) throws -> [Hit] {
+    static func substringHits(_ query: String, limit: Int?, filter: SearchFilter = .init(),
+                              in db: Database) throws -> [Hit] {
         guard let pattern = patterns(for: query).substring else { return [] }  // trigram needs 3
+        let (join, condition, filterArguments) = filter.sql()
         return try Hit.fetchAll(db, sql: """
             SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postTrigram) AS rank
-            FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid
-            WHERE postTrigram MATCH ? ORDER BY rank LIMIT ?
-            """, arguments: [pattern, limit ?? -1])
+            FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid \(join)
+            WHERE postTrigram MATCH ?\(condition) ORDER BY rank LIMIT ?
+            """, arguments: StatementArguments([pattern] + filterArguments + [limit ?? -1]))
     }
 
     public enum SearchMode: String, Sendable, CaseIterable {
@@ -89,8 +93,11 @@ extension Store {
         /// Ordered, at most `limit` long.
         public var hits: [Hit]
         /// Every match, before truncation. `hits.count < total` means more exist — never that
-        /// the rest were discarded.
+        /// the rest were discarded. With a filter, it counts only what the filter admits, so it
+        /// can never promise results this page could not return.
         public var total: Int
+        /// Pass back to continue after this page. `nil` when there is nothing after it.
+        public var nextCursor: String?
     }
 
     /// One search across both indexes, with a single merge policy for every caller.
@@ -108,35 +115,60 @@ extension Store {
     ///
     /// **Reads are bounded by `limit`.** `total` comes from `COUNT` queries, so a small page
     /// stays a small page: asking for 20 of `swift` no longer materialises 6,672 rows.
-    public func search(_ query: String, mode: SearchMode, limit: Int) throws -> SearchResults {
+    public func search(_ query: String, mode: SearchMode, filter: SearchFilter = .init(),
+                       limit: Int, cursor: String? = nil) throws -> SearchResults {
         let cap = max(limit, 0)
+        let fingerprint = Cursor.fingerprint(query: query, mode: mode, filter: filter)
+        var offset = 0
+        if let cursor {
+            guard let decoded = Cursor.decode(cursor) else { throw SearchError.cursorMalformed }
+            // A cursor from another query would return a slice of a different result set while
+            // looking like a continuation — the kind of wrongness nobody notices.
+            guard decoded.fingerprint == fingerprint else { throw SearchError.cursorDoesNotMatchQuery }
+            offset = decoded.offset
+        }
+        let end = offset + cap
+
         return try dbPool.read { db in
-            let words = mode == .substring ? [] : try Self.wordHits(query, limit: cap, in: db)
-            var hits = words
-            if mode != .words, hits.count < cap {
-                // Fewer word hits came back than the limit asked for, so the word set is
-                // COMPLETE — which is what makes "not in the word set" mean substring-only here.
-                // Had the page filled, the substring tail would be below the cut anyway.
+            // Read to the END of the page, not to its size: everything before `offset` still has
+            // to be skipped, and the bound stays a page-sized multiple rather than the corpus.
+            let words = mode == .substring ? [] : try Self.wordHits(query, limit: end, filter: filter, in: db)
+            var merged = words
+            if mode != .words, words.count < end {
+                // Fewer word hits came back than the page's end, so the word set is COMPLETE —
+                // which is what makes "not in the word set" mean substring-only. At most
+                // `words.count` of the substring candidates can be duplicates of it, so asking
+                // for that many extra guarantees enough unique ones to fill the page.
                 var seen = Set(words.map(\.id))
-                for hit in try Self.substringHits(query, limit: cap, in: db)
+                for hit in try Self.substringHits(query, limit: end + words.count, filter: filter, in: db)
                 where seen.insert(hit.id).inserted {
-                    hits.append(hit)
-                    if hits.count == cap { break }
+                    merged.append(hit)
+                    if merged.count == end { break }
                 }
             }
-            return SearchResults(hits: hits, total: try Self.matchCount(query, mode: mode, in: db))
+            let page = Array(merged.dropFirst(offset).prefix(cap))
+            let total = try Self.matchCount(query, mode: mode, filter: filter, in: db)
+            let consumed = offset + page.count
+            return SearchResults(hits: page, total: total,
+                                 nextCursor: consumed < total && !page.isEmpty
+                                     ? Cursor.encode(offset: consumed, fingerprint: fingerprint)
+                                     : nil)
         }
     }
 
     /// Every match, counted in SQLite rather than in Swift. A truncated page reports what it
     /// left behind without the caller holding the rest.
-    static func matchCount(_ query: String, mode: SearchMode, in db: Database) throws -> Int {
+    static func matchCount(_ query: String, mode: SearchMode, filter: SearchFilter = .init(),
+                           in db: Database) throws -> Int {
         let (wordPattern, substringPattern) = patterns(for: query)
+        let (join, condition, filterArguments) = filter.sql()
 
         func count(_ table: String, _ pattern: FTS5Pattern?) throws -> Int {
             guard let pattern else { return 0 }
-            return try Int.fetchOne(db, sql: "SELECT count(*) FROM \(table) WHERE \(table) MATCH ?",
-                                    arguments: [pattern]) ?? 0
+            return try Int.fetchOne(db, sql: """
+                SELECT count(*) FROM \(table) JOIN ftsMap m ON m.rowid = \(table).rowid \(join)
+                WHERE \(table) MATCH ?\(condition)
+                """, arguments: StatementArguments([pattern] + filterArguments)) ?? 0
         }
         switch mode {
         case .words: return try count("postFTS", wordPattern)
@@ -147,9 +179,13 @@ extension Store {
             }
             let both = try Int.fetchOne(db, sql: """
                 SELECT count(*) FROM (
-                  SELECT rowid FROM postFTS WHERE postFTS MATCH ?
-                  INTERSECT SELECT rowid FROM postTrigram WHERE postTrigram MATCH ?)
-                """, arguments: [wordPattern, substringPattern]) ?? 0
+                  SELECT postFTS.rowid FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid \(join)
+                    WHERE postFTS MATCH ?\(condition)
+                  INTERSECT
+                  SELECT postTrigram.rowid FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid \(join)
+                    WHERE postTrigram MATCH ?\(condition))
+                """, arguments: StatementArguments([wordPattern] + filterArguments
+                                                   + [substringPattern] + filterArguments)) ?? 0
             return try count("postFTS", wordPattern) + count("postTrigram", substringPattern) - both
         }
     }
