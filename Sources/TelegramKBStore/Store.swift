@@ -163,7 +163,15 @@ public struct Store: Sendable {
         for row in rows {
             let id = Post.ID(channelUsername: row["channelUsername"], messageID: row["messageID"])
             guard let post = try loadPost(id, from: db) else {
-                try db.execute(sql: "DELETE FROM ftsMap WHERE rowid = ?", arguments: [row["rowid"] as Int64])
+                let rowid: Int64 = row["rowid"]
+                // The mapping is not the only thing left behind. `v4` recreates `postFTS` but not
+                // `postTrigram`, so the trigram row for a vanished post survives a rebuild — and
+                // `matchCount` counts it while the page join through `ftsMap` cannot return it.
+                // A total that disagrees with its own page is the failure `total` exists to
+                // prevent, so all three rows go.
+                try db.execute(sql: "DELETE FROM postFTS WHERE rowid = ?", arguments: [rowid])
+                try db.execute(sql: "DELETE FROM postTrigram WHERE rowid = ?", arguments: [rowid])
+                try db.execute(sql: "DELETE FROM ftsMap WHERE rowid = ?", arguments: [rowid])
                 stale += 1
                 continue
             }

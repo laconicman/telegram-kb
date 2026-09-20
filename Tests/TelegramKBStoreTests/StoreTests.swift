@@ -732,5 +732,12 @@ extension StoreTests {
         #expect(try store.dbPool.read { db in
             try Int.fetchOne(db, sql: "SELECT count(*) FROM ftsMap") } == 1,
                 "the mapping pointing at nothing is gone, not left behind")
+
+        // And every index row with it: the trigram table is NOT recreated by the migration, so a
+        // survivor there would be counted by `matchCount` and missing from the page — a total
+        // that disagrees with what it summarises.
+        let gone = try store.search("concurrency", mode: .both, limit: 10)
+        #expect(gone.hits.isEmpty && gone.total == 0,
+                "the deleted post must not survive in either index, in the page or in the count")
     }
 }
