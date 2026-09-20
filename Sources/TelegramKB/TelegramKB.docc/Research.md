@@ -58,7 +58,11 @@ not with missed pages. `tgkb doctor` reports this per channel.
 
 ### Packaging — `research/spm-traits-binarytarget.md`
 - **SwiftPM traits gate `binaryTarget` downloads.** Trait off: no download, and
-  `show-dependencies` reports the dependency absent from the graph. Verified with a control.
+  `show-dependencies` reports the dependency absent from the graph. Verified with a control, and
+  re-verified 2026-09-21 on a clean clone of `main`: `.build/artifacts` is 0 B.
+- **A gated dependency is still cloned.** Same clean clone: `TDLibFramework` and `TDLibKit`
+  occupy **248 MB** in `.build/repositories` and `.build/checkouts` with the trait off, of 803 MB
+  for all dependencies. The trait gates the *artifact*, not the resolution — see `TD-2`.
 - Scaffold builds clean; `Scripts/check-invariants.sh` passes.
 
 ### TDLib — `research/tdlib-td.md`

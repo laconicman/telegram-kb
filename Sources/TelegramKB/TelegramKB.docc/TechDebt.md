@@ -35,6 +35,15 @@ field-by-field, so drift surfaces as a failed check rather than as quietly worse
 trait-gated and verified not to download with the trait off. Still open: the Xcode resolver, and a
 macOS-only slim artifact (Phase 2).
 
+**Re-measured on a clean clone of `main`, 2026-09-21 — and "Phase 1 pays nothing" was too
+strong.** What the trait genuinely prevents: `.build/artifacts` is **0 B**, so the 343 MiB
+download and its 1.33 GiB expansion never happen, and `swift package show-dependencies` reports
+TDLib absent from the graph. What it does *not* prevent: SwiftPM still **clones the repositories**
+to resolve them — `TDLibFramework` and `TDLibKit` cost **248 MB** of the 803 MB that all clones
+and checkouts occupy after a default build (`.build` totals 1.2 GB). So a contributor who never
+enables the trait still pays a quarter of a gigabyte for it. That is a fifth of what the artifact
+would cost, and worth saying accurately rather than claiming zero.
+
 **The brief's "~300 MB" was low, and the number that matters is a different one.** Measured from
 the shipped artifact's zip central directory (`research/Swiftgram-TDLibFramework.md`):
 
