@@ -1,0 +1,17 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 9134aa5..e50a266 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -162,11 +162,7 @@ public struct Store: Sendable {
+         var indexed = 0, stale = 0
+         for row in rows {
+             let id = Post.ID(channelUsername: row["channelUsername"], messageID: row["messageID"])
+-            guard let post = try loadPost(id, from: db) else {
+-                try db.execute(sql: "DELETE FROM ftsMap WHERE rowid = ?", arguments: [row["rowid"] as Int64])
+-                stale += 1
+-                continue
+-            }
++            guard let post = try loadPost(id, from: db) else { stale += 1; continue }
+             try indexForSearch(post, into: db)
+             indexed += 1
+         }
