@@ -98,6 +98,11 @@ extension Store {
         public var total: Int
         /// Pass back to continue after this page. `nil` when there is nothing after it.
         public var nextCursor: String?
+        /// The corpus changed between the cursor's page and this one, so an offset into the
+        /// result set no longer points where it did: a post may have been skipped or repeated
+        /// across the boundary. Reported rather than hidden; the caller decides whether to
+        /// restart the walk. Always `false` for a first page.
+        public var indexMovedSinceCursor = false
     }
 
     /// One search across both indexes, with a single merge policy for every caller.
@@ -119,13 +124,14 @@ extension Store {
                        limit: Int, cursor: String? = nil) throws -> SearchResults {
         let cap = max(limit, 0)
         let fingerprint = Cursor.fingerprint(query: query, mode: mode, filter: filter)
-        var offset = 0
+        var offset = 0, cursorGeneration: UInt64?
         if let cursor {
             guard let decoded = Cursor.decode(cursor) else { throw SearchError.cursorMalformed }
             // A cursor from another query would return a slice of a different result set while
             // looking like a continuation — the kind of wrongness nobody notices.
             guard decoded.fingerprint == fingerprint else { throw SearchError.cursorDoesNotMatchQuery }
             offset = decoded.offset
+            cursorGeneration = decoded.generation
         }
         let end = offset + cap
 
@@ -147,12 +153,16 @@ extension Store {
                 }
             }
             let page = Array(merged.dropFirst(offset).prefix(cap))
+            // Counted in the SAME read as the page, so the two cannot describe different corpora.
             let total = try Self.matchCount(query, mode: mode, filter: filter, in: db)
+            let generation = try Cursor.generation(in: db)
             let consumed = offset + page.count
-            return SearchResults(hits: page, total: total,
-                                 nextCursor: consumed < total && !page.isEmpty
-                                     ? Cursor.encode(offset: consumed, fingerprint: fingerprint)
-                                     : nil)
+            return SearchResults(
+                hits: page, total: total,
+                nextCursor: consumed < total && !page.isEmpty
+                    ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
+                    : nil,
+                indexMovedSinceCursor: cursorGeneration.map { $0 != generation } ?? false)
         }
     }
 

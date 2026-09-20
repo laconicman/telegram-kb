@@ -290,6 +290,46 @@ whose channel has no username needs the `t.me/c/<rawChannelID>/<id>` form anyway
 will need regardless. Scheduled as `S7` in <doc:Roadmap>, before Phase 2, because TDLib
 reconciliation joins on exactly this id.
 
+## Filtering and paging: what a cursor can and cannot promise
+
+**Decision.** `Store.search` takes a `SearchFilter` (channel, kind, date range) and an opaque
+cursor. The filter joins `post` into the page query **and** the count query; the cursor encodes an
+offset, a fingerprint of the query, and a generation of the corpus.
+
+**The filter is on both or it is on neither.** A `total` counting unfiltered matches would promise
+results the page cannot return — the exact failure `total` was added to prevent. Both run inside
+one `dbPool.read`, so they describe the same snapshot rather than two.
+
+**The cursor is an offset, and says so.** Keyset pagination — "everything after this key" — needs a
+stable total order, and there is none here: `bm25` is computed per index, so word and substring
+ranks are not comparable (§ *Combining the two indexes*). An offset into the merged sequence is
+honest and cheap.
+
+**Its two failure modes are handled differently, on purpose.**
+
+- A cursor from *another* query is **refused**. The fingerprint covers query, mode and filter, so a
+  cursor cannot quietly page through a different result set while looking like a continuation.
+- The corpus *moving* under a walk is **reported, not refused**: `indexMovedSinceCursor`. A sync
+  committing between two pages re-ranks and can push a post across the boundary, skipping or
+  repeating it. Refusing the page would break paging after every sync, which is most of the time;
+  hiding it would make a skipped post silent, which this project does not do. So the page is
+  served and the caller is told the ground moved. The generation is a cheap hash of the newest
+  `lastSyncedAt` and the number of indexed posts.
+
+**What the `post_on_date` and `post_on_kind` indexes actually do here: nothing.** Measured with
+`EXPLAIN QUERY PLAN` on the real corpus, a filtered search drives from the FTS table and probes
+`post` by primary key — FTS5 does not accept predicate pushdown from a joined table, so the filter
+is applied per candidate. Those indexes earn their place for date- or kind-ordered browsing, not
+for filtered search. **The cost, stated:** a selective filter with a broad query walks many FTS
+matches before it can fill a page. At corpus scale that is cheap; it would not be at ten times it.
+
+*Raised by a prospective DeepWiki review before the PR was opened*
+([conversation](https://deepwiki.com/search/prospective-review-before-i-op_f2b869fb-e911-45a8-bd8f-94bc6a297253?mode=deep)),
+which is what the free-review-before-paid-review rule is for. Three of its objections did not apply
+— count and page already share one read, the total already deduplicates through `INTERSECT`, and
+filter values are bound parameters — and the fourth, drift under concurrent writes, is why
+`indexMovedSinceCursor` exists.
+
 ## SQLite + GRDB stays — no challenger cleared the bar
 
 **Decision.** SQLite + GRDB + FTS5, as scaffolded. Reviewed deliberately rather than inherited

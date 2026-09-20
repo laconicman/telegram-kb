@@ -835,3 +835,70 @@ extension StoreTests {
         #expect(empty.hits.isEmpty && empty.total == 0 && empty.nextCursor == nil)
     }
 }
+
+extension StoreTests {
+    /// Paging is where an off-by-one hides. Walk the whole result set at several page sizes and
+    /// in every mode, over a corpus built so the two indexes overlap heavily.
+    @Test("paging covers the result set exactly, at any page size and in any mode",
+          arguments: [1, 2, 3, 7, 18, 50] as [Int])
+    func pagingIsExhaustiveAtEveryPageSize(pageSize: Int) throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: (1...20).map { Self.post($0, "swift concurrency \($0)") }
+                       + (21...25).map { Self.post($0, "SwiftUI only \($0)") })
+
+        for mode in Store.SearchMode.allCases {
+            let whole = try store.search("swift", mode: mode, limit: 1000)
+            var collected: [Post.ID] = []
+            var cursor: String? = nil
+            var guard_ = 0
+            repeat {
+                let page = try store.search("swift", mode: mode, limit: pageSize, cursor: cursor)
+                #expect(page.hits.count <= pageSize)
+                collected += page.hits.map(\.id)
+                cursor = page.nextCursor
+                guard_ += 1
+                #expect(guard_ <= whole.total + 2, "\(mode) at page size \(pageSize) did not terminate")
+            } while cursor != nil
+
+            #expect(collected == whole.hits.map(\.id),
+                    "\(mode) at page size \(pageSize): paged order must equal the single-page order")
+            #expect(Set(collected).count == collected.count, "\(mode): a post appeared twice")
+            #expect(collected.count == whole.total, "\(mode): paging lost \(whole.total - collected.count) hit(s)")
+        }
+    }
+}
+
+extension StoreTests {
+    /// A sync landing between two pages re-ranks the result set, so an offset no longer points
+    /// where it did. The page still comes back — refusing it would break paging after every sync —
+    /// but it says the ground moved, because a silently skipped post is the failure this project
+    /// refuses.
+    @Test("a page served after the corpus moved says so")
+    func pagingReportsCorpusDrift() throws {
+        let store = try Self.filterStore()
+        let first = try store.search("swift", mode: .both, limit: 5)
+        let cursor = try #require(first.nextCursor)
+        #expect(!first.indexMovedSinceCursor, "a first page has nothing to compare against")
+
+        let quiet = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+        #expect(!quiet.indexMovedSinceCursor, "nothing was written between the pages")
+
+        try store.upsert(posts: [Self.post(999, "swift arrived mid-pagination")])
+        let moved = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+        #expect(moved.indexMovedSinceCursor, "the corpus changed under the walk and must say so")
+        #expect(!moved.hits.isEmpty, "and the page is still served, not refused")
+    }
+
+    /// Filter values are bound parameters, never string-built SQL. The sanctioned path for text
+    /// arriving from an LLM tool call, applied to the filter as well as the query.
+    @Test("a filter value cannot break out of its placeholder")
+    func filterValuesAreBound() throws {
+        let store = try Self.filterStore()
+        for hostile in ["iosgr' OR 1=1 --", "'; DROP TABLE post; --", "iosgr\" OR \"\"=\""] {
+            let results = try store.search("swift", mode: .both, filter: .init(channel: hostile), limit: 100)
+            #expect(results.hits.isEmpty && results.total == 0, "\(hostile) matched nothing, as a channel name")
+        }
+        // The table is still there, which is the other half of the assertion.
+        #expect(try store.search("swift", mode: .both, limit: 100).total == 18)
+    }
+}

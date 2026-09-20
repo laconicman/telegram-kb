@@ -56,26 +56,43 @@ extension Store {
     /// The fingerprint binds a cursor to the query and filter that produced it, so a cursor from
     /// one search cannot silently page through another.
     enum Cursor {
-        static func encode(offset: Int, fingerprint: UInt64) -> String {
-            Data("1:\(offset):\(fingerprint)".utf8).base64EncodedString()
+        static func encode(offset: Int, fingerprint: UInt64, generation: UInt64) -> String {
+            Data("2:\(offset):\(fingerprint):\(generation)".utf8).base64EncodedString()
         }
 
-        static func decode(_ text: String) -> (offset: Int, fingerprint: UInt64)? {
+        static func decode(_ text: String) -> (offset: Int, fingerprint: UInt64, generation: UInt64)? {
             guard let data = Data(base64Encoded: text),
                   let decoded = String(data: data, encoding: .utf8) else { return nil }
             let parts = decoded.split(separator: ":")
-            guard parts.count == 3, parts[0] == "1",
+            guard parts.count == 4, parts[0] == "2",
                   let offset = Int(parts[1]), offset >= 0,
-                  let fingerprint = UInt64(parts[2]) else { return nil }
-            return (offset, fingerprint)
+                  let fingerprint = UInt64(parts[2]),
+                  let generation = UInt64(parts[3]) else { return nil }
+            return (offset, fingerprint, generation)
+        }
+
+        /// What the corpus looked like when a page was served.
+        ///
+        /// An offset into a result set is only meaningful while the set holds still. A sync
+        /// committing between two pages re-ranks and can push a post across the page boundary,
+        /// which silently skips or repeats it — and silence is the one outcome this project does
+        /// not accept. So each cursor carries a cheap generation, and a page served against a
+        /// different one says so instead of pretending the walk was clean.
+        static func generation(in db: Database) throws -> UInt64 {
+            let syncedAt = try String.fetchOne(db, sql: "SELECT COALESCE(MAX(lastSyncedAt), '') FROM channel") ?? ""
+            let indexed = try Int.fetchOne(db, sql: "SELECT count(*) FROM ftsMap") ?? 0
+            return hash("\(syncedAt)|\(indexed)")
         }
 
         /// FNV-1a over what the page depends on. Not a security boundary — it catches a cursor
         /// used against a different query, which is a caller mistake, not an attack.
         static func fingerprint(query: String, mode: SearchMode, filter: SearchFilter) -> UInt64 {
-            let material = [query, mode.rawValue, filter.channel ?? "", filter.kind?.rawValue ?? "",
-                            filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
-                            filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""].joined(separator: "\u{1}")
+            hash([query, mode.rawValue, filter.channel ?? "", filter.kind?.rawValue ?? "",
+                  filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
+                  filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""].joined(separator: "\u{1}"))
+        }
+
+        static func hash(_ material: String) -> UInt64 {
             var hash: UInt64 = 0xcbf2_9ce4_8422_2325
             for byte in material.utf8 {
                 hash ^= UInt64(byte)
