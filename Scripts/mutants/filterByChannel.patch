@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 2e00a9f..f99e02c 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -161,7 +161,7 @@ extension Store {
+     static func matchCount(_ query: String, mode: SearchMode, filter: SearchFilter = .init(),
+                            in db: Database) throws -> Int {
+         let (wordPattern, substringPattern) = patterns(for: query)
+-        let (join, condition, filterArguments) = filter.sql()
++        let (join, condition, filterArguments) = ("", "", [] as [any DatabaseValueConvertible])
+ 
+         func count(_ table: String, _ pattern: FTS5Pattern?) throws -> Int {
+             guard let pattern else { return 0 }

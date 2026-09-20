@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 2e00a9f..09a1bf7 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -124,7 +124,7 @@ extension Store {
+             guard let decoded = Cursor.decode(cursor) else { throw SearchError.cursorMalformed }
+             // A cursor from another query would return a slice of a different result set while
+             // looking like a continuation — the kind of wrongness nobody notices.
+-            guard decoded.fingerprint == fingerprint else { throw SearchError.cursorDoesNotMatchQuery }
++            _ = fingerprint
+             offset = decoded.offset
+         }
+         let end = offset + cap
