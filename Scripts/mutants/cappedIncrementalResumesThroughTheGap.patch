@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..01f0615 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -520,6 +520,7 @@ extension Store.CrawlState {
+         // It re-walks already-stored history below the gap; that costs requests, never posts.
+         if incremental && !(reachedSince || reachedEnd) {
+             guard let lowest, let highest else { return self }
++            if lowest > 0 || highest > 0 { return self }
+             return Store.CrawlState(lowest: lowest, highest: Swift.max(highest, self.highest ?? highest),
+                                     backfillComplete: false)
+         }

@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 2cc061d..de45761 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -169,9 +169,7 @@ public struct Store: Sendable {
+                 // `matchCount` counts it while the page join through `ftsMap` cannot return it.
+                 // A total that disagrees with its own page is the failure `total` exists to
+                 // prevent, so all three rows go.
+-                try db.execute(sql: "DELETE FROM postFTS WHERE rowid = ?", arguments: [rowid])
+-                try db.execute(sql: "DELETE FROM postTrigram WHERE rowid = ?", arguments: [rowid])
+-                try db.execute(sql: "DELETE FROM ftsMap WHERE rowid = ?", arguments: [rowid])
++                _ = rowid
+                 stale += 1
+                 continue
+             }

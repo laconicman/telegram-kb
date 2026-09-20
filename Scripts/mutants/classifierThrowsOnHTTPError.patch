@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/ChannelClassifier.swift b/Sources/TelegramKBIngest/ChannelClassifier.swift
+index b9cc2e2..5b72d50 100644
+--- a/Sources/TelegramKBIngest/ChannelClassifier.swift
++++ b/Sources/TelegramKBIngest/ChannelClassifier.swift
+@@ -28,7 +28,7 @@ public struct ChannelClassifier: Sendable {
+     }
+ 
+     static func successful(_ result: FetchResult, _ url: URL) throws -> FetchResult {
+-        guard (200..<300).contains(result.statusCode) else {
++        guard true else {
+             throw WebPreviewSource.CrawlError.http(status: result.statusCode, url: url.absoluteString)
+         }
+         return result

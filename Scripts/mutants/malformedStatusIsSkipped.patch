@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 599e311..4b4c932 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -233,7 +233,7 @@ extension Store {
+                 // Anything else must THROW, so the row counts as unreadable. Falling back to ""
+                 // turned a malformed status into a *failed observation*, and the import then
+                 // overwrote a valid stored resolution with it.
+-                self = .string(try c.decode(String.self))
++                self = .string((try? c.decode(String.self)) ?? "")
+             }
+             var text: String { switch self { case .int(let i): "\(i)"; case .string(let s): s } }
+         }

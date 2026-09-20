@@ -17,6 +17,13 @@ public struct Store: Sendable {
     /// Opens for writing and runs migrations.
     public static func openForWriting(at path: String) throws -> Store {
         var config = Configuration()
+        // SQLite allows ONE writer per database file, across processes. GRDB's default
+        // (`.immediateError`) fails the moment the lock is held, so a second `tgkb sync` died
+        // instantly if its commit landed inside another's — measured: 0.00s to failure without a
+        // timeout, and a wait-then-succeed with one. Page commits last milliseconds, so waiting
+        // is the honest behaviour. It bounds the wait; it does not remove SQLITE_BUSY, and it is
+        // NOT a substitute for keeping one writer per channel (see Design).
+        config.busyMode = .timeout(10)
         config.prepareDatabase { db in
             // Keeps -wal and -shm on disk after the writer closes.
             //
@@ -75,13 +82,19 @@ public struct Store: Sendable {
         }
     }
 
-    public func upsert(posts: [Post]) throws {
+    public func upsert(posts: [Post], policy: WritePolicy = .replace) throws {
         try dbPool.write { db in
-            for post in posts { try Self.write(post, into: db) }
+            for post in posts { try Self.write(post, into: db, policy: policy) }
         }
     }
 
-    static func write(_ post: Post, into db: Database) throws {
+    static func write(_ post: Post, into db: Database, policy: WritePolicy = .replace) throws {
+        if policy == .keepExisting {
+            let exists = try Int.fetchOne(db, sql: """
+                SELECT 1 FROM post WHERE channelUsername = ? AND messageID = ?
+                """, arguments: [post.id.channelUsername, post.id.messageID]) != nil
+            if exists { return }
+        }
         let cu = post.id.channelUsername, mid = post.id.messageID
         try db.execute(sql: """
             INSERT INTO post (channelUsername, messageID, date, kind, formatSource, mediaCount,
@@ -136,6 +149,38 @@ public struct Store: Sendable {
         try indexForSearch(post, into: db)
     }
 
+    /// Re-indexes every mapped post, and drops mappings that no longer point at one.
+    ///
+    /// Used by the `v4` migration, which recreates `postFTS` and so must refill it. A mapping
+    /// whose post has gone is deleted rather than skipped: skipping leaves a row pointing at
+    /// nothing and a post absent from the index, with nothing anywhere saying so.
+    ///
+    /// - Returns: how many posts were re-indexed, and how many stale mappings were removed.
+    @discardableResult
+    static func rebuildWordIndex(in db: Database) throws -> (indexed: Int, staleRemoved: Int) {
+        let rows = try Row.fetchAll(db, sql: "SELECT rowid, channelUsername, messageID FROM ftsMap")
+        var indexed = 0, stale = 0
+        for row in rows {
+            let id = Post.ID(channelUsername: row["channelUsername"], messageID: row["messageID"])
+            guard let post = try loadPost(id, from: db) else {
+                let rowid: Int64 = row["rowid"]
+                // The mapping is not the only thing left behind. `v4` recreates `postFTS` but not
+                // `postTrigram`, so the trigram row for a vanished post survives a rebuild — and
+                // `matchCount` counts it while the page join through `ftsMap` cannot return it.
+                // A total that disagrees with its own page is the failure `total` exists to
+                // prevent, so all three rows go.
+                try db.execute(sql: "DELETE FROM postFTS WHERE rowid = ?", arguments: [rowid])
+                try db.execute(sql: "DELETE FROM postTrigram WHERE rowid = ?", arguments: [rowid])
+                try db.execute(sql: "DELETE FROM ftsMap WHERE rowid = ?", arguments: [rowid])
+                stale += 1
+                continue
+            }
+            try indexForSearch(post, into: db)
+            indexed += 1
+        }
+        return (indexed, stale)
+    }
+
     /// Populates both FTS tables.
     ///
     /// Indexed content is **derived** — folded, lemmatised, and widened with poll text, hashtags
@@ -164,11 +209,14 @@ public struct Store: Sendable {
         }
         if let a = post.authorName { extras.append(a) }
 
-        let word = TextNormalizer.indexContent(text: post.text, extras: extras)
+        let indexed = TextNormalizer.indexed(text: post.text, extras: extras)
         // Trigram serves substring, so it gets the folded surface text without lemmas —
         // lemmas would add noise to substring matching without helping it.
         let sub = TextNormalizer.foldYo(([post.text] + extras).joined(separator: "\n"))
-        try db.execute(sql: "INSERT INTO postFTS (rowid, content) VALUES (?,?)", arguments: [rowid, word])
+        // Separate columns: a phrase cannot straddle the surface text and the lemmas, which it
+        // could when a newline was the only thing between them (see Schema, v4).
+        try db.execute(sql: "INSERT INTO postFTS (rowid, content, lemmas) VALUES (?,?,?)",
+                       arguments: [rowid, indexed.surface, indexed.lemmas])
         try db.execute(sql: "INSERT INTO postTrigram (rowid, content) VALUES (?,?)", arguments: [rowid, sub])
     }
 
@@ -198,8 +246,13 @@ extension Store {
     /// The resolver records the *final* URL; canonicalising it here keeps exactly one
     /// canonicaliser in the system, which is the same reason the script pipes through the Swift
     /// binary rather than reimplementing the spec in Python.
+    public struct ImportReport: Sendable { public var imported: Int; public var skipped: Int }
+
+    /// - Returns: how many rows were imported **and how many were unreadable**. A silent skip
+    ///   turns a truncated or version-skewed file into a successful-looking import missing rows
+    ///   nobody counted.
     @discardableResult
-    public func importResolutions(fromJSONLAt path: String) throws -> Int {
+    public func importResolutions(fromJSONLAt path: String) throws -> ImportReport {
         struct Row: Decodable {
             let url_canonical: String
             let final_url: String
@@ -211,8 +264,11 @@ extension Store {
             case int(Int), string(String)
             init(from d: Decoder) throws {
                 let c = try d.singleValueContainer()
-                if let i = try? c.decode(Int.self) { self = .int(i) }
-                else { self = .string((try? c.decode(String.self)) ?? "") }
+                if let i = try? c.decode(Int.self) { self = .int(i); return }
+                // Anything else must THROW, so the row counts as unreadable. Falling back to ""
+                // turned a malformed status into a *failed observation*, and the import then
+                // overwrote a valid stored resolution with it.
+                self = .string(try c.decode(String.self))
             }
             var text: String { switch self { case .int(let i): "\(i)"; case .string(let s): s } }
         }
@@ -220,8 +276,16 @@ extension Store {
         let text = try String(contentsOfFile: path, encoding: .utf8)
         let iso = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
         var out: [URLResolution] = []
+        var skipped = 0
         for line in text.split(separator: "\n") {
-            guard let row = try? JSONDecoder().decode(Row.self, from: Data(line.utf8)) else { continue }
+            guard let row = try? JSONDecoder().decode(Row.self, from: Data(line.utf8)) else {
+                if !line.trimmingCharacters(in: .whitespaces).isEmpty { skipped += 1 }
+                continue
+            }
+            // An unparseable timestamp makes the row unreadable too. Substituting "now" would
+            // import a malformed observation as the freshest one we have, and re-resolution
+            // decides what to retry by age.
+            guard let resolvedAt = try? iso.parse(row.resolved_at) else { skipped += 1; continue }
             let status = row.http_status?.text
             // A non-2xx outcome is recorded with resolvedCanonical nil: "we checked and it
             // failed" is different information from "we never checked", which is an absent row.
@@ -231,9 +295,276 @@ extension Store {
                 resolvedCanonical: succeeded ? URLCanonicaliser.canonicalise(row.final_url) : nil,
                 httpStatus: status,
                 hops: row.hops,
-                resolvedAt: (try? iso.parse(row.resolved_at)) ?? Date()))
+                resolvedAt: resolvedAt))
         }
         try upsert(resolutions: out)
-        return out.count
+        return ImportReport(imported: out.count, skipped: skipped)
+    }
+}
+
+extension Store {
+    /// Highest message id already stored for a channel, or `nil` if none.
+    ///
+    /// **This is the source of truth for incremental sync, not a checkpoint file.** A separate
+    /// watermark file can drift from the database — delete the store but keep the file and sync
+    /// "resumes" from a mark describing rows that no longer exist, silently skipping the
+    /// backfill. That happened on the first full run. Deriving it from the store makes the
+    /// drift impossible rather than merely unlikely.
+    public func highestMessageID(forChannel username: String) throws -> Int? {
+        try dbPool.read { db in
+            try Int.fetchOne(db, sql: "SELECT MAX(messageID) FROM post WHERE channelUsername = ?",
+                             arguments: [username])
+        }
+    }
+}
+
+extension Store {
+    /// What a channel's crawl already covers. The single source of truth for incremental sync.
+    public struct CrawlState: Sendable, Hashable {
+        public var lowest: Int?
+        public var highest: Int?
+        public var backfillComplete: Bool
+    }
+
+    public func crawlState(forChannel username: String) throws -> CrawlState {
+        try dbPool.read { db in
+            guard let row = try Row.fetchOne(db, sql: """
+                SELECT lowestMessageID, highestMessageID, backfillComplete
+                FROM channel WHERE username = ?
+                """, arguments: [username]) else {
+                return CrawlState(lowest: nil, highest: nil, backfillComplete: false)
+            }
+            return CrawlState(lowest: row["lowestMessageID"], highest: row["highestMessageID"],
+                              backfillComplete: row["backfillComplete"] ?? false)
+        }
+    }
+
+    /// Records crawl progress on the channel row, inside the same database as the posts — so the
+    /// two cannot drift apart the way a side file did.
+    public func recordCrawlState(channel username: String, lowest: Int?, highest: Int?,
+                                 backfillComplete: Bool) throws {
+        try dbPool.write { db in
+            try db.execute(sql: """
+                UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
+                       backfillComplete = ?, lastSyncedAt = ?
+                WHERE username = ?
+                """, arguments: [lowest, highest, backfillComplete, Date(), username])
+        }
+    }
+}
+
+extension Store {
+    /// Ensures a channel row exists **without touching an existing one**.
+    ///
+    /// `upsert(channel:)` overwrites `rawChannelID` on conflict, so using it for the
+    /// foreign-key prerequisite before a crawl would replace a known id with the `0` placeholder
+    /// — and a crawl that then failed would leave the false identity stored, pointing TDLib
+    /// reconciliation at a nonexistent chat. Insert-if-absent has no such failure mode.
+    public func ensureChannel(username: String, reachability: Channel.Reachability) throws {
+        try dbPool.write { db in
+            try db.execute(sql: """
+                INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
+                ON CONFLICT(username) DO NOTHING
+                """, arguments: [username, reachability.rawValue])
+        }
+    }
+
+    /// Records what a crawl learns about a channel's identity, **and nothing else**.
+    ///
+    /// Not `upsert(channel:)`: a crawl knows only the raw id and that the preview works, so a
+    /// full-row upsert writes `nil` over a title or subscriber count another source recorded.
+    public func updateIdentity(channel username: String, rawChannelID: Int64,
+                               reachability: Channel.Reachability) throws {
+        try dbPool.write { db in
+            try db.execute(sql: """
+                UPDATE channel SET rawChannelID = ?, reachability = ? WHERE username = ?
+                """, arguments: [rawChannelID, reachability.rawValue, username])
+        }
+    }
+
+    /// Writes a page of posts and the crawl state it implies **in one transaction**.
+    ///
+    /// Separate writes let an interruption land between them, leaving the watermark describing
+    /// posts that were never committed — extra recrawling at best, and a claim of "one
+    /// transaction scope" that was not true.
+    public func commitPage(_ posts: [Post], channel: String, lowest: Int?, highest: Int?,
+                           backfillComplete: Bool, policy: WritePolicy = .replace) throws {
+        try dbPool.write { db in
+            for post in posts { try Self.write(post, into: db, policy: policy) }
+            try db.execute(sql: """
+                UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
+                       backfillComplete = ?, lastSyncedAt = ? WHERE username = ?
+                """, arguments: [lowest, highest, backfillComplete, Date(), channel])
+        }
+    }
+}
+
+extension Store {
+    /// How to treat a post that is already stored.
+    public enum WritePolicy: Sendable {
+        /// Keep whatever was cached. An edited post is *not* refreshed.
+        ///
+        /// Chosen because a citation should keep saying what it said when it was indexed, and
+        /// because an edit is usually a correction to a link rather than a change of meaning.
+        /// The cost, stated plainly: a post captured mid-edit stays wrong until `--full`.
+        case keepExisting
+        /// Overwrite. What `--full` uses, so a deliberate re-crawl actually refreshes.
+        case replace
+    }
+
+    /// Integrity of a channel's id coverage.
+    ///
+    /// **Message ids are a dense sequence; posts are not dense within it.** An album occupies
+    /// several consecutive ids while rendering as one post, so most absences are explained by
+    /// `mediaCount` rather than by anything missing. What remains after accounting for album
+    /// spans is deletions, service messages — or a page we failed to fetch, which is the only
+    /// one worth alarming about.
+    public struct Integrity: Sendable {
+        public var lowest: Int
+        public var highest: Int
+        public var posts: Int
+        /// Ids accounted for by a post or by an album's span.
+        public var covered: Int
+        /// Ids in range explained by nothing. Expected to be non-zero — deletions are normal.
+        public var unexplained: Int
+        /// The longest run of consecutive unexplained ids. A long run is the signal that a
+        /// *page* was missed, as opposed to scattered deletions.
+        public var longestGap: Int
+        public var longestGapStart: Int?
+        public var backfillComplete: Bool
+    }
+
+    public func integrity(forChannel username: String) throws -> Integrity? {
+        /// One post's id span. Decoded by property name, so the column names are not repeated
+        /// as string literals in a `Row` subscript.
+        struct Span: Decodable, FetchableRecord {
+            var messageID: Int
+            var mediaCount: Int?
+            var first: Int { messageID }
+            var last: Int { messageID + max(1, mediaCount ?? 1) - 1 }
+        }
+
+        return try dbPool.read { db in
+            let spans = try Span.fetchAll(db, sql: """
+                SELECT messageID, mediaCount FROM post WHERE channelUsername = ? ORDER BY messageID
+                """, arguments: [username])
+            guard let lo = spans.first?.first else { return nil }
+
+            // A single ordered pass, because the cost must follow the number of POSTS, not the
+            // width of the id range. Materialising every covered id was fine for web ids in the
+            // thousands and will not be for TDLib's, which are spaced by 2^20.
+            var covered = 0, longest = 0, longestStart: Int?
+            var highestCovered = lo - 1
+            for span in spans {
+                if span.first > highestCovered + 1 {
+                    let gap = span.first - highestCovered - 1
+                    if gap > longest { longest = gap; longestStart = highestCovered + 1 }
+                }
+                // `max(…, highestCovered + 1)` keeps overlapping spans — an album running into
+                // the next post's id — from being counted twice, as the old set did not.
+                covered += max(0, span.last - max(span.first, highestCovered + 1) + 1)
+                highestCovered = max(highestCovered, span.last)
+            }
+            // The upper bound is the highest id COVERED, not the highest post's first id. When
+            // the last post is an album its span runs past that id, which would make
+            // `unexplained` negative and coverage exceed 100%.
+            let hi = highestCovered
+            let complete = try Bool.fetchOne(db,
+                sql: "SELECT backfillComplete FROM channel WHERE username = ?",
+                arguments: [username]) ?? false
+
+            return Integrity(lowest: lo, highest: hi, posts: spans.count,
+                             covered: covered, unexplained: (hi - lo + 1) - covered,
+                             longestGap: longest, longestGapStart: longestStart,
+                             backfillComplete: complete)
+        }
+    }
+}
+
+extension Store {
+    public func channelUsernames() throws -> [String] {
+        try dbPool.read { db in
+            try String.fetchAll(db, sql: "SELECT username FROM channel ORDER BY username")
+        }
+    }
+}
+
+extension Store.CrawlState {
+    /// Merges progress from a walk into the state that existed before it.
+    ///
+    /// **Merge, never replace.** A resumed walk starts at the saved low-water mark and visits only
+    /// OLDER pages, so its own maximum sits below what an earlier run already stored; writing it
+    /// back would make every later incremental sync re-walk history it already has. A walk that
+    /// fetched nothing reports zeros, which would erase both bounds outright. Only `full`, which
+    /// starts at the newest page, has seen enough to replace them.
+    ///
+    /// - Parameters:
+    ///   - lowest, highest: the bounds the walk itself observed, or `nil` if it saw no posts.
+    public func merged(lowest: Int?, highest: Int?, full: Bool) -> (lowest: Int?, highest: Int?) {
+        // `full` starts at the newest page and so may replace the bounds — but a walk that saw
+        // NOTHING has seen nothing to replace them with. Writing its nils back erased the range
+        // and sent every later sync into a fresh backfill.
+        if full { return (lowest ?? self.lowest, highest ?? self.highest) }
+        return (lowest: [self.lowest, lowest].compactMap { $0 }.min(),
+                highest: [self.highest, highest].compactMap { $0 }.max())
+    }
+
+    /// The incremental mark: fetch only posts above it. `nil` means walk from the newest page
+    /// without stopping early — a backfill, or `--full`.
+    public func since(full: Bool) -> Int? {
+        (full || !backfillComplete) ? nil : highest
+    }
+
+    /// Where an unfinished backfill resumes. Without it a channel with more pages than the cap
+    /// re-walks its newest pages on every run and never reaches its own history.
+    public func resumeFrom(full: Bool) -> Int? {
+        (full || backfillComplete) ? nil : lowest
+    }
+
+    /// The state to commit alongside one page of a walk.
+    ///
+    /// **An incremental walk records nothing until it arrives.** It descends from the newest page
+    /// toward `highest`, so after any page short of that, the posts between the page and the stored
+    /// range are still unfetched. Advancing `highest` there — or clearing `backfillComplete`, which
+    /// turns the next run into a resume from the historical low-water mark — makes an interruption
+    /// skip those posts permanently. The page's posts are still written; re-walking them after an
+    /// interruption costs requests, not data.
+    public func afterPage(lowest: Int, highest: Int, full: Bool) -> Store.CrawlState {
+        if since(full: full) != nil { return self }
+        // A backfill or full walk is contiguous from wherever it started, so its bounds are safe
+        // to record page by page. Completion is left as it was: false for a backfill, which only
+        // the finished walk may change; and for `--full` over a finished channel, still true —
+        // an interrupted refresh removes nothing, so every older post is still stored, and
+        // clearing the flag would make the next plain sync re-walk the whole history for nothing.
+        let bounds = merged(lowest: lowest, highest: highest, full: full)
+        return Store.CrawlState(lowest: bounds.lowest, highest: bounds.highest,
+                                backfillComplete: backfillComplete)
+    }
+
+    /// The state to record once a walk returns without throwing.
+    ///
+    /// - Parameters:
+    ///   - lowest, highest: bounds the walk observed, or `nil` if it saw no posts.
+    ///   - reachedEnd: the walk PROVED exhaustion (an empty page, or id 1).
+    ///   - reachedSince: the walk arrived at the incremental mark.
+    public func afterWalk(lowest: Int?, highest: Int?, full: Bool,
+                          reachedEnd: Bool, reachedSince: Bool) -> Store.CrawlState {
+        let incremental = since(full: full) != nil
+        // Stopped short — page cap, or a repeated page — so the gap above the old `highest` is
+        // still open. Keeping the old mark would re-walk the same newest pages forever once the
+        // gap is wider than the cap (TD-18). But what this walk DID cover is contiguous from the
+        // newest page down to `lowest`, which is exactly an unfinished backfill: record it as
+        // one, and the next run resumes below `lowest`, through the gap, to proven exhaustion.
+        // It re-walks already-stored history below the gap; that costs requests, never posts.
+        if incremental && !(reachedSince || reachedEnd) {
+            guard let lowest, let highest else { return self }
+            return Store.CrawlState(lowest: lowest, highest: Swift.max(highest, self.highest ?? highest),
+                                    backfillComplete: false)
+        }
+        let bounds = merged(lowest: lowest, highest: highest, full: full)
+        // Completion is only ever gained by proven exhaustion, never lost: a capped `--full` over a
+        // finished channel still has every older post stored from before.
+        return Store.CrawlState(lowest: bounds.lowest, highest: bounds.highest,
+                                backfillComplete: backfillComplete || reachedEnd)
     }
 }

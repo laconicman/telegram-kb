@@ -10,17 +10,28 @@ public struct ChannelClassifier: Sendable {
     let fetcher: PageFetcher
     public init(fetcher: PageFetcher) { self.fetcher = fetcher }
 
+    /// - Throws: `WebPreviewSource.CrawlError.http` on any non-2xx response. A 429 or 5xx page
+    ///   holds none of the markers below, so classifying it would call a live channel
+    ///   "not publicly resolvable" — and `sync` would skip it and exit 0 on stale data.
     public func classify(_ username: String) async throws -> Channel.Reachability {
         let preview = URL(string: "https://t.me/s/\(username)")!
-        let result = try await fetcher.fetch(preview)
+        let result = try await Self.successful(fetcher.fetch(preview), preview)
         // A 200 whose body actually holds messages. Following the redirect would look like a
         // 200 too, so the path is checked rather than the status alone.
-        if result.statusCode == 200, result.finalURL.path.hasPrefix("/s/") {
+        if result.finalURL.path.hasPrefix("/s/") {
             return .webPreview
         }
 
-        let plain = try await fetcher.fetch(URL(string: "https://t.me/\(username)")!)
+        let url = URL(string: "https://t.me/\(username)")!
+        let plain = try await Self.successful(fetcher.fetch(url), url)
         return Self.classifyPlainPage(plain.body)
+    }
+
+    static func successful(_ result: FetchResult, _ url: URL) throws -> FetchResult {
+        guard (200..<300).contains(result.statusCode) else {
+            throw WebPreviewSource.CrawlError.http(status: result.statusCode, url: url.absoluteString)
+        }
+        return result
     }
 
     /// - `tgme_page_extra` reading "N subscribers" → a broadcast channel exists, so a 302 on

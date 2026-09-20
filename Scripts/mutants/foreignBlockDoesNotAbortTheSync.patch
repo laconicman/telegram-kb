@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
+index 2cd43ff..2686df8 100644
+--- a/Sources/TelegramKBIngest/WebPreviewSource.swift
++++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
+@@ -123,7 +123,7 @@ public struct WebPreviewSource: Sendable {
+             // the walk without claiming an end — the round-9 filter would otherwise have opened a
+             // second false-completion path beside the one it closed.
+             guard !parsed.isEmpty else { reachedEnd = true; break }
+-            let posts = parsed.filter { $0.id.channelUsername == channel.lowercased() }
++            let posts = parsed
+             foreignBlocks += parsed.count - posts.count
+             guard !posts.isEmpty else { break }
+             if rawChannelID == nil {

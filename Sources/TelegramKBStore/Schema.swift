@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import TelegramKBModel
 
 /// The database schema, as an ordered set of migrations.
 ///
@@ -131,6 +132,41 @@ public enum Schema {
             }
             try db.create(index: "ftsMap_on_post", on: "ftsMap",
                           columns: ["channelUsername", "messageID"], unique: true)
+        }
+
+        m.registerMigration("v3-watermarks-in-channel") { db in
+            // Crawl state lives on the channel row, not in a side file.
+            //
+            // A separate watermark file drifts from the database, and did: deleting the store
+            // while the file survived made sync "resume" from a mark describing rows that no
+            // longer existed, leaving a channel with 17 posts and a high-water mark of 181 —
+            // and no amount of deriving the mark from the store fixes that, because the store's
+            // MAX is also 181. The gap is *below* the mark. One source of truth removes the
+            // failure class instead of narrowing it.
+            try db.alter(table: "channel") { t in
+                t.add(column: "lowestMessageID", .integer)
+                t.add(column: "highestMessageID", .integer)
+                t.add(column: "backfillComplete", .boolean).notNull().defaults(to: false)
+                t.add(column: "lastSyncedAt", .datetime)
+            }
+        }
+
+        m.registerMigration("v4-lemmas-in-their-own-column") { db in
+            // A phrase must not be able to straddle the surface text and the lemmas.
+            //
+            // Both were stored in ONE column separated by a newline, and FTS5 tokenises a
+            // newline away: for "кошка сидела на окне" + lemmas "кошка сидеть на окно", the
+            // phrase "окне кошка" matched — the last word of the text next to the first lemma.
+            // Verified directly before the change. Columns cannot be straddled, so the lemmas
+            // move into one of their own, and every indexed post is rebuilt through the same
+            // code that writes new ones.
+            try db.execute(sql: "DROP TABLE IF EXISTS postFTS")
+            try db.create(virtualTable: "postFTS", using: FTS5()) { t in
+                t.tokenizer = .unicode61(diacritics: .remove)
+                t.column("content")
+                t.column("lemmas")
+            }
+            try Store.rebuildWordIndex(in: db)
         }
 
         return m

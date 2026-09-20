@@ -1,0 +1,7 @@
+#!/bin/bash
+# `doctor` is an executable, so its check is an exit status rather than a test.
+# Exits 0 when the behaviour is CORRECT: a missing store must fail the health check.
+set -uo pipefail
+swift build --product tgkb >/dev/null 2>&1 || exit 0   # a broken build is not a passing doctor
+.build/debug/tgkb doctor --db "$(mktemp -d)/absent.sqlite" >/dev/null 2>&1
+[ $? -ne 0 ]

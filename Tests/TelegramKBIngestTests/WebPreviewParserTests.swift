@@ -158,3 +158,48 @@ struct WebPreviewParserTests {
                 "web-parsed posts must be marked .web so consumers know kind is sparse here")
     }
 }
+
+extension WebPreviewParserTests {
+    /// The bare channel id is what lets a web-crawled channel produce a TDLib `chat_id`, so the
+    /// two sources can reconcile (`TD-8`).
+    @Test("the bare channel id is decoded from the data-view payload")
+    func rawChannelIDFromDataView() throws {
+        let id = try #require(try WebPreviewParser.rawChannelID(html: try Self.html("swiftui_dev"), channel: "swiftui_dev"))
+        #expect(id == 1_492_664_793, "measured from this fixture's data-view during Phase 0")
+
+        // …and it must yield the familiar chat id, arithmetically.
+        let channel = TelegramKBModel.Channel(username: "swiftui_dev", rawChannelID: id)
+        #expect(channel.tdlibChatID == -1_001_492_664_793)
+    }
+}
+
+extension WebPreviewParserTests {
+    /// 🔍 The first decodable `data-view` was trusted whatever channel its block belonged to.
+    @Test("a foreign message block cannot supply the channel's identity")
+    func rawChannelIDIgnoresForeignBlocks() throws {
+        // {"c":-999} — a block for another channel, placed first.
+        let foreign = #"<div class="tgme_widget_message" data-post="other/1" data-view="eyJjIjotOTk5fQ"></div>"#
+        let html = try Self.html("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(foreign)<div hidden")
+        let id = try #require(try WebPreviewParser.rawChannelID(html: html, channel: "swiftui_dev"))
+        #expect(id == 1_492_664_793, "the foreign block's 999 must not be taken")
+        #expect(try WebPreviewParser.rawChannelID(html: html, channel: "nobody") == nil)
+    }
+}
+
+extension WebPreviewParserTests {
+    /// 🔴 A block the parser cannot read was dropped silently, while the walk still recorded the
+    /// highest id it *could* read — so the skipped post sat below the mark where no later
+    /// incremental run would look for it.
+    @Test("an unreadable message block is counted, not silently dropped")
+    func unreadableBlocksAreCounted() throws {
+        let broken = #"""
+        <div class="tgme_widget_message" data-post="not-a-post-id">
+          <div class="tgme_widget_message_text js-message_text">who knows</div>
+        </div>
+        """#
+        let html = try Self.html("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(broken)<div hidden")
+        let page = try WebPreviewParser.page(html: html)
+        #expect(page.skippedBlocks == 1)
+        #expect(page.posts.count == 20, "the readable blocks on the same page still parse")
+    }
+}

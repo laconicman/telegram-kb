@@ -60,8 +60,13 @@ let package = Package(
         // see <doc:Design> "Why `tgkb` has no `serve` subcommand". `query` is not the same
         // case and stays: it needs only the Store, and it is how the golden-query evals run
         // without an MCP client in the loop.
+        // The per-channel sync loop, in a library so it can be tested. It was the last piece of
+        // correctness logic reachable only through the executable, and six review rounds found
+        // bugs in it. Only `tgkb` depends on it; `tgkb-mcp` must not.
+        .target(name: "TelegramKBSync", dependencies: ["TelegramKBIngest", "TelegramKBStore"]),
+
         .executableTarget(name: "tgkb", dependencies: [
-            "TelegramKBIngest", "TelegramKBStore",
+            "TelegramKBIngest", "TelegramKBStore", "TelegramKBSync",
             .target(name: "TelegramKBIngestTDLib", condition: .when(traits: ["TDLib"])),
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
         ]),
@@ -84,6 +89,14 @@ let package = Package(
         .testTarget(
             name: "TelegramKBIngestTests",
             dependencies: ["TelegramKBIngest"],
+            resources: [.copy("Fixtures")]
+        ),
+        // Drives the whole sync loop against a stub fetcher and a real store: the sequences that
+        // only an end-to-end run exercises — completion, resumption, a capped incremental walk
+        // converting to a backfill, and a failure leaving the state untouched.
+        .testTarget(
+            name: "TelegramKBSyncTests",
+            dependencies: ["TelegramKBSync"],
             resources: [.copy("Fixtures")]
         ),
     ]

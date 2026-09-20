@@ -343,6 +343,13 @@ than regex, and write fixture-based parser tests.** A brittle-parser defect here
 | **Media posts with no caption at all (empty body)** | **18 / 136** |
 | Message-id gaps | 161 of 297 ids absent (54%) |
 
+**Corrected 2026-09-09.** That "54%" counts ids with no *post row*, which is the misleading
+framing: an album occupies several consecutive ids while rendering as one post, so most of those
+ids are accounted for by `mediaCount`. Measured across the four synced channels with album spans
+included, **86–95% of each channel's id range is accounted for**, and the longest run of
+genuinely unexplained ids is 4–9 — consistent with scattered deletions and service messages,
+not with missed pages. `tgkb doctor` reports this per channel.
+
 Those 18 empty-body posts are a design input: a purely text-driven index silently drops 13% of
 the corpus. They still carry a date, author, reactions and often a link preview, so they should
 be indexed on those fields rather than skipped.
