@@ -89,6 +89,10 @@ extension Store {
             """, arguments: StatementArguments([pattern] + filterArguments + [limit ?? -1]))
     }
 
+    /// Far above any page a person or a model reads, and small enough that no bound computed
+    /// from it can overflow.
+    public static let maxPageSize = 100_000
+
     public enum SearchMode: String, Sendable, CaseIterable {
         case words, substring, both
     }
@@ -126,7 +130,10 @@ extension Store {
     /// stays a small page: asking for 20 of `swift` no longer materialises 6,672 rows.
     public func search(_ query: String, mode: SearchMode, filter: SearchFilter = .init(),
                        limit: Int, cursor: String? = nil) throws -> SearchResults {
-        let cap = max(limit, 0)
+        // Clamped both ways. `Int.max` as a page size made the substring bound `end + words.count`
+        // overflow and trap (PR #2, round 2); with the page and the offset both bounded, every sum
+        // below stays far from the edge.
+        let cap = min(max(limit, 0), Self.maxPageSize)
         let fingerprint = Cursor.fingerprint(query: query, mode: mode, filter: filter)
         var offset = 0, cursorGeneration: UInt64?
         if let cursor {

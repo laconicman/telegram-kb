@@ -166,6 +166,13 @@ public enum Schema {
                 t.column("content")
                 t.column("lemmas")
             }
+            // The rebuild writes through the live indexing code, and that code now records the
+            // index generation — a table `v5` introduced. So a populated store upgrading from v3
+            // reached this line before `indexState` existed and failed with "no such table",
+            // leaving the store unopenable (PR #2, review round 2; reproduced on a real v3 store
+            // before the fix). A migration that calls live code must first create everything that
+            // code touches; `v5` below tolerates finding it already here.
+            try Schema.createIndexState(in: db)
             try Store.rebuildWordIndex(in: db)
         }
 
@@ -174,13 +181,22 @@ public enum Schema {
             // a page served after ANY index change can say the ground moved. The first version
             // derived it from the newest sync time and the number of indexed posts, which a post
             // replaced in place changes neither of — review round 1 of PR #2.
-            try db.create(table: "indexState") { t in
-                t.primaryKey("id", .integer).check { $0 == 1 }
-                t.column("generation", .integer).notNull().defaults(to: 0)
-            }
-            try db.execute(sql: "INSERT INTO indexState (id, generation) VALUES (1, 0)")
+            try Schema.createIndexState(in: db)
         }
 
         return m
+    }
+}
+
+extension Schema {
+    /// The index-generation counter, created idempotently: both `v4` (whose rebuild writes through
+    /// code that bumps it) and `v5` (which introduced it) must be able to call this, in either
+    /// order of history — a store upgrading from v3 runs both, one from v4 runs only v5.
+    static func createIndexState(in db: Database) throws {
+        try db.create(table: "indexState", ifNotExists: true) { t in
+            t.primaryKey("id", .integer).check { $0 == 1 }
+            t.column("generation", .integer).notNull().defaults(to: 0)
+        }
+        try db.execute(sql: "INSERT OR IGNORE INTO indexState (id, generation) VALUES (1, 0)")
     }
 }

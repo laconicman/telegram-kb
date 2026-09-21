@@ -966,3 +966,58 @@ extension StoreTests {
         #expect(!next.hits.isEmpty, "a cursor from `Swift` continues a search for `swift`")
     }
 }
+
+/// PR #2, review round 2.
+extension StoreTests {
+
+    /// 🔴 + 🔍 Every earlier migration test started from an EMPTY file, and an empty v3 store has
+    /// nothing to rebuild — so v4's rebuild never ran the indexing code that now needs v5's
+    /// `indexState`, and "no such table" stayed invisible. Reproduced on a real 155-post v3 store
+    /// before the fix; this builds a populated v3 store hermetically instead.
+    @Test("a populated store from before v4 upgrades through every later migration")
+    func populatedV3StoreUpgrades() throws {
+        let path = Self.tempPath()
+        do {
+            let queue = try DatabaseQueue(path: path)
+            try Schema.migrator.migrate(queue, upTo: "v3-watermarks-in-channel")
+            try queue.write { db in
+                // What v3-era code wrote: a channel, a post, its mapping, and single-column FTS rows.
+                try db.execute(sql: "INSERT INTO channel (username, rawChannelID, reachability) VALUES ('iosgr', 1, 'webPreview')")
+                try db.execute(sql: """
+                    INSERT INTO post (channelUsername, messageID, date, kind, formatSource, text)
+                    VALUES ('iosgr', 7, ?, 'text', 'web', 'Навигация в SwiftUI')
+                    """, arguments: [Date()])
+                try db.execute(sql: "INSERT INTO ftsMap (rowid, channelUsername, messageID) VALUES (1, 'iosgr', 7)")
+                try db.execute(sql: "INSERT INTO postFTS (rowid, content) VALUES (1, 'навигация в swiftui')")
+                try db.execute(sql: "INSERT INTO postTrigram (rowid, content) VALUES (1, 'навигация в swiftui')")
+            }
+        }
+        let store = try Store.openForWriting(at: path)   // runs v4 then v5 over real rows
+        #expect(try store.searchWords("навигация").map(\.id.messageID) == [7],
+                "the post survives the upgrade and is findable through the rebuilt index")
+        #expect(try store.dbPool.read { db in
+            try Int.fetchOne(db, sql: "SELECT generation FROM indexState WHERE id = 1") } ?? 0 > 0,
+                "the rebuild recorded its writes in the generation")
+    }
+
+    /// 🔴 `limit: Int.max` made the substring bound `end + words.count` overflow and trap.
+    @Test("an enormous page size is clamped, not a crash")
+    func hugePageSizeIsClamped() throws {
+        let store = try Self.filterStore()
+        let page = try store.search("swift", mode: .both, limit: .max)
+        #expect(page.hits.count == page.total, "clamped to a page far above the corpus, so everything fits")
+    }
+
+    /// 🟡 Separator-joined fields let a query containing the separator shift the boundaries, so two
+    /// different searches produced one fingerprint and accepted each other's cursors.
+    @Test("fingerprints cannot be forged by shifting field boundaries")
+    func fingerprintFieldsAreUnambiguous() {
+        let s = "\u{1}"
+        // Under the old encoding these two joined to the same string: a|both|b|both|c.
+        let one = Store.Cursor.fingerprint(query: "a\(s)both\(s)b", mode: .both,
+                                           filter: .init(channel: "c"))
+        let two = Store.Cursor.fingerprint(query: "a", mode: .both,
+                                           filter: .init(channel: "b\(s)both\(s)c"))
+        #expect(one != two)
+    }
+}

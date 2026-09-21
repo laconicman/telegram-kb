@@ -97,9 +97,14 @@ extension Store {
         /// `Вёрстка` and `верстка` fold to one query and must not produce cursors that refuse
         /// each other.
         static func fingerprint(query: String, mode: SearchMode, filter: SearchFilter) -> UInt64 {
-            hash([TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue, filter.channel ?? "", filter.kind?.rawValue ?? "",
-                  filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
-                  filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""].joined(separator: "\u{1}"))
+            // Length-prefixed, not separator-joined: with a separator, a query CONTAINING it could
+            // shift the field boundaries so two different searches produced one fingerprint and
+            // accepted each other's cursors (PR #2, round 2).
+            let fields = [TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue,
+                          filter.channel ?? "", filter.kind?.rawValue ?? "",
+                          filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
+                          filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""]
+            return hash(fields.map { "\($0.utf8.count):\($0)" }.joined())
         }
 
         static func hash(_ material: String) -> UInt64 {
