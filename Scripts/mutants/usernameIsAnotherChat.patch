@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 59cb9b4..06bd6c4 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -115,10 +115,6 @@ public struct ChatImport: Sendable {
+             outcome.rawChannelID = verified.rawChannelID
+         }
+         if let id = outcome.rawChannelID {
+-            if let known, known.rawChannelID != 0, known.rawChannelID != id {
+-                throw ImportError.identityConflict(
+-                    "@\(channel) is stored as chat \(known.rawChannelID), but t.me says this export is chat \(id)")
+-            }
+             let others = try store.channels(withRawChannelID: id).filter { $0 != channel }
+             if !others.isEmpty {
+                 throw ImportError.identityConflict(

@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 59cb9b4..79c8f25 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -164,10 +164,6 @@ public struct ChatImport: Sendable {
+             guard Self.sameText(online.text, post.text) else {
+                 throw ImportError.notThisChat(channel: channel, messageID: post.id.messageID)
+             }
+-            let offset = post.date.timeIntervalSince(online.date)
+-            guard offset == 0 else {
+-                throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
+-            }
+             return (post.id.messageID, try MessageEmbed.rawChannelID(html: page.body))
+         }
+         throw ImportError.notFound(channel: channel, tried: newest.map(\.id.messageID))

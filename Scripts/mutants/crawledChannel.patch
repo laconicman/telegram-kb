@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 59cb9b4..160d936 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -105,7 +105,6 @@ public struct ChatImport: Sendable {
+         guard !export.posts.isEmpty else { throw ImportError.nothingReadable(unreadable: export.unreadable) }
+ 
+         let known = try store.identity(forChannel: channel)
+-        if known?.reachability == .webPreview { throw ImportError.crawledChannel(channel) }
+ 
+         var outcome = Outcome(channel: channel, title: export.title, posts: export.posts.count,
+                               serviceMessages: export.serviceMessages, unreadable: export.unreadable)

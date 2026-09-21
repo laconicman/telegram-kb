@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 59cb9b4..0ab65e5 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -156,9 +156,6 @@ public struct ChatImport: Sendable {
+         for post in newest {
+             let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
+             let page = try await fetcher.fetch(url)
+-            guard (200..<300).contains(page.statusCode) else {
+-                throw ImportError.embedFailed(url, status: page.statusCode)
+-            }
+             guard let online = try MessageEmbed.post(html: page.body),
+                   online.id == post.id else { continue }
+             guard Self.sameText(online.text, post.text) else {

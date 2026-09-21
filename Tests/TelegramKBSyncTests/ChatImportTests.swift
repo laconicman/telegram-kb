@@ -210,7 +210,9 @@ struct ChatImportTests {
     func failedRequest() async throws {
         let store = try Self.store()
         let broken = Stub(Dictionary(uniqueKeysWithValues: [Self.route(12, "<html>error</html>", status: 500)]))
-        await #expect(throws: ChatImport.ImportError.self) {
+        // Exactly this error: read as an empty page, the 500 would fall through to `notFound` — also an
+        // ImportError, so a looser expectation would pass with the guard deleted.
+        await #expect(throws: ChatImport.ImportError.embedFailed(URL(string: "https://t.me/testgroup/12?embed=1")!, status: 500)) {
             try await ChatImport(store: store, fetcher: broken)
                 .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
         }
