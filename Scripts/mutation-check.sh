@@ -57,6 +57,12 @@ pass=0; fail=0
 for name in "${names[@]}"; do
   patch="$MUTANTS_DIR/$name.patch"
   if [ ! -f "$patch" ]; then echo "no such mutant: $name" >&2; fail=$((fail + 1)); continue; fi
+  # An empty patch mutates nothing, so its test stays green and the report would blame the TEST.
+  # It happens when the generator's anchor misses — it did, once — so name the real cause.
+  if [ ! -s "$patch" ]; then
+    printf '%-42s %s\n' "$name" "ERROR — the patch is empty; it mutates nothing"
+    fail=$((fail + 1)); continue
+  fi
 
   verify="$MUTANTS_DIR/$name.verify"
   if [ -f "$verify" ] && ! bash "$verify" >/tmp/mutation-baseline-verify.log 2>&1; then
