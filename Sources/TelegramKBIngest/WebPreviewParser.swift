@@ -40,11 +40,19 @@ public enum WebPreviewParser {
 
     public static func parse(html: String) throws -> [Post] { try page(html: html).posts }
 
+    /// Web-preview ids are plain per-channel sequence numbers, orders of magnitude below this.
+    static let maxMessageID = Int(Int32.max)
+
     static func post(from message: Element) throws -> Post? {
         let dataPost = try message.attr("data-post")
         guard !dataPost.isEmpty else { return nil }
         let parts = dataPost.split(separator: "/")
-        guard parts.count == 2, let messageID = Int(parts[1]) else { return nil }
+        // A message id is a positive sequence number, and `Int("-5")` parses. Bounded as well:
+        // the id feeds span arithmetic (`messageID + mediaCount - 1`) that would trap near
+        // `Int.max`, and a block whose id is outside any real range is unreadable, not a post.
+        // Rejecting it here counts it through `skippedBlocks` to the sync's warning.
+        guard parts.count == 2, let messageID = Int(parts[1]),
+              (1...Self.maxMessageID).contains(messageID) else { return nil }
         // Lowercased at the parser boundary. Telegram resolves usernames case-insensitively but
         // SQLite compares keys exactly, so `tgkb sync IOSGR` stored channel `IOSGR` while posts
         // arrived as `iosgr` — and the first page failed its foreign key against a channel that
