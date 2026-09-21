@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index f5771a0..5bb972a 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -14,7 +14,7 @@ extension Store {
+         /// Channel username, without the `@`. Compared lowercased, as everything else here is —
+         /// on assignment too, not only in the initialiser, or `filter.channel = "IOSDev"` would
+         /// silently match nothing against a store that holds usernames folded.
+-        public var channel: String? { didSet { channel = channel?.lowercased() } }
++        public var channel: String?
+         public var kind: PostKind?
+         /// Inclusive bounds on the post's own date, not on when it was crawled.
+         public var from: Date?

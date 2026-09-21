@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index f5771a0..dda3be6 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -97,7 +97,7 @@ extension Store {
+         /// `Вёрстка` and `верстка` fold to one query and must not produce cursors that refuse
+         /// each other.
+         static func fingerprint(query: String, mode: SearchMode, filter: SearchFilter) -> UInt64 {
+-            hash([TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue, filter.channel ?? "", filter.kind?.rawValue ?? "",
++            hash([query, mode.rawValue, filter.channel ?? "", filter.kind?.rawValue ?? "",
+                   filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
+                   filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""].joined(separator: "\u{1}"))
+         }
