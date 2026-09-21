@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBStore/Schema.swift b/Sources/TelegramKBStore/Schema.swift
+index 6d45d21..6425969 100644
+--- a/Sources/TelegramKBStore/Schema.swift
++++ b/Sources/TelegramKBStore/Schema.swift
+@@ -172,7 +172,6 @@ public enum Schema {
+             // leaving the store unopenable (PR #2, review round 2; reproduced on a real v3 store
+             // before the fix). A migration that calls live code must first create everything that
+             // code touches; `v5` below tolerates finding it already here.
+-            try Schema.createIndexState(in: db)
+             try Store.rebuildWordIndex(in: db)
+         }
+ 
