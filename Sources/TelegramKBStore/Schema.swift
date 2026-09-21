@@ -169,6 +169,18 @@ public enum Schema {
             try Store.rebuildWordIndex(in: db)
         }
 
+        m.registerMigration("v5-index-generation") { db in
+            // One counter, bumped by every write to either search index. A cursor records it, so
+            // a page served after ANY index change can say the ground moved. The first version
+            // derived it from the newest sync time and the number of indexed posts, which a post
+            // replaced in place changes neither of — review round 1 of PR #2.
+            try db.create(table: "indexState") { t in
+                t.primaryKey("id", .integer).check { $0 == 1 }
+                t.column("generation", .integer).notNull().defaults(to: 0)
+            }
+            try db.execute(sql: "INSERT INTO indexState (id, generation) VALUES (1, 0)")
+        }
+
         return m
     }
 }

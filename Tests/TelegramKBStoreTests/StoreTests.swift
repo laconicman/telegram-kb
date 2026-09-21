@@ -902,3 +902,67 @@ extension StoreTests {
         #expect(try store.search("swift", mode: .both, limit: 100).total == 18)
     }
 }
+
+/// PR #2, review round 1.
+extension StoreTests {
+
+    /// 🔴 A cursor is text from a model. One decoding to an offset near Int.max made
+    /// `offset + limit` overflow and trap the process, instead of being refused.
+    @Test("an absurd cursor offset is refused, not a crash")
+    func hugeCursorOffsetIsRefused() throws {
+        let store = try Self.filterStore()
+        let first = try store.search("swift", mode: .both, limit: 5)
+        let real = try #require(first.nextCursor)
+        let decoded = try #require(Store.Cursor.decode(real))
+        for offset in [Int.max, Int.max - 1, Store.Cursor.maxOffset + 1] {
+            let forged = Data("2:\(offset):\(decoded.fingerprint):\(decoded.generation)".utf8).base64EncodedString()
+            #expect(throws: Store.SearchError.cursorMalformed) {
+                try store.search("swift", mode: .both, limit: 5, cursor: forged)
+            }
+        }
+    }
+
+    /// 🟡 The generation was derived from the newest sync time and the number of indexed posts.
+    /// A post replaced in place changes neither, so drift went unreported.
+    @Test("replacing a post in place still reports drift to a paging walk")
+    func inPlaceReplacementReportsDrift() throws {
+        let store = try Self.filterStore()
+        let cursor = try #require(try store.search("swift", mode: .both, limit: 5).nextCursor)
+        // Same id, new text: no new row, no sync — the case the old heuristic missed.
+        try store.upsert(posts: [Self.post(3, "swift concurrency rewritten")], policy: .replace)
+        #expect(try store.search("swift", mode: .both, limit: 5, cursor: cursor).indexMovedSinceCursor)
+    }
+
+    /// 🟡 `filter.channel = "IOSDev"` bypassed the initialiser's lowercasing and matched nothing.
+    @Test("a channel assigned after initialisation is folded too")
+    func assignedChannelIsFolded() throws {
+        let store = try Self.filterStore()
+        var filter = Store.SearchFilter()
+        filter.channel = "IOSDev"
+        #expect(filter.channel == "iosdev")
+        #expect(try store.search("swift", mode: .both, filter: filter, limit: 100).total == 5)
+    }
+
+    /// 🔍 bm25 ties are common, and ORDER BY rank alone left them arbitrary — so the same offset
+    /// could point at a different post on the next page even with nothing written in between.
+    @Test("equal-ranked hits come back in one deterministic order")
+    func tiesAreOrderedByIdentity() throws {
+        let (store, _) = try Self.seeded()
+        // Identical text, so identical bm25: only the tie-break decides the order.
+        try store.upsert(posts: [30, 10, 20, 40].map { Self.post($0, "одинаковый текст") })
+        for _ in 0..<3 {
+            #expect(try store.search("одинаковый", mode: .words, limit: 10).hits.map(\.id.messageID)
+                    == [10, 20, 30, 40])
+        }
+    }
+
+    /// 🔍 The fingerprint hashed the raw spelling, so two queries that run the same search refused
+    /// each other's cursors.
+    @Test("spellings that run the same search share a cursor")
+    func equivalentSpellingsShareACursor() throws {
+        let store = try Self.filterStore()
+        let cursor = try #require(try store.search("Swift", mode: .both, limit: 5).nextCursor)
+        let next = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+        #expect(!next.hits.isEmpty, "a cursor from `Swift` continues a search for `swift`")
+    }
+}

@@ -62,7 +62,10 @@ extension Store {
         return try Hit.fetchAll(db, sql: """
             SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postFTS) AS rank
             FROM postFTS JOIN ftsMap m ON m.rowid = postFTS.rowid \(join)
-            WHERE postFTS MATCH ?\(condition) ORDER BY rank LIMIT ?
+            WHERE postFTS MATCH ?\(condition)
+            -- Ties broken by identity: bm25 ties are common, and an ORDER BY that leaves them
+            -- arbitrary makes an offset point somewhere else on the next page.
+            ORDER BY rank, m.channelUsername, m.messageID LIMIT ?
             """, arguments: StatementArguments([pattern] + filterArguments + [limit ?? -1]))
     }
 
@@ -81,7 +84,8 @@ extension Store {
         return try Hit.fetchAll(db, sql: """
             SELECT m.channelUsername AS cu, m.messageID AS mid, bm25(postTrigram) AS rank
             FROM postTrigram JOIN ftsMap m ON m.rowid = postTrigram.rowid \(join)
-            WHERE postTrigram MATCH ?\(condition) ORDER BY rank LIMIT ?
+            WHERE postTrigram MATCH ?\(condition)
+            ORDER BY rank, m.channelUsername, m.messageID LIMIT ?
             """, arguments: StatementArguments([pattern] + filterArguments + [limit ?? -1]))
     }
 
@@ -133,7 +137,10 @@ extension Store {
             offset = decoded.offset
             cursorGeneration = decoded.generation
         }
-        let end = offset + cap
+        // `offset` is bounded by the decoder and `cap` by the caller, but the sum is still
+        // checked rather than assumed: an overflow here would trap the process.
+        let (end, overflowed) = offset.addingReportingOverflow(cap)
+        guard !overflowed else { throw SearchError.cursorMalformed }
 
         return try dbPool.read { db in
             // Read to the END of the page, not to its size: everything before `offset` still has

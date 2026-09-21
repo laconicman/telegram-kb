@@ -172,6 +172,7 @@ public struct Store: Sendable {
                 try db.execute(sql: "DELETE FROM postFTS WHERE rowid = ?", arguments: [rowid])
                 try db.execute(sql: "DELETE FROM postTrigram WHERE rowid = ?", arguments: [rowid])
                 try db.execute(sql: "DELETE FROM ftsMap WHERE rowid = ?", arguments: [rowid])
+                try bumpIndexGeneration(in: db)
                 stale += 1
                 continue
             }
@@ -179,6 +180,12 @@ public struct Store: Sendable {
             indexed += 1
         }
         return (indexed, stale)
+    }
+
+    /// Records that the search indexes changed. Every path that writes or deletes an index row
+    /// calls this, so a cursor from before the change can tell.
+    static func bumpIndexGeneration(in db: Database) throws {
+        try db.execute(sql: "UPDATE indexState SET generation = generation + 1 WHERE id = 1")
     }
 
     /// Populates both FTS tables.
@@ -218,6 +225,7 @@ public struct Store: Sendable {
         try db.execute(sql: "INSERT INTO postFTS (rowid, content, lemmas) VALUES (?,?,?)",
                        arguments: [rowid, indexed.surface, indexed.lemmas])
         try db.execute(sql: "INSERT INTO postTrigram (rowid, content) VALUES (?,?)", arguments: [rowid, sub])
+        try bumpIndexGeneration(in: db)
     }
 
     public func upsert(resolutions: [URLResolution]) throws {

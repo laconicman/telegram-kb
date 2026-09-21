@@ -11,8 +11,10 @@ extension Store {
     /// would promise results the page can never return, which is the failure `total` exists to
     /// prevent.
     public struct SearchFilter: Equatable, Sendable {
-        /// Channel username, without the `@`. Compared lowercased, as everything else here is.
-        public var channel: String?
+        /// Channel username, without the `@`. Compared lowercased, as everything else here is —
+        /// on assignment too, not only in the initialiser, or `filter.channel = "IOSDev"` would
+        /// silently match nothing against a store that holds usernames folded.
+        public var channel: String? { didSet { channel = channel?.lowercased() } }
         public var kind: PostKind?
         /// Inclusive bounds on the post's own date, not on when it was crawled.
         public var from: Date?
@@ -56,6 +58,10 @@ extension Store {
     /// The fingerprint binds a cursor to the query and filter that produced it, so a cursor from
     /// one search cannot silently page through another.
     enum Cursor {
+        /// Far past any corpus this indexes, and far from `Int.max`, so the page arithmetic has
+        /// room. A cursor beyond it is refused as malformed.
+        static let maxOffset = 100_000_000
+
         static func encode(offset: Int, fingerprint: UInt64, generation: UInt64) -> String {
             Data("2:\(offset):\(fingerprint):\(generation)".utf8).base64EncodedString()
         }
@@ -64,8 +70,11 @@ extension Store {
             guard let data = Data(base64Encoded: text),
                   let decoded = String(data: data, encoding: .utf8) else { return nil }
             let parts = decoded.split(separator: ":")
+            // Bounded, not merely non-negative: `offset + limit` must not overflow, and an
+            // offset past any conceivable corpus is a malformed cursor rather than a slow query.
+            // The text arrives from a model, so "absurd input traps the process" is a real path.
             guard parts.count == 4, parts[0] == "2",
-                  let offset = Int(parts[1]), offset >= 0,
+                  let offset = Int(parts[1]), (0...maxOffset).contains(offset),
                   let fingerprint = UInt64(parts[2]),
                   let generation = UInt64(parts[3]) else { return nil }
             return (offset, fingerprint, generation)
@@ -73,21 +82,22 @@ extension Store {
 
         /// What the corpus looked like when a page was served.
         ///
-        /// An offset into a result set is only meaningful while the set holds still. A sync
-        /// committing between two pages re-ranks and can push a post across the page boundary,
-        /// which silently skips or repeats it — and silence is the one outcome this project does
-        /// not accept. So each cursor carries a cheap generation, and a page served against a
-        /// different one says so instead of pretending the walk was clean.
+        /// An offset into a result set is only meaningful while the set holds still. A write
+        /// between two pages re-ranks and can push a post across the page boundary, which silently
+        /// skips or repeats it — and silence is the one outcome this project does not accept. So
+        /// each cursor carries the index generation, a counter every index write bumps, and a
+        /// page served against a different one says so instead of pretending the walk was clean.
         static func generation(in db: Database) throws -> UInt64 {
-            let syncedAt = try String.fetchOne(db, sql: "SELECT COALESCE(MAX(lastSyncedAt), '') FROM channel") ?? ""
-            let indexed = try Int.fetchOne(db, sql: "SELECT count(*) FROM ftsMap") ?? 0
-            return hash("\(syncedAt)|\(indexed)")
+            UInt64(try Int64.fetchOne(db, sql: "SELECT generation FROM indexState WHERE id = 1") ?? 0)
         }
 
         /// FNV-1a over what the page depends on. Not a security boundary — it catches a cursor
         /// used against a different query, which is a caller mistake, not an attack.
+        /// Over the NORMALISED query, so two spellings that run the same search share a cursor.
+        /// `Вёрстка` and `верстка` fold to one query and must not produce cursors that refuse
+        /// each other.
         static func fingerprint(query: String, mode: SearchMode, filter: SearchFilter) -> UInt64 {
-            hash([query, mode.rawValue, filter.channel ?? "", filter.kind?.rawValue ?? "",
+            hash([TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue, filter.channel ?? "", filter.kind?.rawValue ?? "",
                   filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
                   filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""].joined(separator: "\u{1}"))
         }
