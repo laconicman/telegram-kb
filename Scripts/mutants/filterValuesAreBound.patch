@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index 02b6c7f..7cd1930 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -33,7 +33,7 @@ extension Store {
+             guard !isEmpty else { return ("", "", []) }
+             var conditions: [String] = []
+             var arguments: [any DatabaseValueConvertible] = []
+-            if let channel { conditions.append("p.channelUsername = ?"); arguments.append(channel) }
++            if let channel { conditions.append("p.channelUsername = " + "'" + channel + "'") }
+             if let kind { conditions.append("p.kind = ?"); arguments.append(kind.rawValue) }
+             if let from { conditions.append("p.date >= ?"); arguments.append(from) }
+             if let to { conditions.append("p.date <= ?"); arguments.append(to) }

@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index e09c83f..f88f8fd 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -100,7 +100,7 @@ extension Store {
+             // Length-prefixed, not separator-joined: with a separator, a query CONTAINING it could
+             // shift the field boundaries so two different searches produced one fingerprint and
+             // accepted each other's cursors (PR #2, round 2).
+-            let fields = [TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue,
++            let fields = [query, mode.rawValue,
+                           filter.channel ?? "", filter.kind?.rawValue ?? "",
+                           filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
+                           filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""]

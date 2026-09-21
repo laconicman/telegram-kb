@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index faa1fac..4d00d8d 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -225,7 +225,6 @@ public struct Store: Sendable {
+         try db.execute(sql: "INSERT INTO postFTS (rowid, content, lemmas) VALUES (?,?,?)",
+                        arguments: [rowid, indexed.surface, indexed.lemmas])
+         try db.execute(sql: "INSERT INTO postTrigram (rowid, content) VALUES (?,?)", arguments: [rowid, sub])
+-        try bumpIndexGeneration(in: db)
+     }
+ 
+     public func upsert(resolutions: [URLResolution]) throws {

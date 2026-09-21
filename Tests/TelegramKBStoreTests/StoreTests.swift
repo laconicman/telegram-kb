@@ -741,3 +741,283 @@ extension StoreTests {
                 "the deleted post must not survive in either index, in the page or in the count")
     }
 }
+
+/// Track A for S6: filters, an opaque cursor, and a `total` that counts what the page can return.
+extension StoreTests {
+
+    static func filterStore() throws -> Store {
+        let (store, _) = try seeded()
+        try store.upsert(channel: Channel(username: "iosdev", rawChannelID: 2))
+        func post(_ channel: String, _ mid: Int, _ text: String, kind: PostKind, day: Int) -> Post {
+            Post(id: .init(channelUsername: channel, messageID: mid),
+                 date: Date(timeIntervalSince1970: 1_700_000_000 + Double(day) * 86_400),
+                 kind: kind, formatSource: .web, mediaCount: 1, text: text)
+        }
+        try store.upsert(posts: (1...12).map { post("iosgr", $0, "swift concurrency \($0)", kind: .text, day: $0) }
+                       + [post("iosgr", 20, "swift photo post", kind: .photo, day: 20)]
+                       + (1...5).map { post("iosdev", $0, "swift elsewhere \($0)", kind: .text, day: $0) })
+        return store
+    }
+
+    @Test("a channel filter narrows the page AND the count together")
+    func filterByChannel() throws {
+        let store = try Self.filterStore()
+        let all = try store.search("swift", mode: .both, limit: 100)
+        #expect(all.total == 18)
+
+        let one = try store.search("swift", mode: .both, filter: .init(channel: "iosdev"), limit: 100)
+        #expect(one.total == 5, "the count must not promise posts the filter excludes")
+        #expect(one.hits.allSatisfy { $0.id.channelUsername == "iosdev" })
+        // Casing is folded at the boundary, as everywhere else.
+        #expect(try store.search("swift", mode: .both, filter: .init(channel: "IOSDev"), limit: 100).total == 5)
+    }
+
+    @Test("kind and date filters narrow to what they name")
+    func filterByKindAndDate() throws {
+        let store = try Self.filterStore()
+        #expect(try store.search("swift", mode: .both, filter: .init(kind: .photo), limit: 100)
+                    .hits.map(\.id.messageID) == [20])
+
+        let firstWeek = Date(timeIntervalSince1970: 1_700_000_000 + 5 * 86_400)
+        let early = try store.search("swift", mode: .both,
+                                     filter: .init(channel: "iosgr", to: firstWeek), limit: 100)
+        #expect(early.total == 5 && early.hits.count == 5, "days 1 to 5 in that channel")
+    }
+
+    /// The page must walk the result set once: no gaps, no repeats, and a cursor that stops.
+    @Test("paging with the cursor covers every hit exactly once")
+    func cursorPagesWithoutGapsOrRepeats() throws {
+        let store = try Self.filterStore()
+        let everything = try store.search("swift", mode: .both, limit: 100)
+
+        var collected: [Post.ID] = []
+        var cursor: String? = nil
+        var pages = 0
+        repeat {
+            let page = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+            #expect(page.total == everything.total, "the total does not drift between pages")
+            collected += page.hits.map(\.id)
+            cursor = page.nextCursor
+            pages += 1
+            #expect(pages < 10, "pagination must terminate")
+        } while cursor != nil
+
+        #expect(collected.count == everything.total)
+        #expect(Set(collected).count == collected.count, "no post appears on two pages")
+        #expect(collected == everything.hits.map(\.id), "and in the same order as one big page")
+    }
+
+    @Test("a cursor belongs to its query, and a foreign or broken one is refused")
+    func cursorIsBoundToItsQuery() throws {
+        let store = try Self.filterStore()
+        let first = try store.search("swift", mode: .both, limit: 5)
+        let cursor = try #require(first.nextCursor)
+
+        // Same cursor, different query — a silent slice of another result set if accepted.
+        #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
+            try store.search("concurrency", mode: .both, limit: 5, cursor: cursor)
+        }
+        // Same query, different filter.
+        #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
+            try store.search("swift", mode: .both, filter: .init(channel: "iosgr"), limit: 5, cursor: cursor)
+        }
+        #expect(throws: Store.SearchError.cursorMalformed) {
+            try store.search("swift", mode: .both, limit: 5, cursor: "not-a-cursor")
+        }
+    }
+
+    @Test("the last page carries no cursor")
+    func lastPageEndsPagination() throws {
+        let store = try Self.filterStore()
+        let onePage = try store.search("swift", mode: .both, limit: 100)
+        #expect(onePage.nextCursor == nil, "everything fitted, so there is nothing to continue")
+        let empty = try store.search("гравитационные волны", mode: .both, limit: 5)
+        #expect(empty.hits.isEmpty && empty.total == 0 && empty.nextCursor == nil)
+    }
+}
+
+extension StoreTests {
+    /// Paging is where an off-by-one hides. Walk the whole result set at several page sizes and
+    /// in every mode, over a corpus built so the two indexes overlap heavily.
+    @Test("paging covers the result set exactly, at any page size and in any mode",
+          arguments: [1, 2, 3, 7, 18, 50] as [Int])
+    func pagingIsExhaustiveAtEveryPageSize(pageSize: Int) throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: (1...20).map { Self.post($0, "swift concurrency \($0)") }
+                       + (21...25).map { Self.post($0, "SwiftUI only \($0)") })
+
+        for mode in Store.SearchMode.allCases {
+            let whole = try store.search("swift", mode: mode, limit: 1000)
+            var collected: [Post.ID] = []
+            var cursor: String? = nil
+            var guard_ = 0
+            repeat {
+                let page = try store.search("swift", mode: mode, limit: pageSize, cursor: cursor)
+                #expect(page.hits.count <= pageSize)
+                collected += page.hits.map(\.id)
+                cursor = page.nextCursor
+                guard_ += 1
+                #expect(guard_ <= whole.total + 2, "\(mode) at page size \(pageSize) did not terminate")
+            } while cursor != nil
+
+            #expect(collected == whole.hits.map(\.id),
+                    "\(mode) at page size \(pageSize): paged order must equal the single-page order")
+            #expect(Set(collected).count == collected.count, "\(mode): a post appeared twice")
+            #expect(collected.count == whole.total, "\(mode): paging lost \(whole.total - collected.count) hit(s)")
+        }
+    }
+}
+
+extension StoreTests {
+    /// A sync landing between two pages re-ranks the result set, so an offset no longer points
+    /// where it did. The page still comes back — refusing it would break paging after every sync —
+    /// but it says the ground moved, because a silently skipped post is the failure this project
+    /// refuses.
+    @Test("a page served after the corpus moved says so")
+    func pagingReportsCorpusDrift() throws {
+        let store = try Self.filterStore()
+        let first = try store.search("swift", mode: .both, limit: 5)
+        let cursor = try #require(first.nextCursor)
+        #expect(!first.indexMovedSinceCursor, "a first page has nothing to compare against")
+
+        let quiet = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+        #expect(!quiet.indexMovedSinceCursor, "nothing was written between the pages")
+
+        try store.upsert(posts: [Self.post(999, "swift arrived mid-pagination")])
+        let moved = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+        #expect(moved.indexMovedSinceCursor, "the corpus changed under the walk and must say so")
+        #expect(!moved.hits.isEmpty, "and the page is still served, not refused")
+    }
+
+    /// Filter values are bound parameters, never string-built SQL. The sanctioned path for text
+    /// arriving from an LLM tool call, applied to the filter as well as the query.
+    @Test("a filter value cannot break out of its placeholder")
+    func filterValuesAreBound() throws {
+        let store = try Self.filterStore()
+        for hostile in ["iosgr' OR 1=1 --", "'; DROP TABLE post; --", "iosgr\" OR \"\"=\""] {
+            let results = try store.search("swift", mode: .both, filter: .init(channel: hostile), limit: 100)
+            #expect(results.hits.isEmpty && results.total == 0, "\(hostile) matched nothing, as a channel name")
+        }
+        // The table is still there, which is the other half of the assertion.
+        #expect(try store.search("swift", mode: .both, limit: 100).total == 18)
+    }
+}
+
+/// PR #2, review round 1.
+extension StoreTests {
+
+    /// 🔴 A cursor is text from a model. One decoding to an offset near Int.max made
+    /// `offset + limit` overflow and trap the process, instead of being refused.
+    @Test("an absurd cursor offset is refused, not a crash")
+    func hugeCursorOffsetIsRefused() throws {
+        let store = try Self.filterStore()
+        let first = try store.search("swift", mode: .both, limit: 5)
+        let real = try #require(first.nextCursor)
+        let decoded = try #require(Store.Cursor.decode(real))
+        for offset in [Int.max, Int.max - 1, Store.Cursor.maxOffset + 1] {
+            let forged = Data("2:\(offset):\(decoded.fingerprint):\(decoded.generation)".utf8).base64EncodedString()
+            #expect(throws: Store.SearchError.cursorMalformed) {
+                try store.search("swift", mode: .both, limit: 5, cursor: forged)
+            }
+        }
+    }
+
+    /// 🟡 The generation was derived from the newest sync time and the number of indexed posts.
+    /// A post replaced in place changes neither, so drift went unreported.
+    @Test("replacing a post in place still reports drift to a paging walk")
+    func inPlaceReplacementReportsDrift() throws {
+        let store = try Self.filterStore()
+        let cursor = try #require(try store.search("swift", mode: .both, limit: 5).nextCursor)
+        // Same id, new text: no new row, no sync — the case the old heuristic missed.
+        try store.upsert(posts: [Self.post(3, "swift concurrency rewritten")], policy: .replace)
+        #expect(try store.search("swift", mode: .both, limit: 5, cursor: cursor).indexMovedSinceCursor)
+    }
+
+    /// 🟡 `filter.channel = "IOSDev"` bypassed the initialiser's lowercasing and matched nothing.
+    @Test("a channel assigned after initialisation is folded too")
+    func assignedChannelIsFolded() throws {
+        let store = try Self.filterStore()
+        var filter = Store.SearchFilter()
+        filter.channel = "IOSDev"
+        #expect(filter.channel == "iosdev")
+        #expect(try store.search("swift", mode: .both, filter: filter, limit: 100).total == 5)
+    }
+
+    /// 🔍 bm25 ties are common, and ORDER BY rank alone left them arbitrary — so the same offset
+    /// could point at a different post on the next page even with nothing written in between.
+    @Test("equal-ranked hits come back in one deterministic order")
+    func tiesAreOrderedByIdentity() throws {
+        let (store, _) = try Self.seeded()
+        // Identical text, so identical bm25: only the tie-break decides the order.
+        try store.upsert(posts: [30, 10, 20, 40].map { Self.post($0, "одинаковый текст") })
+        for _ in 0..<3 {
+            #expect(try store.search("одинаковый", mode: .words, limit: 10).hits.map(\.id.messageID)
+                    == [10, 20, 30, 40])
+        }
+    }
+
+    /// 🔍 The fingerprint hashed the raw spelling, so two queries that run the same search refused
+    /// each other's cursors.
+    @Test("spellings that run the same search share a cursor")
+    func equivalentSpellingsShareACursor() throws {
+        let store = try Self.filterStore()
+        let cursor = try #require(try store.search("Swift", mode: .both, limit: 5).nextCursor)
+        let next = try store.search("swift", mode: .both, limit: 5, cursor: cursor)
+        #expect(!next.hits.isEmpty, "a cursor from `Swift` continues a search for `swift`")
+    }
+}
+
+/// PR #2, review round 2.
+extension StoreTests {
+
+    /// 🔴 + 🔍 Every earlier migration test started from an EMPTY file, and an empty v3 store has
+    /// nothing to rebuild — so v4's rebuild never ran the indexing code that now needs v5's
+    /// `indexState`, and "no such table" stayed invisible. Reproduced on a real 155-post v3 store
+    /// before the fix; this builds a populated v3 store hermetically instead.
+    @Test("a populated store from before v4 upgrades through every later migration")
+    func populatedV3StoreUpgrades() throws {
+        let path = Self.tempPath()
+        do {
+            let queue = try DatabaseQueue(path: path)
+            try Schema.migrator.migrate(queue, upTo: "v3-watermarks-in-channel")
+            try queue.write { db in
+                // What v3-era code wrote: a channel, a post, its mapping, and single-column FTS rows.
+                try db.execute(sql: "INSERT INTO channel (username, rawChannelID, reachability) VALUES ('iosgr', 1, 'webPreview')")
+                try db.execute(sql: """
+                    INSERT INTO post (channelUsername, messageID, date, kind, formatSource, text)
+                    VALUES ('iosgr', 7, ?, 'text', 'web', 'Навигация в SwiftUI')
+                    """, arguments: [Date()])
+                try db.execute(sql: "INSERT INTO ftsMap (rowid, channelUsername, messageID) VALUES (1, 'iosgr', 7)")
+                try db.execute(sql: "INSERT INTO postFTS (rowid, content) VALUES (1, 'навигация в swiftui')")
+                try db.execute(sql: "INSERT INTO postTrigram (rowid, content) VALUES (1, 'навигация в swiftui')")
+            }
+        }
+        let store = try Store.openForWriting(at: path)   // runs v4 then v5 over real rows
+        #expect(try store.searchWords("навигация").map(\.id.messageID) == [7],
+                "the post survives the upgrade and is findable through the rebuilt index")
+        #expect(try store.dbPool.read { db in
+            try Int.fetchOne(db, sql: "SELECT generation FROM indexState WHERE id = 1") } ?? 0 > 0,
+                "the rebuild recorded its writes in the generation")
+    }
+
+    /// 🔴 `limit: Int.max` made the substring bound `end + words.count` overflow and trap.
+    @Test("an enormous page size is clamped, not a crash")
+    func hugePageSizeIsClamped() throws {
+        let store = try Self.filterStore()
+        let page = try store.search("swift", mode: .both, limit: .max)
+        #expect(page.hits.count == page.total, "clamped to a page far above the corpus, so everything fits")
+    }
+
+    /// 🟡 Separator-joined fields let a query containing the separator shift the boundaries, so two
+    /// different searches produced one fingerprint and accepted each other's cursors.
+    @Test("fingerprints cannot be forged by shifting field boundaries")
+    func fingerprintFieldsAreUnambiguous() {
+        let s = "\u{1}"
+        // Under the old encoding these two joined to the same string: a|both|b|both|c.
+        let one = Store.Cursor.fingerprint(query: "a\(s)both\(s)b", mode: .both,
+                                           filter: .init(channel: "c"))
+        let two = Store.Cursor.fingerprint(query: "a", mode: .both,
+                                           filter: .init(channel: "b\(s)both\(s)c"))
+        #expect(one != two)
+    }
+}

@@ -25,11 +25,19 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 MUTANTS_DIR="Scripts/mutants"
+# Per-run logs. Fixed /tmp names let two runs overwrite each other's diagnostics (PR #2, round 2).
+# Two runs in ONE checkout remain unsafe for a bigger reason — both apply patches to the same
+# files — so this fixes the diagnostics, not concurrency; don't run two harnesses in one tree.
+LOGS=$(mktemp -d "${TMPDIR:-/tmp}/mutation-check.XXXXXX")
 applied=""
 # Whatever happens — a failure, a Ctrl-C — the working tree goes back. A harness that leaves a
 # deliberate bug in the tree would be worse than no harness.
 restore() { [ -n "$applied" ] && git apply -R "$applied" 2>/dev/null; applied=""; }
-trap 'restore; exit 130' INT TERM
+# Cleanup on EVERY exit, not only on a signal: the per-run log directory leaked after each
+# normal run (PR #2, round 3). An EXIT trap keeps the script's own status — verified for
+# explicit exits and for a failing final test alike.
+trap 'restore; rm -rf "$LOGS"' EXIT
+trap 'exit 130' INT TERM
 
 if ! git diff --quiet; then
   echo "refusing to run: the working tree has uncommitted changes, and this script edits files." >&2
@@ -40,12 +48,12 @@ fi
 # Baseline first. A mutant's red means nothing unless the same check is green with the fix in
 # place, and the cheapest way to establish that for every Swift test at once is to run the suite.
 echo "baseline: running the test suite before mutating anything..."
-if ! swift test >/tmp/mutation-baseline.log 2>&1; then
+if ! swift test >"$LOGS/baseline.log" 2>&1; then
   echo "refusing to run: the test suite is RED before any mutation, so no mutant could prove anything." >&2
-  grep -m3 'recorded an issue' /tmp/mutation-baseline.log | sed 's/^/    /' >&2
+  grep -m3 'recorded an issue' "$LOGS/baseline.log" | sed 's/^/    /' >&2
   exit 2
 fi
-echo "baseline: $(grep -o 'Test run with [0-9]* tests' /tmp/mutation-baseline.log | tail -1) pass"
+echo "baseline: $(grep -o 'Test run with [0-9]* tests' "$LOGS/baseline.log" | tail -1) pass"
 echo
 
 names=("$@")
@@ -57,9 +65,15 @@ pass=0; fail=0
 for name in "${names[@]}"; do
   patch="$MUTANTS_DIR/$name.patch"
   if [ ! -f "$patch" ]; then echo "no such mutant: $name" >&2; fail=$((fail + 1)); continue; fi
+  # An empty patch mutates nothing, so its test stays green and the report would blame the TEST.
+  # It happens when the generator's anchor misses — it did, once — so name the real cause.
+  if [ ! -s "$patch" ]; then
+    printf '%-42s %s\n' "$name" "ERROR — the patch is empty; it mutates nothing"
+    fail=$((fail + 1)); continue
+  fi
 
   verify="$MUTANTS_DIR/$name.verify"
-  if [ -f "$verify" ] && ! bash "$verify" >/tmp/mutation-baseline-verify.log 2>&1; then
+  if [ -f "$verify" ] && ! bash "$verify" >"$LOGS/baseline-verify.log" 2>&1; then
     printf '%-42s %s\n' "$name" "ERROR — its check already fails with the fix in place"
     fail=$((fail + 1)); continue
   fi
@@ -70,14 +84,14 @@ for name in "${names[@]}"; do
   fi
   applied="$patch"
 
-  if ! swift build --build-tests >/tmp/mutation-build.log 2>&1; then
+  if ! swift build --build-tests >"$LOGS/build.log" 2>&1; then
     printf '%-42s %s\n' "$name" "ERROR — mutant does not compile, so it proves nothing"
-    grep -m1 'error:' /tmp/mutation-build.log | sed 's/^/    /'
+    grep -m1 'error:' "$LOGS/build.log" | sed 's/^/    /'
     restore; fail=$((fail + 1)); continue
   fi
 
-  if [ -f "$verify" ]; then bash "$verify" >/tmp/mutation-verify.log 2>&1
-  else swift test --filter "$name" >/tmp/mutation-verify.log 2>&1; fi
+  if [ -f "$verify" ]; then bash "$verify" >"$LOGS/verify.log" 2>&1
+  else swift test --filter "$name" >"$LOGS/verify.log" 2>&1; fi
   status=$?
 
   restore

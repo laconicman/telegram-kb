@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index ba6b1db..c393b03 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -65,7 +65,7 @@ extension Store {
+             WHERE postFTS MATCH ?\(condition)
+             -- Ties broken by identity: bm25 ties are common, and an ORDER BY that leaves them
+             -- arbitrary makes an offset point somewhere else on the next page.
+-            ORDER BY rank, m.channelUsername, m.messageID LIMIT ?
++            ORDER BY rank LIMIT ?
+             """, arguments: StatementArguments([pattern] + filterArguments + [limit ?? -1]))
+     }
+ 

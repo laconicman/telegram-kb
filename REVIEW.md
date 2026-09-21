@@ -52,6 +52,9 @@ there rather than re-arguing the decision.
   returning the count.
 - Require a change to `TextNormalizer.indexed` in `Sources/TelegramKBStore/TextNormalizer.swift`
   to carry the matching change to `normalizeQuery`: what the index folds, the query must fold.
+- Flag a migration in `Sources/TelegramKBStore/Schema.swift` that calls live `Store` code without
+  first creating every table that code touches, and require a test that upgrades a POPULATED store
+  from the previous version — an empty one skips the code path that fails.
 - Flag surface text and lemmas written to the same FTS5 column in
   `Sources/TelegramKBStore/Store.swift`; a phrase would straddle the join and match a post that
   contains it in neither form.

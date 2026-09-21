@@ -203,3 +203,21 @@ extension WebPreviewParserTests {
         #expect(page.posts.count == 20, "the readable blocks on the same page still parse")
     }
 }
+
+extension WebPreviewParserTests {
+    /// Found by self-review before pushing, where a free DeepWiki pass could not reach: the parser
+    /// accepted any integer as a message id — negatives included — and the id feeds span arithmetic
+    /// that traps near Int.max.
+    @Test("an out-of-range message id is an unreadable block, not a post")
+    func outOfRangeIDsAreUnreadable() throws {
+        let block = { (post: String) in
+            #"<div class="tgme_widget_message" data-post="\#(post)"><div class="tgme_widget_message_text js-message_text">x</div></div>"#
+        }
+        let hostile = block("chan/-5") + block("chan/0") + block("chan/9223372036854775807")
+        let html = try Self.html("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(hostile)<div hidden")
+        let page = try WebPreviewParser.page(html: html)
+        #expect(page.skippedBlocks == 3)
+        #expect(page.posts.count == 20, "the real blocks on the same page still parse")
+        #expect(page.posts.allSatisfy { $0.id.messageID > 0 })
+    }
+}

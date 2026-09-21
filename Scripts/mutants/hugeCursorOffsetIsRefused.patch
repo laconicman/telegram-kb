@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index f5771a0..a0fca1a 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -74,7 +74,7 @@ extension Store {
+             // offset past any conceivable corpus is a malformed cursor rather than a slow query.
+             // The text arrives from a model, so "absurd input traps the process" is a real path.
+             guard parts.count == 4, parts[0] == "2",
+-                  let offset = Int(parts[1]), (0...maxOffset).contains(offset),
++                  let offset = Int(parts[1]), offset >= 0,
+                   let fingerprint = UInt64(parts[2]),
+                   let generation = UInt64(parts[3]) else { return nil }
+             return (offset, fingerprint, generation)
