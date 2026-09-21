@@ -33,7 +33,11 @@ applied=""
 # Whatever happens — a failure, a Ctrl-C — the working tree goes back. A harness that leaves a
 # deliberate bug in the tree would be worse than no harness.
 restore() { [ -n "$applied" ] && git apply -R "$applied" 2>/dev/null; applied=""; }
-trap 'restore; rm -rf "$LOGS"; exit 130' INT TERM
+# Cleanup on EVERY exit, not only on a signal: the per-run log directory leaked after each
+# normal run (PR #2, round 3). An EXIT trap keeps the script's own status — verified for
+# explicit exits and for a failing final test alike.
+trap 'restore; rm -rf "$LOGS"' EXIT
+trap 'exit 130' INT TERM
 
 if ! git diff --quiet; then
   echo "refusing to run: the working tree has uncommitted changes, and this script edits files." >&2

@@ -184,6 +184,9 @@ public struct Store: Sendable {
 
     /// Records that the search indexes changed. Every path that writes or deletes an index row
     /// calls this, so a cursor from before the change can tell.
+    ///
+    /// It counts WRITES, not revisions: a batch of twenty posts, or a migration's rebuild, moves it
+    /// by twenty. Compare generations for equality only; the difference means nothing.
     static func bumpIndexGeneration(in db: Database) throws {
         try db.execute(sql: "UPDATE indexState SET generation = generation + 1 WHERE id = 1")
     }

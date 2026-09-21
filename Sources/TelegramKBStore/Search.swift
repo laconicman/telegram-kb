@@ -104,7 +104,9 @@ extension Store {
         /// the rest were discarded. With a filter, it counts only what the filter admits, so it
         /// can never promise results this page could not return.
         public var total: Int
-        /// Pass back to continue after this page. `nil` when there is nothing after it.
+        /// Pass back to continue after this page. `nil` when there is nothing after it — and
+        /// also for `limit: 0`, which is a count-only request: nothing was consumed, so a cursor
+        /// would be equivalent to none. Start paging with a positive limit.
         public var nextCursor: String?
         /// The corpus changed between the cursor's page and this one, so an offset into the
         /// result set no longer points where it did: a post may have been skipped or repeated
