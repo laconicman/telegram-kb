@@ -115,6 +115,57 @@ test oracle, never as a runtime dependency** — it is undocumented, its normali
 and it could vanish without notice. It has already earned its keep: comparing our index against
 it revealed a parser bug that would otherwise have shipped.
 
+## A chat export is the way in for a group
+
+**Decision (2026-09-21).** A public **group**, which has no web preview, is loaded from the chat
+export a Telegram client writes ("Export Chat History…"), with `tgkb import`. Its posts carry
+`formatSource: export`, a third source beside `web` and `tdlib`.
+
+**Why an export, and why its HTML.**
+- The web preview answers a group with a 302 (`ChannelClassifier`). TDLib, Phase 2, puts a
+  logged-in account on the critical path. An export needs neither: whoever wants the group in the
+  index exports it from their own client.
+- Telegram for macOS offers **no format choice for a single chat**; it writes HTML. Its
+  account-wide export offers JSON, but it selects kinds of chat, never one chat.
+- The markup follows Telegram Desktop's HTML exporter (`export_output_html.cpp`), but not
+  exactly: a cashtag goes through `ShowHashtag`. So **a real export, not the source, is the
+  authority**, and the test fixtures are modelled on one.
+
+**What the HTML lacks, and how import makes up for it.** The dates carry no offset: they are the
+exporting machine's local time. And the export does not name its chat. So `--timezone` and
+`--channel` are inputs. Before anything is written, one message is fetched from
+`t.me/<chat>/<id>?embed=1`, the one web page a group's message has:
+- different words mean the export is not this chat;
+- a different moment means the zone is wrong;
+- its `data-peer` names the chat's bare id, so `rawChannelID` is learned for `S7`.
+
+Measured on a 12,471-message export: seven of seven embeds sat exactly three hours from the
+export's dates, on a Mac in Europe/Moscow.
+
+**What this source is, and what it is not.**
+- **An independent oracle for Phase 2.** A TDLib crawl of the same group can be diffed against it
+  for presence, dates and text. **Not for albums:** the export writes each item of a media group
+  as its own message with no grouping id, so it cannot check the one reconciliation `TD-8` calls
+  hard.
+- **Sender names are the exporting account's view** (`TD-24`). Telegram shows a contact's saved
+  name in place of their profile name.
+- **A snapshot, not a walk.** An import never sets `backfillComplete`, and a group is never
+  synced. `doctor` reports a group's empty ids as what they are: service messages and deletions.
+
+**Rejected:**
+- *JSON only.* The machine-readable export is the better contract: UTC timestamps, typed
+  entities, user ids. But the macOS client writes it only for a whole account. `ChatImport`
+  takes posts from any parser, so a JSON reader can join when something produces the format.
+- *Importing unverified by default.* A wrong `--channel` or `--timezone` corrupts every post, and
+  nothing would say so. One request prevents both; `--no-verify` stays for a chat with no public
+  username.
+- *Waiting for TDLib.* That would have kept groups out for a whole phase.
+
+**Later: fetch through Telegram's own export.** The clients' exporters use the takeout API (the
+macOS client's error string says "Could not start the export"). A fetch path through it would
+remove the manual step and feed the same `ChatImport`. It needs a logged-in session, and Telegram
+may delay a data export on a new device by hours, so it belongs with Phase 2 in <doc:Roadmap>.
+
 ## A local index, because Telegram's search cannot be reasoned about
 
 **Decision.** SQLite FTS5 is the search engine. Telegram is ingestion only.
@@ -847,7 +898,7 @@ kind      : text | photo | album | video | videoNote | audio | voice
 modifiers : isForwarded (+ origin channel, origin post id, origin author)
             replyTo (post id)
             mediaCount (≥1; >1 means album)
-            formatSource: tdlib | web | absent
+            formatSource: tdlib | web | export | absent
 ```
 
 `kind` is **free and deterministic** where a source supplies it — TDLib's `SearchMessagesFilter`

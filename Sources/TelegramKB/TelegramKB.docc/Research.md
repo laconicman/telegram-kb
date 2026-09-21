@@ -164,6 +164,34 @@ preview — `@iosmmcresources` is a genuine broadcast channel with subscribers w
 302s. And "N members" vs "N subscribers" in `tgme_page_extra` distinguishes a group from a
 channel, making the classifier four-way rather than three.
 
+### Chat exports and message embeds — verified 2026-09-21
+
+- **One message of a public group embeds.** `t.me/<group>/<id>?embed=1` renders the message while
+  `t.me/s/<group>` 302s. It uses the preview's own widget (`div.tgme_widget_message[data-post]`),
+  with `<time datetime>` in UTC and `data-peer="c<bare id>_<hash>"`. Verified on `@sdl_static`.
+- **Telegram for macOS exports one chat as HTML only.** Its *Export Chat* dialog offers media
+  types, a file-size limit and a folder, and no format.
+  - *Export Telegram Data* offers HTML, JSON or both. But it selects kinds of chat (personal,
+    bot, private or public groups and channels), never one chat.
+  - It may also delay the start on a new device: "you will be able to begin downloading your data
+    in {hours}".
+- **The HTML's dates are the exporting machine's local time.** They read `3 April 2023, 12:34:07`
+  with no offset.
+  - Seven of seven messages sat exactly three hours from their embeds, on a Mac in
+    Europe/Moscow.
+  - An edited message keeps its send time; the label reads `edited 12:34` (six of six).
+- **The markup is tdesktop's, with small differences.**
+  - A cashtag is written `ShowHashtag('$TKN')`, where tdesktop has `ShowCashtag`.
+  - A page file holds about 5,000 messages, not tdesktop's `kMessagesInFile = 1000`.
+  - tdesktop's `kJoinWithinSeconds = 900` explains the "joined" blocks that carry no sender
+    (DeepWiki on `telegramdesktop/tdesktop`).
+- **Sender names are the exporting account's view.** One sender's name in the export differed
+  from the name their public embed shows: Telegram displays a contact's saved name (`TD-24`).
+- **Exports carry no album grouping.** tdesktop's JSON writer has no `media_group_id`, and the
+  HTML writes one block per item.
+- **A real export parsed completely.** 12,471 messages, none unreadable, 1,324 service messages,
+  and every media, reaction, preview and reply count equal to the markup's own.
+
 ### The real corpus, and Telegram's result cap — crawled 2026-08-24
 Full histories of the four previewable channels: **7,406 posts**, 2016→2026, **90%
 Russian-dominant**, **95% carrying a link** (16,789 links, 11,665 unique, 479 shared across
