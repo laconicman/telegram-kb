@@ -1020,4 +1020,52 @@ extension StoreTests {
                                            filter: .init(channel: "b\(s)both\(s)c"))
         #expect(one != two)
     }
+
+    // MARK: - Identity reads, for a writer that must not create a second channel
+
+    @Test("identity reads back the id and reachability, and nothing for an unknown channel")
+    func identityRoundTrips() throws {
+        let (store, _) = try Self.seeded()
+        try store.ensureChannel(username: "sdl_static", reachability: .group)
+        #expect(try store.identity(forChannel: "iosgr")
+                == .init(rawChannelID: 1_492_664_793, reachability: .webPreview))
+        #expect(try store.identity(forChannel: "sdl_static") == .init(rawChannelID: 0, reachability: .group))
+        #expect(try store.identity(forChannel: "nobody") == nil)
+    }
+
+    /// A newer `tgkb` may write a reachability this binary has never heard of. Guessing one would
+    /// steer `doctor` and `import` wrong; `nil` says "unknown" honestly.
+    @Test("a reachability this binary does not know reads as nil, not as a guess")
+    func unknownReachabilityIsNil() throws {
+        let (store, _) = try Self.seeded()
+        try store.dbPool.write { db in
+            try db.execute(sql: "UPDATE channel SET reachability = 'fromTheFuture' WHERE username = 'iosgr'")
+        }
+        #expect(try store.identity(forChannel: "iosgr")?.reachability == nil)
+        try store.upsert(posts: [Self.post(1, "one")])
+        #expect(try store.integrity(forChannel: "iosgr")?.reachability == nil)
+    }
+
+    @Test("channels(withRawChannelID:) finds every row sharing an id, which the schema allows")
+    func rowsSharingAnID() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(channel: Channel(username: "renamed", rawChannelID: 1_492_664_793))
+        #expect(try store.channels(withRawChannelID: 1_492_664_793) == ["iosgr", "renamed"])
+        #expect(try store.channels(withRawChannelID: 42).isEmpty)
+    }
+
+    @Test("storedMessageIDs lists what a keepExisting write will leave alone")
+    func storedIDs() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(3, "three"), Self.post(7, "seven")])
+        #expect(try store.storedMessageIDs(forChannel: "iosgr") == [3, 7])
+        #expect(try store.storedMessageIDs(forChannel: "nobody").isEmpty)
+    }
+
+    @Test("integrity reports the channel's reachability, so doctor can tell a group from a crawl")
+    func integrityCarriesReachability() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "one")])
+        #expect(try store.integrity(forChannel: "iosgr")?.reachability == .webPreview)
+    }
 }

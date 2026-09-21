@@ -393,6 +393,46 @@ extension Store {
         }
     }
 
+    /// What the store knows about who a channel is.
+    public struct ChannelIdentity: Sendable, Equatable {
+        /// `0` until a source has learned it.
+        public var rawChannelID: Int64
+        /// `nil` for a value this binary does not know — written by a newer `tgkb` — rather than a
+        /// guess that would steer the caller wrong.
+        public var reachability: Channel.Reachability?
+    }
+
+    /// `nil` when the store has no row for the channel.
+    public func identity(forChannel username: String) throws -> ChannelIdentity? {
+        try dbPool.read { db in
+            guard let row = try Row.fetchOne(db, sql: """
+                SELECT rawChannelID, reachability FROM channel WHERE username = ?
+                """, arguments: [username]) else { return nil }
+            return ChannelIdentity(rawChannelID: row["rawChannelID"],
+                                   reachability: Channel.Reachability(rawValue: row["reachability"]))
+        }
+    }
+
+    /// Every channel row carrying `rawChannelID`.
+    ///
+    /// Until `S7` makes the id the key, nothing in the schema stops two rows sharing one — so a
+    /// writer that must not create a second has to ask here first.
+    public func channels(withRawChannelID id: Int64) throws -> [String] {
+        try dbPool.read { db in
+            try String.fetchAll(db, sql: "SELECT username FROM channel WHERE rawChannelID = ? ORDER BY username",
+                                arguments: [id])
+        }
+    }
+
+    /// The message ids already stored for a channel: what a write under `keepExisting` will leave
+    /// alone, so an import can say how much of it was new.
+    public func storedMessageIDs(forChannel username: String) throws -> Set<Int> {
+        try dbPool.read { db in
+            Set(try Int.fetchAll(db, sql: "SELECT messageID FROM post WHERE channelUsername = ?",
+                                 arguments: [username]))
+        }
+    }
+
     /// Writes a page of posts and the crawl state it implies **in one transaction**.
     ///
     /// Separate writes let an interruption land between them, leaving the watermark describing
@@ -443,6 +483,9 @@ extension Store {
         public var longestGap: Int
         public var longestGapStart: Int?
         public var backfillComplete: Bool
+        /// How the channel is reached. A `.group` came from a chat export: it has no pages to
+        /// miss, and its service messages — joins, pins — occupy ids no post will ever fill.
+        public var reachability: Channel.Reachability?
     }
 
     public func integrity(forChannel username: String) throws -> Integrity? {
@@ -480,14 +523,16 @@ extension Store {
             // the last post is an album its span runs past that id, which would make
             // `unexplained` negative and coverage exceed 100%.
             let hi = highestCovered
-            let complete = try Bool.fetchOne(db,
-                sql: "SELECT backfillComplete FROM channel WHERE username = ?",
-                arguments: [username]) ?? false
+            let channel = try Row.fetchOne(db,
+                sql: "SELECT backfillComplete, reachability FROM channel WHERE username = ?",
+                arguments: [username])
+            let complete: Bool = channel?["backfillComplete"] ?? false
+            let reachability = (channel?["reachability"] as String?).flatMap(Channel.Reachability.init(rawValue:))
 
             return Integrity(lowest: lo, highest: hi, posts: spans.count,
                              covered: covered, unexplained: (hi - lo + 1) - covered,
                              longestGap: longest, longestGapStart: longestStart,
-                             backfillComplete: complete)
+                             backfillComplete: complete, reachability: reachability)
         }
     }
 }
