@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewParser.swift b/Sources/TelegramKBIngest/WebPreviewParser.swift
+index e08b563..5a133b5 100644
+--- a/Sources/TelegramKBIngest/WebPreviewParser.swift
++++ b/Sources/TelegramKBIngest/WebPreviewParser.swift
+@@ -51,8 +51,7 @@ public enum WebPreviewParser {
+         // the id feeds span arithmetic (`messageID + mediaCount - 1`) that would trap near
+         // `Int.max`, and a block whose id is outside any real range is unreadable, not a post.
+         // Rejecting it here counts it through `skippedBlocks` to the sync's warning.
+-        guard parts.count == 2, let messageID = Int(parts[1]),
+-              (1...Self.maxMessageID).contains(messageID) else { return nil }
++        guard parts.count == 2, let messageID = Int(parts[1]) else { return nil }
+         // Lowercased at the parser boundary. Telegram resolves usernames case-insensitively but
+         // SQLite compares keys exactly, so `tgkb sync IOSGR` stored channel `IOSGR` while posts
+         // arrived as `iosgr` — and the first page failed its foreign key against a channel that
