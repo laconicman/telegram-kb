@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index c3f772a..aac9608 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -226,7 +226,7 @@ public enum TGKBServer {
+     /// The store decides whether a page continues (`nextCursor`), so the footer follows it: a
+     /// final page that is smaller than `total` is the end of the walk, not a page to fetch more of.
+     static func footer(_ shown: Int, of total: Int, noun: String, nextCursor: String?) -> String {
+-        if nextCursor != nil { return "\(shown) of \(total) \(noun)(s) — pass next_cursor for the rest" }
++        if shown < total { return "\(shown) of \(total) \(noun)(s) — pass next_cursor for the rest" }
+         return shown < total ? "\(shown) of \(total) \(noun)(s)" : "\(shown) \(noun)(s)"
+     }
+ 

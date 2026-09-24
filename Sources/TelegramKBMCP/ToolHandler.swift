@@ -114,7 +114,7 @@ public enum TGKBServer {
             next_cursor: results.nextCursor,
             index_moved_since_cursor: results.indexMovedSinceCursor)
         return try CallTool.Result(
-            content: [.text(text: render(posts, total: results.total),
+            content: [.text(text: render(posts, total: results.total, nextCursor: results.nextCursor),
                             annotations: nil, _meta: nil)],
             structuredContent: output)
     }
@@ -145,7 +145,8 @@ public enum TGKBServer {
                 link: "https://t.me/\(hit.id.channelUsername)/\(hit.id.messageID)")
         }
         return try CallTool.Result(
-            content: [.text(text: render(links, total: results.total), annotations: nil, _meta: nil)],
+            content: [.text(text: render(links, total: results.total, nextCursor: results.nextCursor),
+                            annotations: nil, _meta: nil)],
             structuredContent: FindLinksOutput(
                 links: links, total: results.total,
                 next_cursor: results.nextCursor,
@@ -200,18 +201,18 @@ public enum TGKBServer {
 
     // MARK: - Text renderings for clients that show only `content`
 
-    static func render(_ posts: [PostSummary], total: Int) -> String {
+    static func render(_ posts: [PostSummary], total: Int, nextCursor: String?) -> String {
         var lines = posts.map {
             "\($0.date.prefix(10))  \($0.link)\($0.reactions > 0 ? "  ♥\($0.reactions)" : "")\n    \($0.snippet)"
         }
-        lines.append(posts.count < total
-            ? "\n\(posts.count) of \(total) result(s) — pass next_cursor for the rest"
-            : "\n\(posts.count) result(s)")
+        lines.append("\n" + footer(posts.count, of: total, noun: "result", nextCursor: nextCursor))
         return lines.joined(separator: "\n")
     }
 
-    static func render(_ links: [LinkHitRecord], total: Int) -> String {
-        guard !links.isEmpty else { return "No posts link to that URL." }
+    static func render(_ links: [LinkHitRecord], total: Int, nextCursor: String?) -> String {
+        guard total > 0 else { return "No posts link to that URL." }
+        let foot = footer(links.count, of: total, noun: "post", nextCursor: nextCursor)
+        guard !links.isEmpty else { return foot }
         return links.map {
             var line = "\($0.date.prefix(10))  \($0.link)\n    \($0.url_raw)"
             if let resolved = $0.resolved_url, resolved != $0.url_raw {
@@ -219,10 +220,14 @@ public enum TGKBServer {
             }
             return line
         }
-        .joined(separator: "\n")
-        + (links.count < total
-            ? "\n\n\(links.count) of \(total) post(s) — pass next_cursor for the rest"
-            : "\n\n\(links.count) post(s)")
+        .joined(separator: "\n") + "\n\n" + foot
+    }
+
+    /// The store decides whether a page continues (`nextCursor`), so the footer follows it: a
+    /// final page that is smaller than `total` is the end of the walk, not a page to fetch more of.
+    static func footer(_ shown: Int, of total: Int, noun: String, nextCursor: String?) -> String {
+        if nextCursor != nil { return "\(shown) of \(total) \(noun)(s) — pass next_cursor for the rest" }
+        return shown < total ? "\(shown) of \(total) \(noun)(s)" : "\(shown) \(noun)(s)"
     }
 
     /// A poll's question and options are its content, so a text-only client sees them too —
@@ -273,7 +278,16 @@ struct Args {
 
     func int(_ key: String, default d: Int, clampedTo max: Int) throws -> Int {
         guard let v = values[key] else { return d }
-        let n: Int? = v.intValue ?? v.doubleValue.flatMap { $0 == $0.rounded() ? Int($0) : nil }
+        let n: Int?
+        if let i = v.intValue {
+            n = i
+        } else if let x = v.doubleValue, x.isFinite, x == x.rounded() {
+            // A whole number past ±2^63 is still a whole number, and the schema promises
+            // clamping; `Int(_:)` would trap there and take the server with it.
+            n = Int(exactly: x) ?? (x > 0 ? Int.max : Int.min)
+        } else {
+            n = nil
+        }
         guard let n, n >= 0 else {
             throw MCPError.invalidParams("\(key) must be a non-negative integer")
         }
