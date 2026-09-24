@@ -1,8 +1,79 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index fd5b62d..4b92290 100644
+index 33047f6..38608a9 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
-@@ -542,17 +542,6 @@ extension Store {
+@@ -1,6 +1,7 @@
+ import Darwin           // kill/errno — lease holder liveness
+ import Foundation
+ import GRDB
++import os               // OSAllocatedUnfairLock — LeaseTokens' synchronous map
+ import SQLite3          // sqlite3_file_control / SQLITE_FCNTL_PERSIST_WAL
+ import TelegramKBModel
+ 
+@@ -17,21 +18,22 @@ public struct Store: Sendable {
+     let leaseTokens = LeaseTokens()
+ 
+     /// A (channel → token) map for the leases one `Store` holds. A class, because the struct's
+-    /// methods mutate it inside `dbPool.write` closures.
+-    final class LeaseTokens: @unchecked Sendable {
+-        private let lock = NSLock()
+-        private var tokens: [String: String] = [:]
++    /// methods mutate it inside `dbPool.write` closures — synchronous, which is also why this
++    /// is a lock and not an actor: `assertChannelLease` runs inside a write transaction and
++    /// cannot suspend (PR #3, review round 5).
++    final class LeaseTokens: Sendable {
++        private let tokens = OSAllocatedUnfairLock(initialState: [String: String]())
+         func token(for channel: String) -> String? {
+-            lock.lock(); defer { lock.unlock() }
+-            return tokens[channel]
++            tokens.withLock { $0[channel] }
+         }
+         func set(_ token: String, for channel: String) {
+-            lock.lock(); defer { lock.unlock() }
+-            tokens[channel] = token
++            tokens.withLock { $0[channel] = token }
+         }
+-        func remove(_ channel: String) {
+-            lock.lock(); defer { lock.unlock() }
+-            tokens[channel] = nil
++        /// Removes only the token `expected` names. A reacquisition that landed between a
++        /// release's row delete and this call holds a different nonce — erasing it would
++        /// orphan a lease its holder still owns (PR #3, review round 5).
++        func remove(_ channel: String, onlyIf expected: String?) {
++            tokens.withLock { if $0[channel] == expected { $0[channel] = nil } }
+         }
+     }
+ 
+@@ -582,12 +584,15 @@ extension Store {
+     /// Releases the lease **only if this `Store` still holds it** — a stolen lease is the
+     /// stealer's, and deleting it would re-open the channel mid-run.
+     public func releaseChannelLease(for username: String) throws {
+-        defer { leaseTokens.remove(username) }
++        // Capture the nonce BEFORE the row delete: a same-Store reacquisition between the two
++        // holds a different nonce, and removing its token would orphan its lease (round 5).
++        let nonce = leaseTokens.token(for: username)
+         try dbPool.write { db in
+             try db.execute(sql: """
+                 DELETE FROM channelLease WHERE channelUsername = ? AND pid = ? AND nonce = ?
+-                """, arguments: [username, Self.processID, leaseTokens.token(for: username)])
++                """, arguments: [username, Self.processID, nonce])
+         }
++        leaseTokens.remove(username, onlyIf: nonce)
+     }
+ 
+     /// Claims `username` for the chat `rawChannelID`, **atomically**: the checks and the write
+@@ -595,7 +600,9 @@ extension Store {
+     /// same old state (PR #3, review round 1). The caller holds the channel's lease.
+     ///
+     /// `nil` id means the caller could not learn the chat's id (an unverified import): the row
+-    /// is ensured, its identity left alone.
++    /// is ensured and its *reachability* corrected — imported posts make a `previewDisabled` or
++    /// `unresolvable` row a `group`, and leaving the stale class would misreport it (PR #3,
++    /// review round 5) — while its `rawChannelID`, known or not, is left alone.
+     public func claimChannelIdentity(username: String, rawChannelID: Int64?,
+                                      reachability: Channel.Reachability) throws {
+         try dbPool.write { db in
+@@ -612,25 +619,14 @@ extension Store {
                          "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
                  }
              }
@@ -19,4 +90,15 @@ index fd5b62d..4b92290 100644
 -            }
              try db.execute(sql: """
                  INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
-                 ON CONFLICT(username) DO NOTHING
+-                ON CONFLICT(username) DO NOTHING
++                ON CONFLICT(username) DO UPDATE SET reachability = excluded.reachability
+                 """, arguments: [username, reachability.rawValue])
+             if let rawChannelID {
+                 try db.execute(sql: """
+-                    UPDATE channel SET rawChannelID = ?, reachability = ? WHERE username = ?
+-                    """, arguments: [rawChannelID, reachability.rawValue, username])
++                    UPDATE channel SET rawChannelID = ? WHERE username = ?
++                    """, arguments: [rawChannelID, username])
+             }
+         }
+     }

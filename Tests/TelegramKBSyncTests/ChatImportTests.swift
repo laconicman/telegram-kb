@@ -377,6 +377,23 @@ struct ChatImportTests {
         #expect(identity?.rawChannelID == 0 && identity?.reachability == .group)
     }
 
+    /// 🟡 Round-5 review: an offline import into a row classified `previewDisabled` (or
+    /// `unresolvable`) used to keep that class — doctor then described a crawl that never ran
+    /// instead of the imported group the posts make it. The claim corrects reachability even
+    /// without a learned id, and leaves the stored id alone.
+    @Test("an offline import reclassifies a preview-disabled row as the group it now is")
+    func offlineImportReclassifies() async throws {
+        let store = try Self.store()
+        try store.upsert(channel: Channel(username: "testgroup", rawChannelID: 42,
+                                        reachability: .previewDisabled))
+        let outcome = try await ChatImport(store: store, fetcher: nil)
+            .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+        #expect(outcome.written == 3)
+        let identity = try store.identity(forChannel: "testgroup")
+        #expect(identity?.reachability == .group, "imported posts make it a group")
+        #expect(identity?.rawChannelID == 42, "a learned id is never overwritten by nil")
+    }
+
     @Test("unreadable blocks are counted, and the rest still lands")
     func unreadableCounted() async throws {
         let store = try Self.store()

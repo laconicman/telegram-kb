@@ -1218,4 +1218,24 @@ extension StoreTests {
                                  lowest: 51, highest: 51, backfillComplete: false)
         }
     }
+
+    /// 🟡 Round-5 review: a release's token cleanup ran unconditionally, so an acquire landing
+    /// between its row delete and its map cleanup had its fresh nonce erased — the new holder
+    /// then failed `channelLeaseLost` on a lease it owned. The remove must be conditional on
+    /// the nonce the releasing task captured.
+    @Test("a release erases only the nonce it captured, not a reacquisition's")
+    func releaseKeepsAReacquiredToken() throws {
+        let tokens = Store.LeaseTokens()
+        tokens.set("released-nonce", for: "iosgr")
+        // The reacquisition's nonce has overwritten the entry: the stale release removes nothing.
+        tokens.set("reacquired-nonce", for: "iosgr")
+        tokens.remove("iosgr", onlyIf: "released-nonce")
+        #expect(tokens.token(for: "iosgr") == "reacquired-nonce")
+        tokens.remove("iosgr", onlyIf: "reacquired-nonce")
+        #expect(tokens.token(for: "iosgr") == nil)
+        // Releasing a lease this store never held removes nothing another task claimed.
+        tokens.set("theirs", for: "iosgr")
+        tokens.remove("iosgr", onlyIf: nil)
+        #expect(tokens.token(for: "iosgr") == "theirs")
+    }
 }
