@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index f715f0c..df63c35 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -71,9 +71,7 @@ public enum TGKBServer {
+         // The conformance server's convention: a tool-level error result, not a protocol error —
+         // the call was well-formed, the name just isn't ours.
+         default:
+-            return CallTool.Result(
+-                content: [.text(text: "Unknown tool: \(name)", annotations: nil, _meta: nil)],
+-                isError: true)
++            throw MCPError.methodNotFound(name)
+         }
+     }
+ 

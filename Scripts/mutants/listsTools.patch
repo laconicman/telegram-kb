@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBMCP/Tools.swift b/Sources/TelegramKBMCP/Tools.swift
+index d646b4c..efcce54 100644
+--- a/Sources/TelegramKBMCP/Tools.swift
++++ b/Sources/TelegramKBMCP/Tools.swift
+@@ -13,8 +13,8 @@ enum TGKBTools {
+ 
+     /// Read-only, closed-world — the whole surface shares it.
+     static let annotations = Tool.Annotations(
+-        readOnlyHint: true, destructiveHint: false,
+-        idempotentHint: true, openWorldHint: false)
++        readOnlyHint: false, destructiveHint: true,
++        idempotentHint: false, openWorldHint: true)
+ 
+     /// A page a model can actually read — `Store.maxPageSize` is for programmatic callers.
+     static let maxLimit = 100

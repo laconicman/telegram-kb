@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 03a5da6..a172163 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -274,7 +274,7 @@ extension Store {
+                 predicate = "COALESCE(r.resolvedCanonical, l.urlCanonical) = ?"
+                 arguments = [effective]
+             } else {
+-                predicate = "l.urlRaw = ?"
++                predicate = "l.urlCanonical = ?"
+                 arguments = [url]
+             }
+             let hits = try LinkHit.fetchAll(db, sql: """
