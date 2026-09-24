@@ -142,8 +142,25 @@ exporting machine's local time. And the export does not name its chat. So `--tim
 
 An export with no text-bearing message still verifies — on the post's id, its date and
 `data-peer`, all of which a media-only embed carries (verified on `@beautifulpictures/3`).
-What is compared is then weaker — no words — so the fallback exists only when no text candidate
-does (PR #3, review round 2).
+What is compared is then weaker — no words — so media posts get a candidate budget of their
+own rather than sharing the text posts': three newest text posts deleted since the export would
+otherwise spend it all, and a media-heavy export would read as `notFound` without asking
+(PR #3, review rounds 2 and 4).
+
+One verified instant pins the zone only *at* that instant. A claimed zone can share the true
+zone's offset there and diverge over the rest of the export's range — a DST transition it lacks,
+or keeps on different dates — silently misdating every post in the diverging span. So after a
+candidate verifies, probes sample the rest of the range: one post per distinct offset the
+claimed zone assigns, plus the oldest and midpoint posts. A probe deleted from `t.me` is skipped
+like any deletion; a live one that disagrees fails the import like the first. The residual: a
+wrong zone whose divergence windows contain no probed post still verifies — the check bounds
+the risk, not closes it (PR #3, review round 4).
+
+An uncaptioned document or audio file still names itself — the media block's title is the
+file's name — so the parser records it as the post's text, the only searchable text such a
+message has. A link preview's `observedAt` is the post's own date: the page file's modification
+time looks like the export's moment, but a copied folder rewrites it and misdates every preview
+it held (PR #3, review round 4).
 
 Measured on a 12,471-message export: seven of seven embeds sat exactly three hours from the
 export's dates, on a Mac in Europe/Moscow.
@@ -326,14 +343,17 @@ shape *within* one process, and will matter when sync crawls channels concurrent
 another process: two `tgkb sync` commands share no memory, and `Task(name:)` (Swift 6.2) is a
 debugging label, not an identity — verified: two tasks with the same name run side by side. The
 cross-process guard therefore lives where both processes can see it — the database itself, as the
-`channelLease` row carrying the channel name, a pid and a heartbeat, claimed in one `IMMEDIATE`
-write transaction with its staleness check (`Store.acquireChannelLease`). Every channel-scoped
-write transaction renews the heartbeat **and asserts the row still names this pid**
-(`Store.assertChannelLease`): a holder suspended past the TTL resumes to find its lease stolen,
-and its next write is refused rather than interleaving with the stealer's — a renewal that ran
-apart from the write would have updated zero rows and said nothing (PR #3, review round 3). A
-claimant steals the lease only from a dead pid or a heartbeat older than the 120 s TTL. The
-`upsert` primitives stay unleased — they are the seeding/fixture path, not a run. No lock file.
+`channelLease` row carrying the channel name, a pid, a heartbeat and a nonce, claimed in one
+`IMMEDIATE` write transaction with its staleness check (`Store.acquireChannelLease`). Every
+channel-scoped write transaction renews the heartbeat **and asserts the row still names this
+holder** (`Store.assertChannelLease`): a holder suspended past the TTL resumes to find its lease
+stolen, and its next write is refused rather than interleaving with the stealer's — a renewal
+that ran apart from the write would have updated zero rows and said nothing (PR #3, review
+round 3). The nonce is per `Store` value, which is what the pid cannot be: two stores in one
+process share a pid, so only the value that acquired the lease passes its assertion, and a
+release cannot delete a sibling's row (review round 4). A claimant steals the lease only from a
+dead pid or a heartbeat older than the 120 s TTL. The `upsert` primitives stay unleased — they
+are the seeding/fixture path, not a run. No lock file.
 That was `TD-21`'s discharge; PR #3's review supplied the import-side instance that made it real.
 
 ## Channel identity is `rawChannelID`, not the username
@@ -345,9 +365,12 @@ channel may not have at all.
 
 The store contradicts this today: `channel.username` is the primary key and `post.channelUsername`
 its foreign key, so a rename would orphan an entire channel's history, and a second crawl under
-the new name would look like a new channel. Three review findings have already circled this —
-username casing breaking the foreign key, the identity placeholder `0`, and trusting the first
-`data-view` on a page.
+the new name would look like a new channel. Review findings have already circled this — username
+casing breaking the foreign key, the identity placeholder `0`, trusting the first `data-view` on
+a page, and a username Telegram reassigned to another chat. That last one is now refused where
+the write happens: a page's `data-view` names its channel's id, so `commitPage` checks it against
+the stored row inside the page transaction — before a post lands, and again on every page after
+(PR #3, review round 4).
 
 **The cost of the pivot, stated rather than waved away.** The id is not known until the first page
 is parsed, so a row must exist before it can be identified. That is acceptable: a crawl always

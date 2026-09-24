@@ -75,9 +75,7 @@ public enum ChatExportParser {
     ///   - pages: the export's HTML pages, in order (see ``pageFiles(in:)``).
     ///   - channel: the username to file posts under. The export does not carry it.
     ///   - timeZone: the zone of the machine that wrote the export.
-    ///   - observedAt: when the export was written — the date its link previews were taken.
-    public static func parse(pages: [String], channel: String, timeZone: TimeZone,
-                             observedAt: Date) throws -> Export {
+    public static func parse(pages: [String], channel: String, timeZone: TimeZone) throws -> Export {
         let dates = DateFormatter()
         dates.locale = Locale(identifier: "en_US_POSIX")
         dates.timeZone = timeZone
@@ -97,7 +95,7 @@ public enum ChatExportParser {
                     continue
                 }
                 guard let post = try post(from: block, channel: channel, sender: &sender,
-                                          dates: dates, observedAt: observedAt) else {
+                                          dates: dates) else {
                     export.unreadable += 1
                     continue
                 }
@@ -108,7 +106,7 @@ public enum ChatExportParser {
     }
 
     static func post(from block: Element, channel: String, sender: inout String?,
-                     dates: DateFormatter, observedAt: Date) throws -> Post? {
+                     dates: DateFormatter) throws -> Post? {
         guard let body = try block.select("> div.body").first() else { return nil }
         // The sender first, even from a block that turns out unreadable: the "joined" message
         // after it still continues from this sender, not from the one before.
@@ -120,7 +118,13 @@ public enum ChatExportParser {
               let dateEl = try body.select("> div.date").first(),
               let date = dates.date(from: try dateEl.attr("title")) else { return nil }
         let textEl = try body.select("> div.text").first()
-        let text = try textEl.map(NodeText.text(of:)) ?? ""
+        var text = try textEl.map(NodeText.text(of:)) ?? ""
+        if text.isEmpty {
+            // An uncaptioned document or audio file still names itself: the media block's title
+            // is the file's name — the only searchable text such a message has (PR #3, round 4).
+            text = try body.select(".media_file .title, .media_audio_file .title")
+                .first().map(NodeText.text(of:)) ?? ""
+        }
 
         return Post(
             id: .init(channelUsername: channel, messageID: id),
@@ -133,7 +137,7 @@ public enum ChatExportParser {
             replyTo: try replyTarget(in: body),
             forward: try forwardOrigin(in: body),
             hashtags: try textEl.map(hashtags(in:)) ?? [],
-            links: try links(in: body, text: textEl, observedAt: observedAt),
+            links: try links(in: body, text: textEl, observedAt: date),
             reactions: try reactions(in: body),
             poll: try poll(in: body))
     }
@@ -188,6 +192,11 @@ public enum ChatExportParser {
     /// The same rule as the web preview (`WebPreviewParser.links`): every absolute `http(s)` href
     /// in the text — mentions included, rendered as `https://t.me/<name>` — then the link preview,
     /// attached to the matching link or added as its own.
+    ///
+    /// `observedAt` is the post's own date — the only reliable timestamp the export carries. The
+    /// page file's modification time looks like the export's moment but a copied folder rewrites
+    /// it, misdating every preview it held (PR #3, round 4); the snapshot Telegram rendered rode
+    /// with the message, so the message's date is the honest claim.
     static func links(in body: Element, text: Element?, observedAt: Date) throws -> [LinkRef] {
         var refs: [LinkRef] = []
         var seen = Set<String>()

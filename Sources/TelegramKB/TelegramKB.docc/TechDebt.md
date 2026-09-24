@@ -450,8 +450,10 @@ commit. PR #3's review found the same hole on the *import* path —
 concurrent `run` calls passed the identity checks against the same old state and interleaved
 batches under one username — which is what made the discharge land. A later round hardened the
 hold: every channel-scoped write transaction renews the heartbeat and refuses when the row no
-longer names this pid, so a holder suspended past the TTL cannot resume and interleave with the
-stealer (`Store.assertChannelLease`).
+longer names this holder, so a holder suspended past the TTL cannot resume and interleave with
+the stealer (`Store.assertChannelLease`). The row's `nonce` is per `Store` value — a pid alone
+cannot tell two stores in one process apart, so the assertion and the release both bind it
+(review round 4).
 
 `busyMode = .timeout(10)` makes a second writer wait rather than fail instantly, which is right
 for two writers on *different* channels sharing one file. Two on the *same* channel now see the

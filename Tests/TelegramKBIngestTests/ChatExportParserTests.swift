@@ -11,7 +11,7 @@ import TelegramKBModel
 struct ChatExportParserTests {
 
     static let moscow = TimeZone(identifier: "Europe/Moscow")!
-    static let observed = Date(timeIntervalSince1970: 1_790_000_000)
+
 
     static func page(_ name: String) throws -> String {
         let url = try #require(Bundle.module.url(forResource: "Fixtures/export/\(name)", withExtension: "html"))
@@ -20,7 +20,7 @@ struct ChatExportParserTests {
 
     static func export() throws -> ChatExportParser.Export {
         try ChatExportParser.parse(pages: [page("messages"), page("messages2")], channel: "testgroup",
-                                   timeZone: moscow, observedAt: observed)
+                                   timeZone: moscow)
     }
 
     static func post(_ id: Int) throws -> Post {
@@ -82,13 +82,15 @@ struct ChatExportParserTests {
 
     /// The web preview's rule, kept: a preview whose URL differs from the text's link — here by a
     /// trailing slash — is a second link, and canonicalisation folds the two later.
-    @Test("a link preview becomes a link with its metadata, dated when the export was taken")
+    @Test("a link preview becomes a link with its metadata, dated to the message it rode")
     func linkPreview() throws {
-        let links = try Self.post(12).links
+        let post = try Self.post(12)
+        let links = post.links
         #expect(links.map(\.urlRaw) == ["https://example.org/article/", "https://example.org/article"])
         #expect(links[1].preview == LinkPreview(siteName: "Example", title: "An article",
                                                 description: "What the article says",
-                                                resolvedURL: "https://example.org/article", observedAt: Self.observed))
+                                                resolvedURL: "https://example.org/article",
+                                                observedAt: post.date))
         #expect(links[0].urlCanonical == links[1].urlCanonical)
     }
 
@@ -103,6 +105,15 @@ struct ChatExportParserTests {
     func kinds() throws {
         let kinds = try Self.export().posts.map(\.kind)
         #expect(kinds == [.text, .text, .text, .photo, .poll, .text, .document, .voice, .sticker, .video, .unknown])
+    }
+
+    /// 🟡 An uncaptioned document named itself only in the media block's title — which the
+    /// parser dropped, so the file's name was never indexed. It is now the post's text; a
+    /// captioned document keeps its caption (PR #3, review round 4).
+    @Test("an uncaptioned document's file name is its searchable text")
+    func documentFilenameIsText() throws {
+        #expect(try Self.post(21).text == "manual.pdf")
+        #expect(try Self.post(21).kind == .document)
     }
 
     @Test("pages are read in number order, so messages10 follows messages9")

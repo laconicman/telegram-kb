@@ -114,11 +114,10 @@ public struct ChatImport: Sendable {
         guard Channel.isUsername(channel) else { throw Channel.InvalidUsername(name: channel) }
 
         let files = try ChatExportParser.pageFiles(in: directory)
-        guard let first = files.first else { throw ImportError.notAnExport(directory) }
-        let written = (try? FileManager.default.attributesOfItem(atPath: first.path)[.modificationDate]) as? Date
+        guard !files.isEmpty else { throw ImportError.notAnExport(directory) }
         let export = try ChatExportParser.parse(
             pages: try files.map { try String(contentsOf: $0, encoding: .utf8) },
-            channel: channel, timeZone: timeZone, observedAt: written ?? Date())
+            channel: channel, timeZone: timeZone)
         guard !export.posts.isEmpty else { throw ImportError.nothingReadable(unreadable: export.unreadable) }
 
         let known = try store.identity(forChannel: channel)
@@ -132,7 +131,8 @@ public struct ChatImport: Sendable {
         var outcome = Outcome(channel: channel, title: export.title, posts: export.posts.count,
                               serviceMessages: export.serviceMessages, unreadable: export.unreadable)
         if let fetcher {
-            let verified = try await verify(export.posts, channel: channel, fetcher: fetcher)
+            let verified = try await verify(export.posts, channel: channel, timeZone: timeZone,
+                                            fetcher: fetcher)
             outcome.verifiedMessageID = verified.messageID
             outcome.rawChannelID = verified.rawChannelID
         }
@@ -153,7 +153,8 @@ public struct ChatImport: Sendable {
             state.lowest = min(state.lowest ?? .max, ids.min()!)
             state.highest = max(state.highest ?? .min, ids.max()!)
             try store.commitPage(batch, channel: channel, lowest: state.lowest, highest: state.highest,
-                                 backfillComplete: false, policy: policy)
+                                 backfillComplete: false, policy: policy,
+                                 rawChannelID: outcome.rawChannelID)
         }
         outcome.lowest = state.lowest
         outcome.highest = state.highest
@@ -162,43 +163,84 @@ public struct ChatImport: Sendable {
         return outcome
     }
 
-    /// Confirms the export against `t.me`, newest message with text first. A message deleted since
-    /// the export was taken is skipped; a failed request is not — it is an error, not an answer.
+    /// Confirms the export against `t.me`. A message deleted since the export was taken is
+    /// skipped; a failed request is not — it is an error, not an answer.
     ///
-    /// Text-bearing candidates come first because `sameText` is the strong check. An export
-    /// without any — a media-only group — still verifies, on the remaining evidence: the post's
-    /// **id, its date to the second, and `data-peer`** all bind it to the named chat (a media
-    /// message's embed carries all three; verified on `@beautifulpictures`, 2026-09-24). The
-    /// text check then compares two empty strings and contributes nothing — accepted trade-off,
-    /// since the alternative is refusing a valid export (PR #3, review round 2).
-    func verify(_ posts: [Post], channel: String,
+    /// Text-bearing candidates come first because `sameText` is the strong check; media-only
+    /// posts follow with a budget of their own, verifying on **id + date to the second +
+    /// `data-peer`** (a media message's embed carries all three; verified on `@beautifulpictures`,
+    /// 2026-09-24) — so newest text posts deleted since the export cannot spend the media posts'
+    /// chances (PR #3, review rounds 2 and 4). Weaker evidence than a text match, but a foreign
+    /// chat hosting the same id at the same second under the same peer is not a plausible
+    /// collision.
+    ///
+    /// One verified instant pins the zone only AT that instant: a wrong zone can share the offset
+    /// there and diverge elsewhere in the export's range — a DST transition the claimed zone
+    /// lacks, or keeps on different dates — leaving older posts silently misdated. So probes then
+    /// sample the rest of the range: one post per distinct offset the claimed zone assigns it,
+    /// plus the oldest and midpoint posts (round 4). The residual: a wrong zone whose divergence
+    /// windows contain no probed post still verifies — the check bounds the risk, not closes it.
+    func verify(_ posts: [Post], channel: String, timeZone: TimeZone,
                 fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64) {
         let newest = posts.reversed()
-        let candidates = newest.filter { !$0.text.isEmpty } + newest.filter { $0.text.isEmpty }
-        let newestCandidates = candidates.prefix(Self.candidates)
-        for post in newestCandidates {
-            let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
-            let page = try await fetcher.fetch(url)
-            guard (200..<300).contains(page.statusCode) else {
-                throw ImportError.embedFailed(url, status: page.statusCode)
+        let candidates = newest.filter { !$0.text.isEmpty }.prefix(Self.candidates)
+                       + newest.filter { $0.text.isEmpty }.prefix(Self.candidates)
+        var verified: (post: Post, rawID: Int64)?
+        for post in candidates {
+            if let rawID = try await probe(post, channel: channel, fetcher: fetcher) {
+                verified = (post, rawID)
+                break
             }
-            guard let online = try MessageEmbed.post(html: page.body),
-                  online.id == post.id else { continue }
+        }
+        guard let verified else {
+            throw ImportError.notFound(channel: channel, tried: candidates.map(\.id.messageID))
+        }
+
+        var probed: Set<Int> = [verified.post.id.messageID]
+        var probes: [Post] = []
+        var seenOffsets: Set<Int> = [timeZone.secondsFromGMT(for: verified.post.date)]
+        for post in posts where seenOffsets.insert(timeZone.secondsFromGMT(for: post.date)).inserted {
+            probes.append(post); probed.insert(post.id.messageID)
+        }
+        for post in [posts[0], posts[posts.count / 2]] where probed.insert(post.id.messageID).inserted {
+            probes.append(post)
+        }
+        for post in probes {
+            // A probe deleted from t.me cannot date-check its regime — skipped, like any
+            // deletion; a live one that disagrees fails the import like any verified post.
+            _ = try await probe(post, channel: channel, fetcher: fetcher)
+        }
+        return (verified.post.id.messageID, verified.rawID)
+    }
+
+    /// Fetches one candidate's embed and checks it against the export's record. `nil` means the
+    /// message is gone from `t.me` — skipped, not an error; a live embed that disagrees throws.
+    /// Returns the page's `data-peer` bare id.
+    func probe(_ post: Post, channel: String, fetcher: PageFetcher) async throws -> Int64? {
+        let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
+        let page = try await fetcher.fetch(url)
+        guard (200..<300).contains(page.statusCode) else {
+            throw ImportError.embedFailed(url, status: page.statusCode)
+        }
+        guard let online = try MessageEmbed.post(html: page.body),
+              online.id == post.id else { return nil }
+        // An embed without a text div — a media-only message — has no words to compare, and
+        // comparing would put the file name the parser recorded for search against nothing.
+        if !online.text.isEmpty {
             guard Self.sameText(online.text, post.text) else {
                 throw ImportError.notThisChat(channel: channel, messageID: post.id.messageID)
             }
-            let offset = post.date.timeIntervalSince(online.date)
-            guard offset == 0 else {
-                throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
-            }
-            // A verified page that names no chat cannot feed the identity checks — returning nil
-            // here once let a marked-verified import skip them and store identity 0 (PR #3).
-            guard let rawID = try MessageEmbed.rawChannelID(html: page.body) else {
-                throw ImportError.malformedEmbed(url)
-            }
-            return (post.id.messageID, rawID)
         }
-        throw ImportError.notFound(channel: channel, tried: newestCandidates.map(\.id.messageID))
+        let offset = post.date.timeIntervalSince(online.date)
+        guard offset == 0 else {
+            throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
+        }
+        // A verified page that names no chat cannot feed the identity checks — returning nil
+        // here once let a marked-verified import skip them and store identity 0 (PR #3).
+        guard let rawID = try MessageEmbed.rawChannelID(html: page.body) else {
+            throw ImportError.malformedEmbed(url)
+        }
+        return rawID
     }
 
     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and

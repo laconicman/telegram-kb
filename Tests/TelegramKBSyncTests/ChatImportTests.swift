@@ -265,7 +265,59 @@ struct ChatImportTests {
         #expect(try store.identity(forChannel: "testgroup") == nil)
     }
 
-    /// 🟡 An export whose posts carry no text used to find zero candidates and throw `notFound`
+    /// � A zone can share the claimed offset at the newest message and diverge before it —
+    /// claimed `UTC-5` vs real New York is right all winter and an hour off all summer. One
+    /// verified instant then misdates every post in the diverging span, silently, so probes
+    /// must reach beyond the candidate that passed (PR #3, review round 4).
+    @Test("a zone right at the newest message but wrong earlier is refused")
+    func seasonalZoneIsCaught() async throws {
+        let store = try Self.store()
+        let fixedMinus5 = TimeZone(secondsFromGMT: -5 * 3600)!
+        let msgs = [
+            // July noon under the claimed -5 stores as 17:00Z; under New York it was 16:00Z.
+            Message(id: 1, title: "15 July 2023, 12:00:00", text: "летний пост"),
+            // January noon: -5 either way — the newest message verifies and hides the error.
+            Message(id: 2, title: "15 January 2024, 12:00:00", text: "зимний пост"),
+        ]
+        let telegram = Stub(Dictionary(uniqueKeysWithValues: [
+            Self.route(2, Self.embed("testgroup", 2, text: "зимний пост",
+                                     utc: "2024-01-15T17:00:00+00:00")),
+            Self.route(1, Self.embed("testgroup", 1, text: "летний пост",
+                                     utc: "2023-07-15T16:00:00+00:00")),
+        ]))
+        await #expect(throws: ChatImport.ImportError.wrongZone(
+                        channel: "testgroup", messageID: 1, offset: 3600)) {
+            try await ChatImport(store: store, fetcher: telegram)
+                .run(export: try Self.exportDirectory(msgs), channel: "testgroup",
+                     timeZone: fixedMinus5)
+        }
+        #expect(try store.storedMessageIDs(forChannel: "testgroup").isEmpty)
+    }
+
+    /// 🟡 The candidate budget used to be one `prefix(3)` over newest-first posts: three text
+    /// posts deleted since the export spent it all and the media posts behind them were never
+    /// asked — a media-heavy export read as `notFound`. Text and media now budget separately
+    /// (PR #3, review round 4).
+    @Test("deleted text posts do not spend the media candidates' chances")
+    func deletedTextPostsFallThroughToMedia() async throws {
+        let store = try Self.store()
+        let msgs = [
+            Message(id: 7, title: "3 April 2023, 11:00:00", text: "", media: true),
+            // All three text posts are gone from t.me: no routes, and the stub answers an
+            // empty page — as it does for a deleted message.
+            Message(id: 10, title: "3 April 2023, 12:00:00", text: "ушёл"),
+            Message(id: 11, title: "3 April 2023, 12:10:00", text: "потом этот"),
+            Message(id: 12, title: "3 April 2023, 12:34:07", text: "и этот тоже"),
+        ]
+        let telegram = Stub(Dictionary(uniqueKeysWithValues: [
+            Self.route(7, Self.embedMedia("testgroup", 7, utc: "2023-04-03T08:00:00+00:00")),
+        ]))
+        let outcome = try await ChatImport(store: store, fetcher: telegram)
+            .run(export: try Self.exportDirectory(msgs), channel: "testgroup", timeZone: Self.moscow)
+        #expect(outcome.verifiedMessageID == 7)
+    }
+
+    /// �🟡 An export whose posts carry no text used to find zero candidates and throw `notFound`
     /// without ever asking t.me. A media-only group still verifies — on the post's id, its date
     /// to the second, and `data-peer`, all of which a media embed carries (PR #3, round 2).
     @Test("a media-only export verifies on id, date and the chat's bare id")

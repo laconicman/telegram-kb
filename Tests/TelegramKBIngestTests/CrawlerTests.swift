@@ -232,7 +232,7 @@ extension CrawlerTests {
     func streamingDoesNotRetain() async throws {
         let counter = Counter()
         let result = try await WebPreviewSource(fetcher: try Self.twoPageStub())
-            .crawl(channel: "swiftui_dev") { posts, _ in await counter.add(posts.count) }
+            .crawl(channel: "swiftui_dev") { posts, _, _ in await counter.add(posts.count) }
         #expect(await counter.total == 34, "every post still reaches the caller")
         #expect(result.postCount == 34, "and is counted")
         #expect(result.posts.isEmpty, "but none is held for a final rewrite")

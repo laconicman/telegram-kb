@@ -75,12 +75,17 @@ public struct WebPreviewSource: Sendable {
     ///   - resumeFrom: begin backward pagination here instead of at the newest page. The saved
     ///     `lowestMessageID` of an unfinished backfill — without it a channel larger than
     ///     `maxPages` re-walks its newest pages forever and never reaches its history.
-    ///   - onPage: called with each page as it arrives. **When provided, pages are not retained**
-    ///     — the caller has already persisted them, and holding a whole channel in memory to
-    ///     hand back at the end defeats the point of streaming.
+    ///   - onPage: called with each page as it arrives — its posts, the watermark they imply,
+    ///     and the channel's bare id as learned so far (`data-view`, `nil` until a page yields
+    ///     one, which on real markup is the first page with this channel's posts). The id arrives
+    ///     BEFORE the page's posts commit, so the caller can refuse a channel whose stored
+    ///     identity disagrees while nothing has yet been written (PR #3, review round 4).
+    ///     **When provided, pages are not retained** — the caller has already persisted them,
+    ///     and holding a whole channel in memory to hand back at the end defeats the point of
+    ///     streaming.
     public func crawl(channel: String, since: Int? = nil, resumeFrom: Int? = nil,
                       maxPages: Int = 500,
-                      onPage: (@Sendable ([Post], Watermark) async throws -> Void)? = nil)
+                      onPage: (@Sendable ([Post], Watermark, Int64?) async throws -> Void)? = nil)
     async throws -> CrawlResult {
         var retained: [Int: Post] = [:]
         var cursor: Int? = resumeFrom
@@ -146,7 +151,8 @@ public struct WebPreviewSource: Sendable {
             if let onPage {
                 try await onPage(posts, Watermark(
                     channelUsername: channel, highestMessageID: highestSeen ?? 0,
-                    lowestMessageID: lowestSeen ?? 0, updatedAt: Date(), isBackfillComplete: false))
+                    lowestMessageID: lowestSeen ?? 0, updatedAt: Date(), isBackfillComplete: false),
+                                 rawChannelID)
             }
 
             if let since, ids.allSatisfy({ $0 <= since }) { reachedSince = true; break }

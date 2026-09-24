@@ -67,14 +67,17 @@ public struct ChannelSync: Sendable {
 
         let result = try await source.crawl(channel: channel, since: since,
                                             resumeFrom: state.resumeFrom(full: full),
-                                            maxPages: maxPages) { posts, mark in
+                                            maxPages: maxPages) { posts, mark, pageChannelID in
             // One transaction per page: the posts and the state describing them commit together,
             // so an interruption cannot leave a mark for posts that were never written.
             let next = state.afterPage(lowest: mark.lowestMessageID,
                                        highest: mark.highestMessageID, full: full)
+            // `rawChannelID` makes the page prove it belongs to the stored chat — a username
+            // reassigned since the row was written fails the commit instead of mixing histories.
             try store.commitPage(posts, channel: channel, lowest: next.lowest,
                                  highest: next.highest, backfillComplete: next.backfillComplete,
-                                 policy: full ? .replace : .keepExisting)
+                                 policy: full ? .replace : .keepExisting,
+                                 rawChannelID: pageChannelID)
         }
 
         if let raw = result.rawChannelID {
