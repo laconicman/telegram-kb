@@ -125,6 +125,17 @@ struct CrawlerTests {
         #expect(try await ChannelClassifier(fetcher: stub).classify("x") == .group)
     }
 
+    /// 🟨 A name with a URL delimiter would fetch a different page than the name suggests —
+    /// refused before any request leaves (PR #3, review round 2).
+    @Test("a username that cannot be a t.me path segment never reaches the network")
+    func invalidUsernameIsRefused() async throws {
+        let stub = StubFetcher(routes: [:])
+        await #expect(throws: Channel.InvalidUsername(name: "bad name")) {
+            try await ChannelClassifier(fetcher: stub).classify("bad name")
+        }
+        #expect(await stub.urls().isEmpty, "refused before the first fetch")
+    }
+
 
 
 }

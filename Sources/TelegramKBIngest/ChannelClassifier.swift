@@ -14,6 +14,9 @@ public struct ChannelClassifier: Sendable {
     ///   holds none of the markers below, so classifying it would call a live channel
     ///   "not publicly resolvable" — and `sync` would skip it and exit 0 on stale data.
     public func classify(_ username: String) async throws -> Channel.Reachability {
+        // Before it reaches a URL: a name with a `/`, `?` or space would crash `URL(string:)`
+        // or quietly fetch a different page (PR #3, review round 2).
+        guard Channel.isUsername(username) else { throw Channel.InvalidUsername(name: username) }
         let preview = URL(string: "https://t.me/s/\(username)")!
         let result = try await Self.successful(fetcher.fetch(preview), preview)
         // A 200 whose body actually holds messages. Following the redirect would look like a

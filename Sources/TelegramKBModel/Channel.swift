@@ -35,6 +35,23 @@ public struct Channel: Codable, Hashable, Sendable {
 
     static let zeroChannelID: Int64 = -1_000_000_000_000
 
+    /// ASCII letters, digits and underscores — the only characters a `t.me/<name>` path segment
+    /// can carry. Anything else (`/`, `?`, a space) either crashes `URL(string:)` or lands the
+    /// request on a different page than the name suggests, while the posts are still stored
+    /// under the name as given (PR #3, review round 2).
+    public static func isUsername(_ name: String) -> Bool {
+        !name.isEmpty && name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_") }
+    }
+
+    /// A string that cannot be a `t.me` path segment — see ``isUsername(_:)``.
+    public struct InvalidUsername: Error, Equatable, CustomStringConvertible {
+        public var name: String
+        public init(name: String) { self.name = name }
+        public var description: String {
+            "\(name) is not a Telegram username — only letters, digits and _ are allowed"
+        }
+    }
+
     /// The four-way classification `tgkb doctor` produces for a configured channel.
     ///
     /// The distinction matters because `t.me/s/<name>` returns the same 302 for all three
