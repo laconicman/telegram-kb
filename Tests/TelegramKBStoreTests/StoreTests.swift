@@ -1,10 +1,18 @@
 import Foundation
 import GRDB
+import NaturalLanguage
 import Testing
 import TelegramKBModel
 @testable import TelegramKBStore
 
 struct StoreTests {
+
+    /// `NLTagger` reads its Russian lemma model from a system asset that not every Mac has. Where
+    /// it is missing every Russian token comes back untagged, so the tests that need the lemma
+    /// path are gated on this probe and the skip names the cause (`TD-4`).
+    static let russianLemmasAvailable = TextNormalizer.lemmas("навигации", language: .russian) == "навигация"
+    static let noRussianLemmaModel: Comment =
+        "NLTagger has no Russian lemma model on this Mac (TD-4); the lemma path cannot be tested here"
 
     static func tempPath() -> String {
         FileManager.default.temporaryDirectory
@@ -61,7 +69,8 @@ struct StoreTests {
     }
 
     /// TD-4's regression test. A naive prefix index scores WORSE than Telegram here.
-    @Test("навигация matches a post containing навигации, via the lemma path")
+    @Test("навигация matches a post containing навигации, via the lemma path",
+          .enabled(if: Self.russianLemmasAvailable, Self.noRussianLemmaModel))
     func russianInflection() throws {
         let (store, _) = try Self.seeded()
         try store.upsert(posts: [
@@ -153,7 +162,8 @@ struct StoreTests {
         try writer.upsert(posts: [Self.post(50, "навигация")])
         let reader = try Store.openForReading(at: path)
         #expect(try reader.searchWords("навигация").contains { $0.id.messageID == 50 })
-        try writer.upsert(posts: [Self.post(51, "ещё про навигацию")])
+        // The surface form again: this test is about the reader, not the lemma path.
+        try writer.upsert(posts: [Self.post(51, "и снова навигация")])
         #expect(try reader.searchWords("навигация").count >= 2,
                 "the reader sees the writer's commits; it just cannot observe them")
     }
@@ -687,7 +697,8 @@ extension StoreTests {
 
     /// 🟡 A query carrying any phrase stopped lemmatising its loose terms, so it found less than
     /// the same words unquoted.
-    @Test("loose terms beside a phrase are still lemmatised")
+    @Test("loose terms beside a phrase are still lemmatised",
+          .enabled(if: Self.russianLemmasAvailable, Self.noRussianLemmaModel))
     func looseTermsKeepTheirLemmasBesideAPhrase() throws {
         let (store, _) = try Self.seeded()
         try store.upsert(posts: [Self.post(1, "Тут про навигацию в SwiftUI сегодня")])
