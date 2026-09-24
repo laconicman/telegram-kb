@@ -94,6 +94,17 @@ divergence from the plan: language is detected per text with `NLLanguageRecogniz
 explicitly, not stored on the row. A single-word query that cannot be identified falls back to its
 surface form, which still matches the lemmas indexed for every post.
 
+**A precondition the tests carry, found 2026-09-24.** `NLTagger` loads its Russian lemma model
+from a system linguistic asset, and a Mac without it (a fresh macOS 26 VM used for review of
+PR #3) returns *no tag* for every Russian token while English still lemmatises. The
+binary is fine on such a machine — an untagged token is indexed verbatim, so search degrades to
+surface matching — but the two tests that assert the lemma path fail there for a reason that is
+not the code's, and `Scripts/mutation-check.sh` then refuses its baseline and runs no mutant.
+The tests are gated on a probe (`StoreTests.russianLemmasAvailable`: `навигации` → `навигация`),
+skip with a message naming this entry, and the harness reports a mutant whose test was skipped
+as *unproven on this Mac* rather than green. Cheap to check by hand:
+`swift test --filter russianInflection` — a skip is this precondition, a failure is a regression.
+
 **Now measured rather than suspected**, and the finding inverts the naive assumption: on
 inflected Russian, Telegram's own search is *better* than a plain FTS5 prefix index. SQLite has
 no Russian stemmer.
