@@ -371,7 +371,10 @@ casing breaking the foreign key, the identity placeholder `0`, trusting the firs
 a page, and a username Telegram reassigned to another chat. That last one is now refused where
 the write happens: a page's `data-view` names its channel's id, so `commitPage` checks it against
 the stored row inside the page transaction — before a post lands, and again on every page after
-(PR #3, review round 4).
+(PR #3, review round 4). An id of `0` matches anything, and a group imported with `--no-verify`
+stores exactly that; for it the row's *kind* is the evidence: a group never becomes a broadcast
+channel, so `ensureChannel` refuses a web crawl of a `.group` row, under the lease, before the
+first page (the round-4 finding's second half).
 
 **The cost of the pivot, stated rather than waved away.** The id is not known until the first page
 is parsed, so a row must exist before it can be identified. That is acceptable: a crawl always

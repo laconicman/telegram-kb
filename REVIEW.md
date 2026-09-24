@@ -28,7 +28,8 @@ there rather than re-arguing the decision.
 - Flag a `rawChannelID` learned from a page or an embed that is checked outside the write
   transaction consuming it — `Store.commitPage` re-checks it against the stored row inside its
   own `dbPool.write`, so a username reassigned between the check and the write cannot merge two
-  chats under one name.
+  chats under one name. An id of `0` (an unverified import) passes that check, so also flag a
+  web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
