@@ -1,10 +1,10 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index 8470304..b13fc46 100644
+index e660103..2aa09c7 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
-@@ -80,7 +80,7 @@ public struct Store: Sendable {
-     public func truncateWAL() throws {
-         try dbPool.barrierWriteWithoutTransaction { db in
+@@ -87,7 +87,7 @@ public struct Store: Sendable {
+             sqlite3_busy_timeout(db.sqliteConnection, 0)
+             defer { sqlite3_busy_timeout(db.sqliteConnection, CInt(timeout)) }
              do {
 -                try db.checkpoint(.truncate)
 +                try db.checkpoint(.passive)

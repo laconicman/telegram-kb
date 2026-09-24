@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
+index d4ac61a..a146593 100644
+--- a/Sources/TelegramKBSync/ChannelSync.swift
++++ b/Sources/TelegramKBSync/ChannelSync.swift
+@@ -55,11 +55,6 @@ public struct ChannelSync: Sendable {
+             try? store.truncateWAL()
+             throw error
+         }
+-        do {
+-            try store.truncateWAL()
+-        } catch {
+-            outcome.walCleanupFailed = true
+-        }
+         return outcome
+     }
+ 
