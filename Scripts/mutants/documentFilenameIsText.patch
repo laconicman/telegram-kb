@@ -1,0 +1,19 @@
+diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
+index fccc07d..93e071f 100644
+--- a/Sources/TelegramKBIngest/ChatExportParser.swift
++++ b/Sources/TelegramKBIngest/ChatExportParser.swift
+@@ -118,13 +118,7 @@ public enum ChatExportParser {
+               let dateEl = try body.select("> div.date").first(),
+               let date = dates.date(from: try dateEl.attr("title")) else { return nil }
+         let textEl = try body.select("> div.text").first()
+-        var text = try textEl.map(NodeText.text(of:)) ?? ""
+-        if text.isEmpty {
+-            // An uncaptioned document or audio file still names itself: the media block's title
+-            // is the file's name — the only searchable text such a message has (PR #3, round 4).
+-            text = try body.select(".media_file .title, .media_audio_file .title")
+-                .first().map(NodeText.text(of:)) ?? ""
+-        }
++        let text = try textEl.map(NodeText.text(of:)) ?? ""
+ 
+         return Post(
+             id: .init(channelUsername: channel, messageID: id),
