@@ -1,9 +1,9 @@
 diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
-index 9778a72..de88899 100644
+index e8e9c20..d17dce3 100644
 --- a/Sources/TelegramKBSync/ChannelSync.swift
 +++ b/Sources/TelegramKBSync/ChannelSync.swift
-@@ -38,7 +38,7 @@ public struct ChannelSync: Sendable {
-     public func sync(channel name: String, full: Bool = false) async throws -> Outcome {
+@@ -85,7 +85,7 @@ public struct ChannelSync: Sendable {
+     private func walk(channel name: String, full: Bool) async throws -> Outcome {
          // Telegram usernames are case-insensitive ASCII; SQLite keys are not. A mismatch with the
          // parsed `data-post` fails the post → channel foreign key.
 -        let channel = name.lowercased()

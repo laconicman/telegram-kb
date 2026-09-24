@@ -39,5 +39,6 @@ it — `tgkb`'s `run` cannot be imported): `SQLITE_BUSY` (a reader mid-snapshot)
 tolerated, since the next writer's checkpoint reclaims the residue anyway. The
 attempt runs with an *immediate* busy policy — the writer's 10s timeout would make
 cleanup stall behind a pinned reader, defeating "best-effort" — while other errors
-surface through `Outcome.walCleanupFailed` rather than vanishing into `try?`.
+surface through `Outcome.walCleanupFailed` — or, when the walk itself failed, through
+`ChannelSync.CleanupAlsoFailed` carrying both — rather than vanishing into `try?`.
 `PERSIST_WAL` still owns the files; only the contents are returned.

@@ -493,7 +493,8 @@ for minutes in our surface — every MCP call is a fresh short read. The unmanag
 every write session ends by giving the space back. The attempt runs with an immediate busy
 policy — the writer's 10s timeout would otherwise stall cleanup behind a pinned reader.
 `SQLITE_BUSY` (a reader mid-snapshot) is tolerated: the residue then clears on the next
-writer's checkpoint; any other error surfaces as `Outcome.walCleanupFailed`. No mid-backfill
+writer's checkpoint; any other error surfaces as `Outcome.walCleanupFailed` (or, when the walk
+itself failed, as `ChannelSync.CleanupAlsoFailed` carrying both errors). No mid-backfill
 cadence — the measurement showed checkpoints already slip through; and never
 `.full`/`.restart`/`.truncate` mid-walk, which would block on readers.
 
