@@ -85,6 +85,8 @@ public struct Store: Sendable {
         case schemaNotMigrated
         /// The channel is crawled from its web preview; a second source would mix.
         case channelCrawled(String)
+        /// The row came from a chat export; a web preview under its name is another chat.
+        case channelImported(String)
         /// The claimed identity disagrees with what is stored; the message says how.
         case channelIDConflict(String)
         /// Another live process holds the channel's lease.
@@ -99,6 +101,9 @@ public struct Store: Sendable {
                      + "(the writer) to migrate it; a read-only process cannot."
             case .channelCrawled(let c):
                 return "@\(c) is crawled from its web preview"
+            case .channelImported(let c):
+                return "@\(c) was imported from a chat export as a group; a channel now answering to "
+                     + "that name is another chat — the username was reassigned"
             case .channelIDConflict(let why):
                 return why
             case .channelLeaseHeld(let c, let pid):
@@ -414,9 +419,20 @@ extension Store {
     /// foreign-key prerequisite before a crawl would replace a known id with the `0` placeholder
     /// — and a crawl that then failed would leave the false identity stored, pointing TDLib
     /// reconciliation at a nonexistent chat. Insert-if-absent has no such failure mode.
+    ///
+    /// A row stored as a `.group` is refused to a web crawl: a group never becomes a broadcast
+    /// channel, so a preview answering to its name belongs to another chat. `commitPage`'s id
+    /// check cannot see this when the group was imported unverified — its `rawChannelID` is
+    /// `0`, which matches anything. The caller holds the lease, and every identity write asserts
+    /// it, so the row cannot change between this check and the pages that follow.
     public func ensureChannel(username: String, reachability: Channel.Reachability) throws {
         try dbPool.write { db in
             try assertChannelLease(in: db, channel: username)
+            if reachability == .webPreview,
+               try String.fetchOne(db, sql: "SELECT reachability FROM channel WHERE username = ?",
+                                   arguments: [username]) == Channel.Reachability.group.rawValue {
+                throw StoreError.channelImported(username)
+            }
             try db.execute(sql: """
                 INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
                 ON CONFLICT(username) DO NOTHING

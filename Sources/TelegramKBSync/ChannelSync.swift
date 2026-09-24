@@ -59,7 +59,8 @@ public struct ChannelSync: Sendable {
 
         // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign key and
         // pages are written as they arrive. Insert-if-absent, never an upsert, so a previously
-        // learned `rawChannelID` is not overwritten by the placeholder.
+        // learned `rawChannelID` is not overwritten by the placeholder. A row imported as a group
+        // is refused here: a group never becomes a channel, so this preview is another chat's.
         try store.ensureChannel(username: channel, reachability: .webPreview)
 
         let state = try store.crawlState(forChannel: channel)

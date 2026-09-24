@@ -249,4 +249,24 @@ extension SyncTests {
                 "the foreign channel's posts must not land under the group's name")
         #expect(try store.identity(forChannel: "swiftui_dev")?.rawChannelID == 101)
     }
+
+    /// 🔴 The id check above sees nothing when the group was imported with `--no-verify`: its
+    /// stored id is 0, which matches any page. The row's kind is the evidence that remains — a
+    /// group never becomes a broadcast channel — so `ensureChannel` refuses on it, under the
+    /// lease, before the first page.
+    @Test("a group imported unverified refuses a web crawl under its reassigned name")
+    func unverifiedGroupRefused() async throws {
+        let store = try Self.store()
+        try store.upsert(channel: Channel(username: "swiftui_dev", rawChannelID: 0,
+                                        reachability: .group))
+        await #expect(throws: Store.StoreError.channelImported("swiftui_dev")) {
+            try await ChannelSync(store: store, fetcher: try Self.twoPages())
+                .sync(channel: "swiftui_dev")
+        }
+        #expect(try store.highestMessageID(forChannel: "swiftui_dev") == nil,
+                "the foreign channel's posts must not land under the group's name")
+        #expect(try store.identity(forChannel: "swiftui_dev")
+                == .init(rawChannelID: 0, reachability: .group),
+                "the row keeps saying what the import said")
+    }
 }
