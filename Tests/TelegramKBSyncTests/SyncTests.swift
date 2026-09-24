@@ -265,8 +265,8 @@ extension SyncTests {
         }
         #expect(try store.highestMessageID(forChannel: "swiftui_dev") == nil,
                 "the foreign channel's posts must not land under the group's name")
-        #expect(try store.identity(forChannel: "swiftui_dev")
-                == .init(rawChannelID: 0, reachability: .group),
+        let identity = try store.identity(forChannel: "swiftui_dev")
+        #expect(identity?.rawChannelID == 0 && identity?.reachability == .group,
                 "the row keeps saying what the import said")
     }
 }
