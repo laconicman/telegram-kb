@@ -79,6 +79,13 @@ public struct Store: Sendable {
     /// not an error: the next writer's checkpoint clears it either way.
     public func truncateWAL() throws {
         try dbPool.barrierWriteWithoutTransaction { db in
+            // The 10s `busyMode` exists so page commits out-wait a rival writer. Here it would
+            // only mean waiting out a reader's snapshot — exactly what a best-effort cleanup
+            // must not do, so the attempt runs with an immediate busy policy instead. The C
+            // call cannot throw, which is why it and not `PRAGMA busy_timeout` restores.
+            let timeout = try Int.fetchOne(db, sql: "PRAGMA busy_timeout") ?? 10_000
+            sqlite3_busy_timeout(db.sqliteConnection, 0)
+            defer { sqlite3_busy_timeout(db.sqliteConnection, CInt(timeout)) }
             do {
                 try db.checkpoint(.truncate)
             } catch let e as DatabaseError where e.resultCode.primaryResultCode == .SQLITE_BUSY {

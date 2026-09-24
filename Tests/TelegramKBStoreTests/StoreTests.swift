@@ -226,6 +226,43 @@ extension StoreTests {
         try store.truncateWAL()
         #expect(walSize() == 0, "the file stays (PERSIST_WAL) but its contents are returned")
     }
+
+    /// A TRUNCATE checkpoint waits on readers' snapshots. The writer's 10s busy timeout would
+    /// make a best-effort cleanup stall behind a pinned reader; it gets an immediate policy
+    /// instead, so the residue waits for the next writer rather than the exit waiting for it.
+    @Test("a pinned reader makes cleanup skip, not stall")
+    func truncateWALDoesNotWaitOnReaders() throws {
+        let (store, path) = try Self.seeded()
+        try store.upsert(posts: (1...40).map { Self.post($0, "post \($0)") })
+        let reader = try Store.openForReading(at: path)
+
+        // Park a read transaction so its snapshot pins the WAL. The semaphores bracket the
+        // hold: the read has begun before truncateWAL runs, and it ends only after.
+        let acquired = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let done = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            try? reader.dbPool.read { db in
+                // A deferred transaction pins no snapshot until it reads — make it read.
+                _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM post")
+                acquired.signal()
+                release.wait()
+            }
+            done.signal()
+        }
+        acquired.wait()
+
+        let started = Date()
+        try store.truncateWAL()   // BUSY — a reader holds the WAL — and must NOT wait it out
+        let elapsed = Date().timeIntervalSince(started)
+        release.signal()
+        done.wait()
+
+        #expect(elapsed < 5, "with the writer's 10s timeout this call would stall behind the reader")
+        let wal = (try? FileManager.default
+            .attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal > 0, "the pinned snapshot keeps the residue — a later writer reclaims it")
+    }
 }
 
 extension StoreTests {

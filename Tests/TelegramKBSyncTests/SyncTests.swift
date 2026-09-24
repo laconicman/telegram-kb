@@ -206,3 +206,21 @@ extension SyncTests {
         #expect(outcome.postCount == 20)
     }
 }
+
+extension SyncTests {
+    /// TD-22: the session-end reclaim lives in `ChannelSync` precisely so a test can see it —
+    /// `tgkb`'s `run` cannot be imported. If the call is removed this goes green nowhere.
+    @Test("a finished sync hands the WAL's space back")
+    func syncLeavesWALTruncated() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-sync-\(UUID().uuidString).sqlite").path
+        let store = try Store.openForWriting(at: path)
+        let outcome = try await ChannelSync(store: store, fetcher: try Self.twoPages())
+            .sync(channel: "swiftui_dev")
+
+        #expect(!outcome.walCleanupFailed)
+        let wal = (try? FileManager.default
+            .attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal == 0, "the file stays (PERSIST_WAL); its contents are given back")
+    }
+}

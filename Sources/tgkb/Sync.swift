@@ -53,13 +53,16 @@ struct Sync: AsyncParsableCommand {
     func run() async throws {
         try store.ensureDirectory()
         let db = try Store.openForWriting(at: store.databasePath)
-        // A backfill's WAL keeps whatever it grew to until the next checkpoint can truncate it —
-        // measured at 44MB for a 4,411-post channel under a pinned reader (TD-22). The file
-        // itself stays by design (PERSIST_WAL); only its contents need giving back. Busy means
-        // a reader is mid-snapshot — the next writer reclaims it then.
-        defer { try? db.truncateWAL() }
 
         if let path = importResolutions {
+            // The channel loop's reclaim lives in `ChannelSync`; this path bypasses it, so
+            // it owns its own — best-effort, but a real failure says so rather than vanishing.
+            defer {
+                do { try db.truncateWAL() } catch {
+                    let msg = "warning: WAL cleanup failed — the space is reclaimed by the next write instead\n"
+                    FileHandle.standardError.write(Data(msg.utf8))
+                }
+            }
             let report = try db.importResolutions(fromJSONLAt: path)
             print("imported \(report.imported) resolutions")
             if report.skipped > 0 {
@@ -100,6 +103,11 @@ struct Sync: AsyncParsableCommand {
             if outcome.foreignBlocks > 0 {
                 let warning = "\(outcome.channel): \(outcome.foreignBlocks) block(s) belonged to "
                             + "another channel and were skipped — the page layout may have changed\n"
+                FileHandle.standardError.write(Data(warning.utf8))
+            }
+            if outcome.walCleanupFailed {
+                let warning = "\(outcome.channel): WAL cleanup failed — the space is reclaimed "
+                            + "by the next write instead\n"
                 FileHandle.standardError.write(Data(warning.utf8))
             }
             print("\(outcome.channel): \(outcome.postCount) posts, \(outcome.pagesFetched) pages"

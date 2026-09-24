@@ -33,7 +33,11 @@ Three arms:
 
 So: mid-backfill growth under real readers is bounded; the unmanaged part is the
 **residue**, which persists exactly as long as some reader keeps the file open — the
-normal state while `tgkb-mcp` runs. Hence `Store.truncateWAL()`, deferred in
-`Sync.run`: `SQLITE_BUSY` (a reader mid-snapshot) is tolerated, since the next
-writer's checkpoint reclaims the residue anyway. `PERSIST_WAL` still owns the files;
-only the contents are returned.
+normal state while `tgkb-mcp` runs. Hence `Store.truncateWAL()`, called from
+`ChannelSync.sync` at the end of each channel's write session (where tests can see
+it — `tgkb`'s `run` cannot be imported): `SQLITE_BUSY` (a reader mid-snapshot) is
+tolerated, since the next writer's checkpoint reclaims the residue anyway. The
+attempt runs with an *immediate* busy policy — the writer's 10s timeout would make
+cleanup stall behind a pinned reader, defeating "best-effort" — while other errors
+surface through `Outcome.walCleanupFailed` rather than vanishing into `try?`.
+`PERSIST_WAL` still owns the files; only the contents are returned.

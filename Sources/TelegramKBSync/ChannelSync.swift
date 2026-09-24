@@ -38,10 +38,34 @@ public struct ChannelSync: Sendable {
         /// Blocks the parser could not read. Non-zero means posts are missing from the index
         /// below the recorded mark, where no later incremental run will look for them.
         public var unreadableBlocks = 0
+        /// The end-of-session WAL reclaim failed with a real error (`TD-22` — BUSY, a reader
+        /// mid-snapshot, is absorbed inside `Store.truncateWAL` and does not set this). The
+        /// sync itself is complete; the residue is reclaimed by a later write instead.
+        public var walCleanupFailed = false
     }
 
     /// - Parameter full: re-walk from the newest page, overwriting stored copies. Never removes.
     public func sync(channel name: String, full: Bool = false) async throws -> Outcome {
+        var outcome: Outcome
+        do {
+            outcome = try await walk(channel: name, full: full)
+        } catch {
+            // A failed walk still committed pages, so the reclaim is still attempted. The
+            // walk's own error is the one the caller must see, so this result is dropped.
+            try? store.truncateWAL()
+            throw error
+        }
+        do {
+            try store.truncateWAL()
+        } catch {
+            outcome.walCleanupFailed = true
+        }
+        return outcome
+    }
+
+    /// Classify, crawl, write each page, record what the walk proved. `sync` wraps this in
+    /// the session-end WAL reclaim, which is why the flag lives on `Outcome`.
+    private func walk(channel name: String, full: Bool) async throws -> Outcome {
         // Telegram usernames are case-insensitive ASCII; SQLite keys are not. A mismatch with the
         // parsed `data-post` fails the post → channel foreign key.
         let channel = name.lowercased()
