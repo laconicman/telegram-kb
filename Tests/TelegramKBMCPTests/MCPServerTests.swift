@@ -52,6 +52,25 @@ struct MCPServerTests {
         return try JSONDecoder().decode(Output.self, from: data)
     }
 
+    /// -32602 specifically — not just "some error surfaced". A misspelled param reported as
+    /// an internal error would pass a looser assertion while telling the client the wrong thing.
+    static func expectInvalidParams(
+        _ comment: String,
+        _ body: () async throws -> CallTool.Result
+    ) async {
+        do {
+            _ = try await body()
+            Issue.record("\(comment): expected invalidParams, got a result")
+        } catch let e as MCPError {
+            guard case .invalidParams = e else {
+                Issue.record("\(comment): expected -32602, got \(e)")
+                return
+            }
+        } catch {
+            Issue.record("\(comment): expected MCPError, got \(error)")
+        }
+    }
+
     @Test("tools/list serves the three tools with all four annotations set")
     func listsTools() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
@@ -112,9 +131,9 @@ struct MCPServerTests {
         let page1 = try await client.callTool(
             name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
         let cursor = try #require(try Self.decode(page1, as: SearchPostsOutput.self).next_cursor)
-        await #expect(throws: MCPError.self) {
-            // A cursor minted by "и" must not page through "вёрстка".
-            _ = try await client.callTool(
+        // A cursor minted by "и" must not page through "вёрстка".
+        await Self.expectInvalidParams("foreign cursor") {
+            try await client.callTool(
                 name: "search_posts", arguments: ["query": "вёрстка", "cursor": .string(cursor)]).value
         }
     }
@@ -122,19 +141,19 @@ struct MCPServerTests {
     @Test("malformed calls are invalidParams — missing arg, wrong type, unknown key, bad kind")
     func invalidArgsRejected() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
-        await #expect(throws: MCPError.self) {
-            _ = try await client.callTool(name: "search_posts", arguments: [:]).value
+        await Self.expectInvalidParams("missing query") {
+            try await client.callTool(name: "search_posts", arguments: [:]).value
         }
-        await #expect(throws: MCPError.self) {
-            _ = try await client.callTool(
+        await Self.expectInvalidParams("query of wrong type") {
+            try await client.callTool(
                 name: "search_posts", arguments: ["query": .int(3)]).value
         }
-        await #expect(throws: MCPError.self) {
-            _ = try await client.callTool(
+        await Self.expectInvalidParams("misspelled key") {
+            try await client.callTool(
                 name: "search_posts", arguments: ["query": "x", "chanel": "iosgr"]).value
         }
-        await #expect(throws: MCPError.self) {
-            _ = try await client.callTool(
+        await Self.expectInvalidParams("undeclared kind") {
+            try await client.callTool(
                 name: "search_posts", arguments: ["query": "x", "kind": "tesseract"]).value
         }
     }
@@ -188,9 +207,9 @@ struct MCPServerTests {
         let missing = try await client.callTool(
             name: "get_post", arguments: ["post": "@iosgr/404"]).value
         #expect(missing.isError == true)
-        await #expect(throws: MCPError.self) {
-            _ = try await client.callTool(name: "get_post",
-                                          arguments: ["post": "not a ref"]).value
+        await Self.expectInvalidParams("unparseable post ref") {
+            try await client.callTool(name: "get_post",
+                                      arguments: ["post": "not a ref"]).value
         }
     }
 

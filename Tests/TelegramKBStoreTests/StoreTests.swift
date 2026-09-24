@@ -174,12 +174,21 @@ struct StoreTests {
         // Once resolved, the shortener query finds the destination post too — and vice versa.
         #expect(try store.links(to: short).hits.map(\.id.messageID) == [1, 2])
         #expect(try store.links(to: dest).hits.map(\.id.messageID) == [1, 2])
-        // `total` counts every match, not the page — truncation is never silent.
-        let capped = try store.links(to: dest, limit: 1)
-        #expect(capped.hits.count == 1 && capped.total == 2)
         let hit = try store.links(to: dest).hits.first { $0.id.messageID == 1 }
         #expect(hit?.urlRaw == short)
         #expect(hit?.effectiveURL == destCanonical)
+    }
+
+    @Test("links(to:) total counts every match — a truncated page is never silent")
+    func linkTotalCountsEveryMatch() throws {
+        let (store, _) = try Self.seeded()
+        let dest = "https://habr.com/ru/post/1"
+        try store.upsert(posts: [
+            Self.post(1, "один", links: [LinkRef(urlRaw: dest)]),
+            Self.post(2, "два", links: [LinkRef(urlRaw: dest + "?utm_source=tg")]),
+        ])
+        let capped = try store.links(to: dest, limit: 1)
+        #expect(capped.hits.count == 1 && capped.total == 2)
     }
 
     @Test("links(to:) falls back to the raw spelling when the URL cannot be canonicalised")
