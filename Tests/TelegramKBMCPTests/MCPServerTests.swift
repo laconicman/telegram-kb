@@ -217,6 +217,8 @@ struct MCPServerTests {
         let out2 = try Self.decode(page2, as: FindLinksOutput.self)
         #expect(out2.links.map(\.post) == ["@iosgr/3"], "the second page must not repeat")
         #expect(out2.next_cursor == nil)
+        #expect(page2.structuredContent?.objectValue?["next_cursor"] == nil,
+                "a final page omits next_cursor rather than sending null against a string schema")
 
         // A link cursor is bound to its URL, and to find_links: neither misuse pages silently.
         await Self.expectInvalidParams("cursor for another URL") {
@@ -226,6 +228,67 @@ struct MCPServerTests {
         await Self.expectInvalidParams("link cursor passed to search_posts") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": "про", "cursor": .string(cursor)]).value
+        }
+    }
+
+    /// 🟡 The text footer decided "more to fetch" by `page.count < total`, which is true on every
+    /// page of a multi-page walk — including the last, which then told the model to pass a
+    /// `next_cursor` that did not exist. With `limit: 0` it said no posts linked at all.
+    @Test("the text footer follows next_cursor: a final page is the end, a count is a count")
+    func footerFollowsNextCursor() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 3),
+                 date: Date(timeIntervalSince1970: 1_700_000_003),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "тот же сократитель",
+                 links: [LinkRef(urlRaw: "https://clck.ru/33ABCD")]),
+        ])
+        let (client, _) = try await Self.connected(store)
+        func text(_ r: CallTool.Result) throws -> String {
+            guard case .text(let s, _, _) = r.content.first else {
+                throw MCPError.internalError("expected a text content block")
+            }
+            return s
+        }
+        let url: Value = "https://clck.ru/33ABCD"
+        let first = try await client.callTool(
+            name: "find_links", arguments: ["url": url, "limit": .int(1)]).value
+        let cursor = try #require(try Self.decode(first, as: FindLinksOutput.self).next_cursor)
+        #expect(try text(first).hasSuffix("1 of 2 post(s) — pass next_cursor for the rest"))
+
+        let last = try await client.callTool(
+            name: "find_links", arguments: ["url": url, "limit": .int(1), "cursor": .string(cursor)]).value
+        #expect(try text(last).hasSuffix("1 of 2 post(s)"),
+                "a final page smaller than total is the end of the walk, not a page to continue")
+
+        let count = try await client.callTool(
+            name: "find_links", arguments: ["url": url, "limit": .int(0)]).value
+        #expect(try Self.decode(count, as: FindLinksOutput.self).total == 2)
+        #expect(try text(count) == "0 of 2 post(s)", "a count is not an empty result set")
+
+        let search = try await client.callTool(
+            name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
+        let more = try #require(try Self.decode(search, as: SearchPostsOutput.self).next_cursor)
+        let end = try await client.callTool(
+            name: "search_posts", arguments: ["query": "про", "limit": .int(1), "cursor": .string(more)]).value
+        #expect(try text(end).hasSuffix("1 of 2 result(s)"))
+    }
+
+    /// 🔴 `Args.int` converted a whole-valued double with `Int(_:)`, which traps past ±2^63 — so
+    /// `"limit": 1e20` killed the server instead of being clamped as the schema promises.
+    @Test("a limit past Int.max is clamped, not a crash")
+    func hugeLimitIsClampedNotFatal() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        let out = try await client.callTool(
+            name: "search_posts", arguments: ["query": "про", "limit": .double(1e20)]).value
+        #expect(try Self.decode(out, as: SearchPostsOutput.self).posts.count == 2)
+        await Self.expectInvalidParams("a hugely negative limit is still a negative limit") {
+            try await client.callTool(
+                name: "search_posts", arguments: ["query": "про", "limit": .double(-1e20)]).value
+        }
+        await Self.expectInvalidParams("a fractional limit is not an integer") {
+            try await client.callTool(
+                name: "search_posts", arguments: ["query": "про", "limit": .double(1.5)]).value
         }
     }
 

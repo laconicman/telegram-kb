@@ -411,8 +411,12 @@ details the spec-level decisions left open:
   A query that cannot be canonicalised falls back to the raw spelling, which is what `url_raw`
   exists for. `total` counts the full match set in the same read, so a `limit`-truncated list
   never presents as complete, and the list pages with the same opaque cursor as `search_posts`
-  — fingerprinted over the match key rather than the spelling — because a page cap with no
-  continuation would make every match past it unreachable.
+  because a page cap with no continuation would make every match past it unreachable. The
+  cursor is fingerprinted over the query's canonical URL, not the key it currently resolves to:
+  a resolution written mid-walk then reads as `index_moved_since_cursor`, the drift signal the
+  tool advertises, rather than as a cursor for some other query. The text footer follows
+  `next_cursor` too — a final page smaller than `total` is the end of the walk, not an
+  invitation to fetch more.
 - **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
   load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
   from a second read would pair them with bodies from whatever a concurrent sync had committed
