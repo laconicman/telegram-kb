@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index 6d2d610..4d5a0a8 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -47,7 +47,7 @@ extension Store {
+             if let kind { conditions.append("p.kind = ?"); arguments.append(kind.rawValue) }
+             if let from { conditions.append("p.date >= ?"); arguments.append(from) }
+             if let to { conditions.append("p.date <= ?"); arguments.append(to) }
+-            if let before { conditions.append("p.date < ?"); arguments.append(before) }
++            if let before { conditions.append("p.date <= ?"); arguments.append(before) }
+             let join = """
+                 JOIN post p ON p.channelUsername = m.channelUsername AND p.messageID = m.messageID
+                 """

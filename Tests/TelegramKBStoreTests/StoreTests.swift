@@ -957,6 +957,16 @@ extension StoreTests {
         let early = try store.search("swift", mode: .both,
                                      filter: .init(channel: "iosgr", to: firstWeek), limit: 100)
         #expect(early.total == 5 && early.hits.count == 5, "days 1 to 5 in that channel")
+
+        // `before` is exclusive where `to` is inclusive, and the two are distinct to a cursor.
+        let strictly = try store.search("swift", mode: .both,
+                                        filter: .init(channel: "iosgr", before: firstWeek), limit: 100)
+        #expect(strictly.total == 4, "day 5 itself is out")
+        let paged = try store.search("swift", mode: .both, filter: .init(before: firstWeek), limit: 2)
+        #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
+            try store.search("swift", mode: .both, filter: .init(to: firstWeek), limit: 2,
+                             cursor: try #require(paged.nextCursor))
+        }
     }
 
     /// The page must walk the result set once: no gaps, no repeats, and a cursor that stops.
