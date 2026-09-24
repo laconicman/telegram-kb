@@ -33,7 +33,10 @@ public enum WebPreviewParser {
         // `tgme_widget_message_wrap`, but a single-post `?embed=1` page has no wrapper at all —
         // selecting the wrapper silently parses zero posts from every embed. The fixtures for
         // poll, forward, reply and album are all embeds, which is how this surfaced.
-        let blocks = try doc.select("div.tgme_widget_message[data-post]")
+        // The selector is deliberately NOT `[data-post]`: a message div missing the attribute
+        // can never become a post — it has no channel/id — but it IS an unreadable block, and
+        // `post(from:)` returning nil for it is what `skippedBlocks` exists to count.
+        let blocks = try doc.select("div.tgme_widget_message")
         let posts = try blocks.compactMap(post(from:))
         return Page(posts: posts, skippedBlocks: blocks.count - posts.count)
     }

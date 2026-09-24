@@ -246,4 +246,23 @@ extension WebPreviewParserTests {
         #expect(page.posts.count == 20, "the real blocks on the same page still parse")
         #expect(page.posts.allSatisfy { $0.id.messageID > 0 })
     }
+
+    /// A `tgme_widget_message` div without `data-post` can never become a post — it has no
+    /// channel/id — but it is still an unreadable block. Selecting `[data-post]` would make it
+    /// invisible to `skippedBlocks`, a hole between the two counts (PR #4, round 1).
+    @Test("a message block missing data-post counts as unreadable, not as nothing")
+    func missingDataPostIsCounted() throws {
+        let html = #"""
+        <div class="tgme_widget_message">
+          <div class="tgme_widget_message_text js-message_text">id-less block</div>
+        </div>
+        <div class="tgme_widget_message" data-post="c/7">
+          <div class="tgme_widget_message_text js-message_text">real post</div>
+          <a class="tgme_widget_message_date"><time datetime="2026-01-01T00:00:00+00:00"></time></a>
+        </div>
+        """#
+        let page = try WebPreviewParser.page(html: html)
+        #expect(page.posts.count == 1)
+        #expect(page.skippedBlocks == 1, "the id-less block is unreadable, not invisible")
+    }
 }
