@@ -80,7 +80,12 @@ struct LinkHitRecord: Codable, Sendable, Equatable {
 
 struct FindLinksOutput: Codable, Sendable, Equatable {
     var links: [LinkHitRecord]
+    /// Every match, before truncation — `links.count < total` means more exist.
     var total: Int
+    /// Pass back as `cursor` to continue; absent when there is nothing after this page.
+    var next_cursor: String?
+    /// A link or resolution write landed between pages — a post may have been skipped or repeated.
+    var index_moved_since_cursor: Bool
 }
 
 /// The full post — `get_post`'s record. Everything the store knows, unabridged.
@@ -128,7 +133,7 @@ struct PostDetail: Codable, Sendable, Equatable {
     var author: String?
     var kind: String
     var media_count: Int
-    /// `web` | `export` | `tdlib` — what the source could express, so "not a document" is
+    /// `web` | `tdlib` | `absent` — what the source could express, so "not a document" is
     /// distinguishable from "this source cannot say".
     var format_source: String
     var text: String

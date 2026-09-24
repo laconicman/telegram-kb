@@ -23,7 +23,9 @@ there rather than re-arguing the decision.
   `Sources/TelegramKBSync/ChannelSync.swift` after a walk ends, because completion is knowable
   only once the walk stops — a crash before it costs a re-crawl, never a false completion.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
-  `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
+  `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`). `swift-log`
+  and `swift-system` are the SDK's own dependencies, named only because its `StdioTransport` and
+  `Logger` signatures require their types; they add nothing to the closure.
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
   `Spec/url-canonical/fixtures.json` cases in any diff that changes
   `Sources/TelegramKBModel/URLCanonicaliser.swift` rules.

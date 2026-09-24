@@ -87,7 +87,8 @@ enum TGKBTools {
             or what it resolved to — so a shortener (clck.ru, bit.ly) query finds the \
             destination's posts and a destination query finds every spelling that resolved to \
             it. Each record returns url_canonical (the join key) with the resolved target beside \
-            it, plus the post's t.me link.
+            it, plus the post's t.me link. Pass next_cursor back as `cursor` to continue a \
+            result list; `total` reports every match before truncation.
             """,
         inputSchema: .object([
             "type": "object",
@@ -95,7 +96,10 @@ enum TGKBTools {
                 "url": .object(["type": "string",
                                 "description": "Any spelling — raw, canonical, or shortener."]),
                 "limit": .object(["type": "integer", "default": .int(defaultLimit),
-                                  "minimum": 0, "maximum": .int(maxLimit)]),
+                                  "minimum": 0, "maximum": .int(maxLimit),
+                                  "description": "Page size; values above the maximum are clamped."]),
+                "cursor": .object(["type": "string",
+                                   "description": "The previous page's next_cursor, verbatim."]),
             ]),
             "required": ["url"],
             "additionalProperties": false,
@@ -106,6 +110,8 @@ enum TGKBTools {
             "properties": .object([
                 "links": .object(["type": "array", "items": .object(["type": "object"])]),
                 "total": .object(["type": "integer"]),
+                "next_cursor": .object(["type": "string"]),
+                "index_moved_since_cursor": .object(["type": "boolean"]),
             ]),
         ]))
 

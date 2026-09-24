@@ -410,7 +410,17 @@ details the spec-level decisions left open:
   finds the destination's posts and a destination finds every spelling that resolved to it.
   A query that cannot be canonicalised falls back to the raw spelling, which is what `url_raw`
   exists for. `total` counts the full match set in the same read, so a `limit`-truncated list
-  never presents as complete.
+  never presents as complete, and the list pages with the same opaque cursor as `search_posts`
+  — fingerprinted over the match key rather than the spelling — because a page cap with no
+  continuation would make every match past it unreachable.
+- **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
+  load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
+  from a second read would pair them with bodies from whatever a concurrent sync had committed
+  in between — the same two-snapshot fault `Store.search` already refuses between its two
+  indexes.
+- **A date-only `to` is the whole day.** `YYYY-MM-DD` as an upper bound becomes the day's last
+  millisecond (the store's date precision), not `23:59:59` — the bound is inclusive and a post
+  stamped inside the final second is still that day's.
 - **The post reference is a grammar of three forms** — `@channel/id` (what records emit),
   `channel/id`, `https://t.me/channel/id` (what people paste). All fold to the lowercase key.
 - **Server assembly lives in the library** (`TGKBServer.makeServer`), so `TelegramKBMCPTests`
