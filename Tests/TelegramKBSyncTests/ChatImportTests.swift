@@ -60,10 +60,12 @@ struct ChatImportTests {
     }
 
     /// `t.me/<chat>/<id>?embed=1` as Telegram renders a public group's message.
-    static func embed(_ chat: String, _ id: Int, text: String, utc: String) -> String {
-        """
+    static func embed(_ chat: String, _ id: Int, text: String, utc: String,
+                      peer: Int64? = chatID) -> String {
+        let dataPeer = peer.map { " data-peer=\"c\($0)_-1111111111111111111\"" } ?? ""
+        return """
         <html><body>
-        <div class="tgme_widget_message js-widget_message" data-post="\(chat)/\(id)" data-peer="c\(chatID)_-1111111111111111111">
+        <div class="tgme_widget_message js-widget_message" data-post="\(chat)/\(id)"\(dataPeer)>
         <div class="tgme_widget_message_bubble">
         <div class="tgme_widget_message_text js-message_text" dir="auto">\(text)</div>
         <span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/\(chat)/\(id)"><time datetime="\(utc)" class="time">12:34</time></a></span>
@@ -228,6 +230,45 @@ struct ChatImportTests {
         }
     }
 
+    @Test("a verified page that names no chat stops the import — the format changed, not the check")
+    func embedWithoutPeer() async throws {
+        let store = try Self.store()
+        let peerless = Stub(Dictionary(uniqueKeysWithValues: [
+            Self.route(12, Self.embed("testgroup", 12, text: Self.messages[2].text,
+                                      utc: "2023-04-03T09:34:07+00:00", peer: nil)),
+        ]))
+        // Read as a missing id, the import would skip the uniqueness checks and still record
+        // itself verified — a nil id is only honest when nothing was fetched at all.
+        await #expect(throws: ChatImport.ImportError.malformedEmbed(
+                        URL(string: "https://t.me/testgroup/12?embed=1")!)) {
+            try await ChatImport(store: store, fetcher: peerless)
+                .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+        }
+        #expect(try store.identity(forChannel: "testgroup") == nil)
+    }
+
+    @Test("a second writer for the same channel is refused while the lease is held")
+    func concurrentImportRefused() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-import-\(UUID().uuidString).sqlite").path
+        let holder = try Store.openForWriting(at: path)
+        let store = try Store.openForWriting(at: path)
+        try holder.acquireChannelLease(for: "testgroup")
+        defer { try? holder.releaseChannelLease(for: "testgroup") }
+
+        await #expect(throws: Store.StoreError.channelLeaseHeld(
+                        channel: "testgroup", pid: ProcessInfo.processInfo.processIdentifier)) {
+            try await ChatImport(store: store, fetcher: nil)
+                .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+        }
+        #expect(try store.identity(forChannel: "testgroup") == nil)
+
+        try holder.releaseChannelLease(for: "testgroup")
+        let outcome = try await ChatImport(store: store, fetcher: nil)
+            .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+        #expect(outcome.written == 3)
+    }
+
     @Test("offline, nothing is verified and no id is learned")
     func offline() async throws {
         let store = try Self.store()
@@ -269,9 +310,17 @@ struct ChatImportTests {
         }
     }
 
-    @Test("the same words rendered twice compare equal; different words do not")
+    @Test("the same words rendered twice compare equal; reordered or recounted ones do not")
     func sameText() {
         #expect(ChatImport.sameText("Первая  строка\nпро @someone", "Первая строка про @someone"))
         #expect(!ChatImport.sameText("Первая строка", "Совсем другое сообщение"))
+        // A Set-based overlap passed both of these: order and repetition are now checked.
+        #expect(!ChatImport.sameText("Alice paid Bob today", "Bob paid Alice today"))
+        #expect(!ChatImport.sameText("a a b", "a b b"))
+        // The bound: one different token in ten still compares equal, two do not.
+        #expect(ChatImport.sameText("one two three four five six seven eight nine ten",
+                                    "one two three four five six seven eight nine tenX"))
+        #expect(!ChatImport.sameText("one two three four five six seven eight nine ten",
+                                     "one two three four five six seven eight nineX tenX"))
     }
 }

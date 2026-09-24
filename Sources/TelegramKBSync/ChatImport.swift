@@ -15,9 +15,14 @@ import TelegramKBStore
 /// 3. **Verify against one embed**, when a fetcher is given: the newest message with text is fetched
 ///    from `t.me/<chat>/<id>?embed=1`. Different words mean the export is not this chat; a
 ///    different moment means the export's zone is wrong — its dates carry no offset. The embed
-///    also names the chat's bare id, so the import learns `rawChannelID`.
-/// 4. **One chat, one row.** Until `S7` keys channels by `rawChannelID`, nothing in the schema stops
-///    two usernames holding one id, so it is checked here, before anything is written.
+///    also names the chat's bare id, so the import learns `rawChannelID`. A page that verifies
+///    but names no chat is a format change, not an offline import — it throws, because the
+///    identity checks below would otherwise be skipped while "verified" is recorded.
+/// 4. **One chat, one row — and one writer at a time.** The channel's lease is taken before the
+///    embed is fetched and held until the last batch commits, so two `tgkb import` processes
+///    cannot interleave under one username (TD-21). The identity checks and the write then share
+///    `claimChannelIdentity`'s single transaction, so no claimant can pass them against state a
+///    rival has already replaced (PR #3, review round 1).
 /// 5. **Write in batches**, each one `commitPage`: the posts and the id bounds they extend commit
 ///    together. `backfillComplete` is never set — an export is a snapshot of a chat, not a walk
 ///    that proved it reached the start — and a group is never synced, so nothing reads it.
@@ -62,6 +67,8 @@ public struct ChatImport: Sendable {
         case wrongZone(channel: String, messageID: Int, offset: TimeInterval)
         case identityConflict(String)
         case embedFailed(URL, status: Int)
+        /// The page verified the message but carries no readable `data-peer`.
+        case malformedEmbed(URL)
 
         public var description: String {
             switch self {
@@ -85,6 +92,9 @@ public struct ChatImport: Sendable {
                 return why
             case .embedFailed(let url, let status):
                 return "\(url.absoluteString) answered \(status)"
+            case .malformedEmbed(let url):
+                return "\(url.absoluteString) verified the message but names no chat — the "
+                     + "embed's data-peer is missing or changed; pass --no-verify to import unchecked"
             }
         }
     }
@@ -107,6 +117,11 @@ public struct ChatImport: Sendable {
         let known = try store.identity(forChannel: channel)
         if known?.reachability == .webPreview { throw ImportError.crawledChannel(channel) }
 
+        // Held from here to the last batch: a second tgkb writing this channel fails fast
+        // instead of interleaving its checks and rows with ours.
+        try store.acquireChannelLease(for: channel)
+        defer { try? store.releaseChannelLease(for: channel) }
+
         var outcome = Outcome(channel: channel, title: export.title, posts: export.posts.count,
                               serviceMessages: export.serviceMessages, unreadable: export.unreadable)
         if let fetcher {
@@ -114,23 +129,15 @@ public struct ChatImport: Sendable {
             outcome.verifiedMessageID = verified.messageID
             outcome.rawChannelID = verified.rawChannelID
         }
-        if let id = outcome.rawChannelID {
-            if let known, known.rawChannelID != 0, known.rawChannelID != id {
-                throw ImportError.identityConflict(
-                    "@\(channel) is stored as chat \(known.rawChannelID), but t.me says this export is chat \(id)")
-            }
-            let others = try store.channels(withRawChannelID: id).filter { $0 != channel }
-            if !others.isEmpty {
-                throw ImportError.identityConflict(
-                    "chat \(id) is already stored as @\(others.joined(separator: ", @")) — renamed? "
-                  + "Until S7 one chat can have only one row")
-            }
+        do {
+            try store.claimChannelIdentity(username: channel, rawChannelID: outcome.rawChannelID,
+                                           reachability: .group)
+        } catch Store.StoreError.channelCrawled(let c) {
+            throw ImportError.crawledChannel(c)
+        } catch Store.StoreError.channelIDConflict(let why) {
+            throw ImportError.identityConflict(why)
         }
 
-        try store.ensureChannel(username: channel, reachability: .group)
-        if let id = outcome.rawChannelID {
-            try store.updateIdentity(channel: channel, rawChannelID: id, reachability: .group)
-        }
         let stored = try store.storedMessageIDs(forChannel: channel)
         var state = try store.crawlState(forChannel: channel)
         for start in stride(from: 0, to: export.posts.count, by: batchSize) {
@@ -140,6 +147,7 @@ public struct ChatImport: Sendable {
             state.highest = max(state.highest ?? .min, ids.max()!)
             try store.commitPage(batch, channel: channel, lowest: state.lowest, highest: state.highest,
                                  backfillComplete: false, policy: policy)
+            try store.touchChannelLease(for: channel)
         }
         outcome.lowest = state.lowest
         outcome.highest = state.highest
@@ -151,7 +159,7 @@ public struct ChatImport: Sendable {
     /// Confirms the export against `t.me`, newest message with text first. A message deleted since
     /// the export was taken is skipped; a failed request is not — it is an error, not an answer.
     func verify(_ posts: [Post], channel: String,
-                fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64?) {
+                fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64) {
         let newest = posts.reversed().filter { !$0.text.isEmpty }.prefix(Self.candidates)
         for post in newest {
             let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
@@ -168,21 +176,31 @@ public struct ChatImport: Sendable {
             guard offset == 0 else {
                 throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
             }
-            return (post.id.messageID, try MessageEmbed.rawChannelID(html: page.body))
+            // A verified page that names no chat cannot feed the identity checks — returning nil
+            // here once let a marked-verified import skip them and store identity 0 (PR #3).
+            guard let rawID = try MessageEmbed.rawChannelID(html: page.body) else {
+                throw ImportError.malformedEmbed(url)
+            }
+            return (post.id.messageID, rawID)
         }
         throw ImportError.notFound(channel: channel, tried: newest.map(\.id.messageID))
     }
 
     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and
-    /// what each renders around a link or an emoji, may differ; the words may not.
+    /// what each renders around a link or an emoji, may differ; the words may not — and neither
+    /// may their ORDER or repetition. The earlier Set-based overlap accepted "Bob paid Alice" for
+    /// "Alice paid Bob" (PR #3, review round 1); the diff below keeps order and counts repeats.
+    ///
+    /// Whether the 0.9 tolerance is needed at all is UNVERIFIED — on the reference export every
+    /// checked message matched token-for-token. It stays for a message edited between the export
+    /// and the import; if a real divergence ever asks for more, name it here.
     static func sameText(_ a: String, _ b: String) -> Bool {
         func words(_ s: String) -> [Substring] {
             s.lowercased().split { !$0.isLetter && !$0.isNumber }
         }
         let wa = words(a), wb = words(b)
         if wa == wb { return true }
-        let sa = Set(wa), sb = Set(wb)
-        guard !sa.isEmpty, !sb.isEmpty else { return false }
-        return Double(sa.intersection(sb).count) / Double(max(sa.count, sb.count)) >= 0.9
+        let common = wa.count - wb.difference(from: wa).removals.count
+        return Double(common) / Double(max(wa.count, wb.count)) >= 0.9
     }
 }
