@@ -39,6 +39,12 @@ public enum ChatExportParser {
 
     /// The export's pages in the order the client wrote them: `messages.html`, `messages2.html`, …
     /// Sorted by number, so `messages10.html` follows `messages9.html`.
+    ///
+    /// The sequence must start at `messages.html` and have no holes: the exporter numbers pages
+    /// contiguously, so a missing number is a file lost after the export — never a page it
+    /// skipped (tdesktop `HtmlWriter.messagesFile`; the page size differs by client, the
+    /// numbering does not). Accepting the remainder would import a partial history and report
+    /// nothing missing (PR #3, round 2).
     public static func pageFiles(in directory: URL) throws -> [URL] {
         let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
         let pages = names.compactMap { name -> (Int, URL)? in
@@ -46,8 +52,23 @@ public enum ChatExportParser {
             let digits = name.dropFirst("messages".count).dropLast(".html".count)
             guard let n = digits.isEmpty ? 1 : Int(digits) else { return nil }
             return (n, directory.appendingPathComponent(name))
+        }.sorted { $0.0 < $1.0 }
+        for (page, expected) in zip(pages.map(\.0), 1...) where page != expected {
+            throw IncompleteExport(directory: directory, missing: expected)
         }
-        return pages.sorted { $0.0 < $1.0 }.map(\.1)
+        return pages.map(\.1)
+    }
+
+    /// The export's page sequence has a hole — a file was lost or the copy is partial.
+    public struct IncompleteExport: Error, Equatable, CustomStringConvertible {
+        public var directory: URL
+        /// The first absent page: `1` when `messages.html` itself is missing.
+        public var missing: Int
+        public var description: String {
+            let file = missing == 1 ? "messages.html" : "messages\(missing).html"
+            return "\(directory.path): \(file) is missing — the export is incomplete, and "
+                 + "importing what remains would silently drop the posts it held"
+        }
     }
 
     /// - Parameters:

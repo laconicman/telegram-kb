@@ -110,11 +110,38 @@ struct ChatExportParserTests {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("export-\(UUID())")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        for name in ["messages10.html", "messages.html", "messages2.html", "messages9.html", "style.css"] {
+        for name in (["messages.html"] + (2...10).map { "messages\($0).html" }) + ["style.css"] {
             try "".write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
         }
         #expect(try ChatExportParser.pageFiles(in: dir).map(\.lastPathComponent)
-                == ["messages.html", "messages2.html", "messages9.html", "messages10.html"])
+                == ["messages.html"] + (2...10).map { "messages\($0).html" })
+    }
+
+    /// 🔴 The exporter numbers pages contiguously from `messages.html` (tdesktop `HtmlWriter`),
+    /// so a hole is a lost file. Accepting the remainder would import a partial history and
+    /// report nothing missing (PR #3, review round 2).
+    @Test("a hole in the page sequence is a partial export, not a valid one")
+    func pageSequenceGapIsRefused() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("export-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for name in ["messages.html", "messages3.html"] {
+            try "".write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
+        #expect(throws: ChatExportParser.IncompleteExport(directory: dir, missing: 2)) {
+            try ChatExportParser.pageFiles(in: dir)
+        }
+    }
+
+    @Test("a folder that starts at messages2.html is missing its first page")
+    func pageSequenceFirstPageIsRefused() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("export-\(UUID())")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try "".write(to: dir.appendingPathComponent("messages2.html"), atomically: true, encoding: .utf8)
+        #expect(throws: ChatExportParser.IncompleteExport(directory: dir, missing: 1)) {
+            try ChatExportParser.pageFiles(in: dir)
+        }
     }
 
     // MARK: - The message embed: the one web page a group's message has
