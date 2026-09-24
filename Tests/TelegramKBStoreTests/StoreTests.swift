@@ -1000,7 +1000,33 @@ extension StoreTests {
                 "the rebuild recorded its writes in the generation")
     }
 
-    /// 🔴 `limit: Int.max` made the substring bound `end + words.count` overflow and trap.
+    /// � The v3 test crosses v6 too, but REVIEW.md asks for the *previous populated* schema:
+    /// a store that already has data at v5 must still open — and take a lease — once v6 runs
+    /// (PR #3, review round 2).
+    @Test("a populated store from before v6 upgrades to the lease schema")
+    func populatedV5StoreUpgrades() throws {
+        let path = Self.tempPath()
+        do {
+            let queue = try DatabaseQueue(path: path)
+            try Schema.migrator.migrate(queue, upTo: "v5-index-generation")
+            try queue.write { db in
+                // What v5-era code wrote: a channel and a post under it.
+                try db.execute(sql: "INSERT INTO channel (username, rawChannelID, reachability) VALUES ('iosgr', 1, 'webPreview')")
+                try db.execute(sql: """
+                    INSERT INTO post (channelUsername, messageID, date, kind, formatSource, text)
+                    VALUES ('iosgr', 7, ?, 'text', 'web', 'Навигация в SwiftUI')
+                    """, arguments: [Date()])
+            }
+        }
+        let store = try Store.openForWriting(at: path)   // runs v6 over real rows
+        #expect(try store.storedMessageIDs(forChannel: "iosgr") == [7],
+                "the v5 rows survive the upgrade")
+        try store.acquireChannelLease(for: "iosgr")
+        defer { try? store.releaseChannelLease(for: "iosgr") }
+        // Acquiring proves `channelLease` exists and works on a migrated store.
+    }
+
+    /// �🔴 `limit: Int.max` made the substring bound `end + words.count` overflow and trap.
     @Test("an enormous page size is clamped, not a crash")
     func hugePageSizeIsClamped() throws {
         let store = try Self.filterStore()
