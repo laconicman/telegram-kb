@@ -96,8 +96,15 @@ public enum TGKBServer {
             }
             filter.kind = k
         }
-        filter.from = try args.date("from", bound: .lower)
-        filter.to = try args.date("to", bound: .upper)
+        switch try args.date("from") {
+        case .instant(let d)?, .day(start: let d)?: filter.from = d
+        case nil: break
+        }
+        switch try args.date("to") {
+        case .instant(let d)?: filter.to = d
+        case .day(start: let d)?: filter.before = d.addingTimeInterval(86_400)
+        case nil: break
+        }
         let mode = try args.enumerated("mode", as: Store.SearchMode.self) ?? .both
         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
         let cursor = try args.string("cursor")
@@ -225,8 +232,12 @@ public enum TGKBServer {
 
     /// The store decides whether a page continues (`nextCursor`), so the footer follows it: a
     /// final page that is smaller than `total` is the end of the walk, not a page to fetch more of.
+    /// The cursor itself is in the text — a client that shows only `content` has no other way to
+    /// get it.
     static func footer(_ shown: Int, of total: Int, noun: String, nextCursor: String?) -> String {
-        if nextCursor != nil { return "\(shown) of \(total) \(noun)(s) — pass next_cursor for the rest" }
+        if let nextCursor {
+            return "\(shown) of \(total) \(noun)(s) — for the rest, pass next_cursor: \(nextCursor)"
+        }
         return shown < total ? "\(shown) of \(total) \(noun)(s)" : "\(shown) \(noun)(s)"
     }
 
@@ -303,24 +314,26 @@ struct Args {
         return v
     }
 
-    enum Bound { case lower, upper }
+    /// A date argument as written: an instant, or a whole calendar day.
+    enum DateArg: Equatable {
+        case instant(Date)
+        /// `YYYY-MM-DD` — which a model produces constantly. The caller decides what "the day"
+        /// means for its bound: its first instant as a lower bound, and *everything before the
+        /// next day* as an upper one. The day's "last instant" is not a representable date, and
+        /// any approximation of it excludes the posts stamped after it.
+        case day(start: Date)
+    }
 
-    /// ISO-8601, or a bare `YYYY-MM-DD` — which a model produces constantly. A date-only `from`
-    /// means the day's start; a date-only `to` means its end, or the filter would exclude the
-    /// day it names. The end is the day's last millisecond — the store keeps dates to the
-    /// millisecond — not `23:59:59`: the bound is inclusive, and a post stamped inside the final
-    /// second is still that day's.
-    func date(_ key: String, bound: Bound) throws -> Date? {
+    /// ISO-8601 with or without fractional seconds — the store keeps dates to the millisecond,
+    /// so a bound must be expressible at that precision — or a bare `YYYY-MM-DD`.
+    func date(_ key: String) throws -> DateArg? {
         guard let s = try string(key) else { return nil }
-        if let d = try? Self.iso.parse(s) { return d }
-        if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") {
-            switch bound {
-            case .lower: return start
-            case .upper: return start.addingTimeInterval(86_400 - 0.001)
-            }
-        }
+        if let d = try? Self.iso.parse(s) { return .instant(d) }
+        if let d = try? Self.isoFractional.parse(s) { return .instant(d) }
+        if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") { return .day(start: start) }
         throw MCPError.invalidParams("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
     }
 
     static let iso = Date.ISO8601FormatStyle()
+    static let isoFractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 }

@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index 50544ca..c43778a 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -333,7 +333,6 @@ struct Args {
+     func date(_ key: String) throws -> DateArg? {
+         guard let s = try string(key) else { return nil }
+         if let d = try? Self.iso.parse(s) { return .instant(d) }
+-        if let d = try? Self.isoFractional.parse(s) { return .instant(d) }
+         if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") { return .day(start: start) }
+         throw MCPError.invalidParams("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
+     }
