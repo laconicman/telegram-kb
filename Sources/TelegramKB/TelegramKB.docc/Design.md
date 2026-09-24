@@ -133,14 +133,25 @@ export a Telegram client writes ("Export Chat History…"), with `tgkb import`. 
 
 **What the HTML lacks, and how import makes up for it.** The dates carry no offset: they are the
 exporting machine's local time. And the export does not name its chat. So `--timezone` and
-`--channel` are inputs. Before anything is written, one message is fetched from
+`--channel` are inputs; the name is checked against the username charset before it can reach a
+`t.me` path. Before anything is written, one message is fetched from
 `t.me/<chat>/<id>?embed=1`, the one web page a group's message has:
 - different words mean the export is not this chat;
 - a different moment means the zone is wrong;
 - its `data-peer` names the chat's bare id, so `rawChannelID` is learned for `S7`.
 
+An export with no text-bearing message still verifies — on the post's id, its date and
+`data-peer`, all of which a media-only embed carries (verified on `@beautifulpictures/3`).
+What is compared is then weaker — no words — so the fallback exists only when no text candidate
+does (PR #3, review round 2).
+
 Measured on a 12,471-message export: seven of seven embeds sat exactly three hours from the
 export's dates, on a Mac in Europe/Moscow.
+
+The export is only as complete as its files: the pages are numbered contiguously
+(`messages.html`, `messages2.html`, … — tdesktop's `messagesFile`), so a missing `messagesN.html`
+is a lost file and `pageFiles` refuses a sequence with a hole rather than silently importing a
+partial history.
 
 **What this source is, and what it is not.**
 - **An independent oracle for Phase 2.** A TDLib crawl of the same group can be diffed against it

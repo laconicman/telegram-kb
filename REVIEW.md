@@ -45,6 +45,9 @@ there rather than re-arguing the decision.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
   `Sources/TelegramKBIngest/WebPreviewParser.swift`.
+- Flag a channel username interpolated into a `t.me` URL without a `Channel.isUsername` check
+  first — a `/`, `?` or space fetches a different page than the name the posts are stored
+  under, and `URL(string:)` force-unwraps crash on some of them.
 - Require `Store.ensureChannel` before the first `commitPage` for a channel; `post` has a foreign
   key to `channel`.
 - Flag `upsert(channel:)` with a placeholder `rawChannelID` of 0; it overwrites a learned id.

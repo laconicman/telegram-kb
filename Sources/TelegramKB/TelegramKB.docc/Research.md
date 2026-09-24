@@ -169,6 +169,12 @@ channel, making the classifier four-way rather than three.
 - **One message of a public group embeds.** `t.me/<group>/<id>?embed=1` renders the message while
   `t.me/s/<group>` 302s. It uses the preview's own widget (`div.tgme_widget_message[data-post]`),
   with `<time datetime>` in UTC and `data-peer="c<bare id>_<hash>"`. Verified on `@sdl_static`.
+- **A media-only message embeds the same way.** No `js-message_text` div, but `<time datetime>`
+  and `data-peer` are still present — enough for an id + date + peer verification. Verified on
+  `@beautifulpictures/3`, 2026-09-24.
+- **Export pages are numbered contiguously** — `messages.html`, `messages2.html`, … — so a hole
+  in the sequence is a lost file, not a page the exporter skipped (tdesktop `HtmlWriter`'s
+  `messagesFile(index)`; DeepWiki on `telegramdesktop/tdesktop`, 2026-09-24).
 - **Telegram for macOS exports one chat as HTML only.** Its *Export Chat* dialog offers media
   types, a file-size limit and a folder, and no format.
   - *Export Telegram Data* offers HTML, JSON or both. But it selects kinds of chat (personal,
