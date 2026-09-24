@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
-index 96f4cc1..ca9df43 100644
+index 8e93257..8aa0ed6 100644
 --- a/Sources/TelegramKBStore/Search.swift
 +++ b/Sources/TelegramKBStore/Search.swift
-@@ -162,7 +162,7 @@ extension Store {
-                 nextCursor: consumed < total && !page.isEmpty
-                     ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
-                     : nil,
--                indexMovedSinceCursor: cursorGeneration.map { $0 != generation } ?? false)
-+                indexMovedSinceCursor: false)
-         }
+@@ -187,7 +187,7 @@ extension Store {
+             nextCursor: consumed < total && !page.isEmpty
+                 ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
+                 : nil,
+-            indexMovedSinceCursor: cursorGeneration.map { $0 != generation } ?? false)
++            indexMovedSinceCursor: false)
      }
  
+     /// Every match, counted in SQLite rather than in Swift. A truncated page reports what it

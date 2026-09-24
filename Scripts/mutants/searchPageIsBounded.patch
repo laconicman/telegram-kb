@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
-index 96f4cc1..035c18d 100644
+index 8e93257..b74ca61 100644
 --- a/Sources/TelegramKBStore/Search.swift
 +++ b/Sources/TelegramKBStore/Search.swift
-@@ -158,7 +158,7 @@ extension Store {
-             let generation = try Cursor.generation(in: db)
-             let consumed = offset + page.count
-             return SearchResults(
--                hits: page, total: total,
-+                hits: page, total: page.count,
-                 nextCursor: consumed < total && !page.isEmpty
-                     ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
-                     : nil,
+@@ -183,7 +183,7 @@ extension Store {
+         let generation = try Cursor.generation(in: db)
+         let consumed = offset + page.count
+         return SearchResults(
+-            hits: page, total: total,
++            hits: page, total: page.count,
+             nextCursor: consumed < total && !page.isEmpty
+                 ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
+                 : nil,

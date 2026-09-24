@@ -392,6 +392,55 @@ emits exactly the literal the next tool accepts (`@username`, or a synthetic for
 without one). One parameter instead of an id/hash/type triple, and no resolve call inside the
 model's loop.
 
+**As implemented (S6).** Three tools — `search_posts`, `find_links`, `get_post` — with the
+details the spec-level decisions left open:
+
+- **Errors split where the spec splits them.** Malformed calls — missing or mistyped
+  arguments, an unknown key (`additionalProperties: false` is enforced by hand, because the SDK
+  validates nothing against `inputSchema`), a bad `kind`/`mode`/date, a foreign or malformed
+  cursor — throw `MCPError.invalidParams`, a protocol error. Calls that ran and failed — an
+  unknown tool name, a `get_post` miss — return `isError: true`, the conformance server's own
+  convention, so the failure is a tool result a model reads rather than a transport fault.
+- **fd 1 is made untouchable.** `guardedStdioTransport` `dup`s real stdout to a spare
+  descriptor for the transport, then `dup2`s stderr onto fd 1 — after which a stray `print()`
+  lands on the spec-sanctioned diagnostics channel instead of corrupting JSON-RPC framing
+  (`research/mcp-swift-sdk.md` § Logging 5; the SDK guards only its own logger).
+- **`find_links` matches on the effective URL both ways** — `COALESCE(resolvedCanonical,
+  urlCanonical)` on the link side against the same expression for the query — so a shortener
+  finds the destination's posts and a destination finds every spelling that resolved to it.
+  A query that cannot be canonicalised falls back to the raw spelling, which is what `url_raw`
+  exists for. `total` counts the full match set in the same read, so a `limit`-truncated list
+  never presents as complete, and the list pages with the same opaque cursor as `search_posts`
+  because a page cap with no continuation would make every match past it unreachable. The
+  cursor is fingerprinted over the query's canonical URL, not the key it currently resolves to:
+  a resolution written mid-walk then reads as `index_moved_since_cursor`, the drift signal the
+  tool advertises, rather than as a cursor for some other query. The text footer follows
+  `next_cursor` too — a final page smaller than `total` is the end of the walk, not an
+  invitation to fetch more — and prints the cursor itself, under the name of the argument
+  that takes it (`cursor`, not the `next_cursor` field it came from), since a client that
+  shows only `content` has no other way to obtain it.
+- **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
+  load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
+  from a second read would pair them with bodies from whatever a concurrent sync had committed
+  in between — the same two-snapshot fault `Store.search` already refuses between its two
+  indexes.
+- **A date-only `to` is the whole day.** `YYYY-MM-DD` as an upper bound becomes
+  `SearchFilter.before: nextMidnight`, an exclusive bound — not `23:59:59`, and not the day's
+  "last millisecond" either: a day has no last instant, and any approximation of one excludes
+  the posts stamped after it. An explicit timestamp, with or without fractional seconds, stays
+  the inclusive `to`. The schema declares `from`/`to` as plain strings, not `format:
+  date-time` — a validating client would otherwise refuse the date-only spelling.
+- **Dates go out at the precision the store keeps.** Every `date` a record carries is ISO-8601
+  with fractional seconds, so a date read from one result and passed back as an inclusive `to`
+  still admits the post it came from; the fraction-less rendering excluded it.
+- **The post reference is a grammar of three forms** — `@channel/id` (what records emit),
+  `channel/id`, `https://t.me/channel/id` (what people paste). All fold to the lowercase key.
+- **Server assembly lives in the library** (`TGKBServer.makeServer`), so `TelegramKBMCPTests`
+  drives the real `Server` and a real `Client` over `InMemoryTransport.createConnectedPair` —
+  protocol framing included — rather than a re-implementation. `tgkb-mcp` itself is ~50 lines:
+  stderr logging bootstrap, a hand-rolled `--db` flag (ArgumentParser would widen the
+  allowlisted closure for one option), `openForReading` — a reader never migrates.
+
 ## Why `tgkb` has no `serve` subcommand
 
 **Decision.** `tgkb` does **not** expose `serve`. The only way to run the MCP server is the

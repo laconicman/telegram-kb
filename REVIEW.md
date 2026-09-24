@@ -23,7 +23,9 @@ there rather than re-arguing the decision.
   `Sources/TelegramKBSync/ChannelSync.swift` after a walk ends, because completion is knowable
   only once the walk stops — a crash before it costs a re-crawl, never a false completion.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
-  `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
+  `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`). `swift-log`
+  and `swift-system` are the SDK's own dependencies, named only because its `StdioTransport` and
+  `Logger` signatures require their types; they add nothing to the closure.
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
   `Spec/url-canonical/fixtures.json` cases in any diff that changes
   `Sources/TelegramKBModel/URLCanonicaliser.swift` rules.
@@ -59,6 +61,13 @@ there rather than re-arguing the decision.
   `Sources/TelegramKBStore/Store.swift`; a phrase would straddle the join and match a post that
   contains it in neither form.
 - Flag `NLTagger` use without an explicit `setLanguage` in `Sources/TelegramKBStore/`.
+- Flag a `total` or count field derived from the returned page's contents in
+  `Sources/TelegramKBStore/` or `Sources/TelegramKBMCP/`; it must be a COUNT over the same
+  predicate, or a `limit`-truncated list reports itself complete.
+- Flag the error-channel split in `Sources/TelegramKBMCP/` crossing the wrong way: a malformed
+  argument (missing key, wrong type, unknown key, foreign cursor, `Store.SearchError`) must be
+  `MCPError.invalidParams`, not an `isError` result; a call that ran and failed (unknown tool
+  name, a `get_post` miss) must be `isError: true`, not a thrown protocol error.
 
 ## Anti-patterns to Flag
 

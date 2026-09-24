@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index c3f772a..fb7f8fc 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -149,7 +149,7 @@ public enum TGKBServer {
+                             annotations: nil, _meta: nil)],
+             structuredContent: FindLinksOutput(
+                 links: links, total: results.total,
+-                next_cursor: results.nextCursor,
++                next_cursor: nil,
+                 index_moved_since_cursor: results.indexMovedSinceCursor))
+     }
+ 

@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index c3f772a..89ba511 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -284,7 +284,7 @@ struct Args {
+         } else if let x = v.doubleValue, x.isFinite, x == x.rounded() {
+             // A whole number past ±2^63 is still a whole number, and the schema promises
+             // clamping; `Int(_:)` would trap there and take the server with it.
+-            n = Int(exactly: x) ?? (x > 0 ? Int.max : Int.min)
++            n = Int(x)
+         } else {
+             n = nil
+         }

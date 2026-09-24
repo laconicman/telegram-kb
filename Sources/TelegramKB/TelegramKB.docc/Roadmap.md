@@ -127,7 +127,7 @@ Those checks stopped being hand-run in round 8 — `Scripts/mutation-check.sh` r
 from `Scripts/mutants/*.patch`, each patch putting one fixed bug back. The review lessons are encoded
 in `REVIEW.md`.
 
-### S6 — `tgkb-mcp`
+### S6 — `tgkb-mcp` ✅ *(done)*
 **Load the `mcp-builder` skill first** — it is from `anthropics/skills`, already installed, and
 covers exactly this. Designing the tool surface from the SDK research alone would skip it
 (`research/skills-landscape.md`).
@@ -174,6 +174,13 @@ which is exactly what a prospective ask is for):
   closure is the one invariant a new target can break silently.
 
 **Done:** Claude answers "what has anyone shared about X" with cited `t.me` links.
+
+*Landed as:* `search_posts`, `find_links`, `get_post` over `Store.search`/`post`/`links(to:)`,
+all four annotations explicit, `structuredContent` + `outputSchema` + a text rendering, and the
+`dup`/`dup2` stdout guard so a stray `print()` cannot corrupt the session. The `mcp-builder`
+skill this slice was told to load turned out not to be installed in the implementing
+environment — the SDK research notes (`research/mcp-swift-sdk.md`, verified against 0.12.1
+source) and a prospective DeepWiki pass on the concrete shapes substituted for it.
 
 ---
 

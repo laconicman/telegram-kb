@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 8e93257..c3b33c8 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -355,7 +355,7 @@ extension Store.LinkHit: FetchableRecord {
+ extension Store {
+     /// In `ids` order; an id without a row is skipped.
+     static func loadPosts(_ ids: [Post.ID], from db: Database) throws -> [Post] {
+-        try ids.compactMap { try loadPost($0, from: db) }
++        try ids.reversed().compactMap { try loadPost($0, from: db) }
+     }
+ 
+     static func loadPost(_ id: Post.ID, from db: Database) throws -> Post? {

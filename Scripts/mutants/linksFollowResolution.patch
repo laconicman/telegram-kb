@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 8e93257..42cd75c 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -304,7 +304,7 @@ extension Store {
+             argument = try String.fetchOne(db,
+                 sql: "SELECT resolvedCanonical FROM urlResolution WHERE urlCanonical = ?",
+                 arguments: [canonical]) ?? canonical
+-            predicate = "COALESCE(r.resolvedCanonical, l.urlCanonical) = ?"
++            predicate = "l.urlCanonical = ?"
+         } else {
+             predicate = "l.urlRaw = ?"
+             argument = url

@@ -14,6 +14,14 @@ public struct Store: Sendable {
 
     // MARK: - Opening
 
+    /// The conventional on-disk location, owned here so `tgkb` and `tgkb-mcp` open the same
+    /// file by default — a convention duplicated per executable is one that drifts.
+    public static var defaultPath: String {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? URL(fileURLWithPath: NSHomeDirectory())
+        return base.appendingPathComponent("telegram-kb/kb.sqlite").path
+    }
+
     /// Opens for writing and runs migrations.
     public static func openForWriting(at path: String) throws -> Store {
         var config = Configuration()
@@ -182,8 +190,9 @@ public struct Store: Sendable {
         return (indexed, stale)
     }
 
-    /// Records that the search indexes changed. Every path that writes or deletes an index row
-    /// calls this, so a cursor from before the change can tell.
+    /// Records that a paged result set may have moved. Every path that writes or deletes an index
+    /// row calls this, and so does a resolution write — it re-keys links — so a cursor from before
+    /// the change can tell.
     ///
     /// It counts WRITES, not revisions: a batch of twenty posts, or a migration's rebuild, moves it
     /// by twenty. Compare generations for equality only; the difference means nothing.
@@ -244,6 +253,7 @@ public struct Store: Sendable {
                       canonicalSpecVersion=excluded.canonicalSpecVersion
                     """, arguments: [r.urlCanonical, r.resolvedCanonical, r.httpStatus,
                                      r.hops, r.resolvedAt, r.canonicalSpecVersion])
+                try Self.bumpIndexGeneration(in: db)
             }
         }
     }

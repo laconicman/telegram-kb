@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBMCP/Records.swift b/Sources/TelegramKBMCP/Records.swift
+index b37a6a6..5f9b674 100644
+--- a/Sources/TelegramKBMCP/Records.swift
++++ b/Sources/TelegramKBMCP/Records.swift
+@@ -187,6 +187,6 @@ extension Date {
+     /// Every date a tool emits, at the precision the store keeps: a returned date passed back as
+     /// an inclusive `to` must still admit the post it was read from.
+     var tgkbISO8601: String {
+-        formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
++        formatted(.iso8601)
+     }
+ }

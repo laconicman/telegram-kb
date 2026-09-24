@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index f715f0c..415b0d9 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -176,9 +176,6 @@ public enum TGKBServer {
+     /// the records emit, plus the paste-friendly forms.
+     static func parsePostRef(_ text: String) -> Post.ID? {
+         var s = text.trimmingCharacters(in: .whitespaces)
+-        for prefix in ["https://t.me/", "http://t.me/", "t.me/"] where s.hasPrefix(prefix) {
+-            s = String(s.dropFirst(prefix.count))
+-        }
+         if s.hasPrefix("@") { s.removeFirst() }
+         let parts = s.split(separator: "/", omittingEmptySubsequences: false)
+         guard parts.count == 2, let id = Int(parts[1]), id > 0, !parts[0].isEmpty
