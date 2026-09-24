@@ -232,12 +232,12 @@ extension SyncTests {
     /// Telegram reassigned to another chat wrote the new owner's posts into the old channel's
     /// row first. The page's `data-view` carries the id, so the check now runs inside the page
     /// transaction — before a single post lands.
-    @Test("a username reassigned to another chat refuses to mix its posts into the group's row")
+    @Test("a username reassigned to another chat refuses to mix its posts into the old row")
     func reassignedUsernameRefused() async throws {
         let store = try Self.store()
-        // swiftui_dev was a group once: imported under this name with chat id 101, unpreviewable.
+        // swiftui_dev was crawled once as channel 101 — a row the kind check lets through.
         try store.upsert(channel: Channel(username: "swiftui_dev", rawChannelID: 101,
-                                        reachability: .group))
+                                        reachability: .webPreview))
         // Telegram then gave the name to channel 1_492_664_793 — the fixture's `data-view`.
         await #expect(throws: Store.StoreError.channelIDConflict(
                         "@swiftui_dev is stored as chat 101; the page carries chat 1492664793"
@@ -246,7 +246,7 @@ extension SyncTests {
                 .sync(channel: "swiftui_dev")
         }
         #expect(try store.highestMessageID(forChannel: "swiftui_dev") == nil,
-                "the foreign channel's posts must not land under the group's name")
+                "the foreign channel's posts must not land under the old channel's name")
         #expect(try store.identity(forChannel: "swiftui_dev")?.rawChannelID == 101)
     }
 
