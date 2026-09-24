@@ -283,6 +283,9 @@ extension Store {
     /// The cursor is bound to the query's canonical URL, not to where it currently resolves: a
     /// resolution written mid-walk re-keys the result set and is reported as drift through the
     /// generation, rather than refused as a cursor for some other query.
+    ///
+    /// Hits come in post order; a post carrying the URL more than once lists those links in the
+    /// order the post did. Every key is total, so an offset walk sees each link exactly once.
     public func links(to url: String, limit: Int = maxPageSize, cursor: String? = nil) throws
         -> LinkResults {
         try dbPool.read { db in try Self.links(to: url, limit: limit, cursor: cursor, in: db) }
@@ -326,7 +329,7 @@ extension Store {
                    COALESCE(r.resolvedCanonical, l.urlCanonical) AS eff
             FROM link l LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
             WHERE \(predicate)
-            ORDER BY l.channelUsername, l.messageID LIMIT ? OFFSET ?
+            ORDER BY l.channelUsername, l.messageID, l.id LIMIT ? OFFSET ?
             """, arguments: [argument, cap, offset])
         let total = try Int.fetchOne(db, sql: """
             SELECT COUNT(*) FROM link l

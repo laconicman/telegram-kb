@@ -431,6 +431,34 @@ struct MCPServerTests {
         #expect(!text.contains("no text"), "a poll is not an empty post")
     }
 
+    /// 🟡 The search text listed date, permalink, reactions and snippet — the author only lived in
+    /// `structuredContent`, so a text-only client could not tell who signed a hit.
+    @Test("search_posts text names a signed post's author, beside the permalink that names its channel")
+    func searchTextNamesTheAuthor() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 6),
+                 date: Date(timeIntervalSince1970: 1_700_000_006),
+                 kind: .text, formatSource: .web, mediaCount: 1,
+                 text: "Подписанный пост: вёрстка и не только", authorName: "Иван Петров"),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let result = try await client.callTool(
+            name: "search_posts", arguments: ["query": "вёрстка"]).value
+        let out = try Self.decode(result, as: SearchPostsOutput.self)
+        #expect(out.posts.map(\.post).sorted() == ["@iosgr/1", "@iosgr/6"])
+        guard case .text(let text, _, _) = result.content.first else {
+            Issue.record("expected a text content block"); return
+        }
+        let lines = text.split(separator: "\n").map(String.init)
+        let signed = try #require(lines.first { $0.contains("https://t.me/iosgr/6") })
+        #expect(signed.contains("https://t.me/iosgr/6  by Иван Петров"),
+                "the author follows the permalink, which already carries the channel")
+        let unsigned = try #require(lines.first { $0.contains("https://t.me/iosgr/1") })
+        #expect(!unsigned.contains(" by "), "an unsigned post gets no empty byline")
+        #expect(unsigned.hasSuffix("♥5"))
+    }
+
     @Test("get_post returns the full record; a missing post is a tool error, not silence")
     func getPost() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
