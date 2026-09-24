@@ -286,19 +286,25 @@ struct StoreTests {
             Self.post(2, "пять раз", links: spellings.map { LinkRef(urlRaw: $0) }),
             Self.post(3, "три", links: [LinkRef(urlRaw: dest + "?utm_source=x")]),
         ])
-        var walked: [(Int, String)] = []
-        var cursor: String?
-        repeat {
-            let page = try store.links(to: dest, limit: 1, cursor: cursor)
-            #expect(page.hits.count == 1 && page.total == 7)
-            walked += page.hits.map { ($0.id.messageID, $0.urlRaw) }
-            cursor = page.nextCursor
-        } while cursor != nil
-        #expect(walked.map(\.0) == [1, 2, 2, 2, 2, 2, 3])
-        #expect(walked.filter { $0.0 == 2 }.map(\.1) == spellings,
-                "the post's links, each exactly once, in the order the post carried them")
-        #expect(walked.map(\.1) == (try store.links(to: dest).hits.map(\.urlRaw)),
-                "the page walk and the single read agree")
+        // Every page is its own query, so an arbitrary tie order shows up as a spelling repeated
+        // on one walk and missing from another — not on every walk. Walk enough times that an
+        // order left to chance cannot pass by chance.
+        for _ in 1...25 {
+            var walked: [(Int, String)] = []
+            var cursor: String?
+            repeat {
+                let page = try store.links(to: dest, limit: 1, cursor: cursor)
+                #expect(page.hits.count == 1 && page.total == 7)
+                walked += page.hits.map { ($0.id.messageID, $0.urlRaw) }
+                cursor = page.nextCursor
+            } while cursor != nil
+            #expect(Set(walked.map { "\($0.0) \($0.1)" }).count == 7, "no link repeated, none skipped")
+            #expect(walked.map(\.0) == [1, 2, 2, 2, 2, 2, 3])
+            #expect(walked.filter { $0.0 == 2 }.map(\.1) == spellings,
+                    "the post's links in the order the post carried them")
+            #expect(walked.map(\.1) == (try store.links(to: dest).hits.map(\.urlRaw)),
+                    "the page walk and the single read agree")
+        }
     }
 
     /// 🟡 The link cursor was fingerprinted over the query's *resolved* key. A resolution
