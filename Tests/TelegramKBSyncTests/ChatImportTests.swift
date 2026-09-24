@@ -181,7 +181,8 @@ struct ChatImportTests {
     @Test("a username crawled from the web is not a group, and is refused")
     func crawledChannel() async throws {
         let store = try Self.store()
-        try store.ensureChannel(username: "testgroup", reachability: .webPreview)
+        try store.upsert(channel: Channel(username: "testgroup", rawChannelID: 0,
+                                        reachability: .webPreview))
         await #expect(throws: ChatImport.ImportError.crawledChannel("testgroup")) {
             try await ChatImport(store: store, fetcher: nil)
                 .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
@@ -203,8 +204,8 @@ struct ChatImportTests {
     @Test("a username stored as another chat is refused")
     func usernameIsAnotherChat() async throws {
         let store = try Self.store()
-        try store.ensureChannel(username: "testgroup", reachability: .group)
-        try store.updateIdentity(channel: "testgroup", rawChannelID: 42, reachability: .group)
+        try store.upsert(channel: Channel(username: "testgroup", rawChannelID: 42,
+                                        reachability: .group))
         await #expect(throws: ChatImport.ImportError.self) {
             try await ChatImport(store: store, fetcher: Self.telegram())
                 .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)

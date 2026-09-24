@@ -154,7 +154,6 @@ public struct ChatImport: Sendable {
             state.highest = max(state.highest ?? .min, ids.max()!)
             try store.commitPage(batch, channel: channel, lowest: state.lowest, highest: state.highest,
                                  backfillComplete: false, policy: policy)
-            try store.touchChannelLease(for: channel)
         }
         outcome.lowest = state.lowest
         outcome.highest = state.highest

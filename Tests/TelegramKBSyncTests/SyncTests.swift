@@ -82,9 +82,12 @@ struct SyncTests {
     @Test("a capped incremental walk is left resumable, not marked up to date")
     func cappedIncrementalConverts() async throws {
         let store = try Self.store()
+        // A finished writer: holds the lease for its writes, then releases it for the sync.
+        try store.acquireChannelLease(for: "swiftui_dev")
         try store.ensureChannel(username: "swiftui_dev", reachability: .webPreview)
         try store.recordCrawlState(channel: "swiftui_dev", lowest: 1, highest: 100,
                                    backfillComplete: true)
+        try store.releaseChannelLease(for: "swiftui_dev")
 
         let outcome = try await ChannelSync(store: store, fetcher: try Self.twoPages(), maxPages: 1)
             .sync(channel: "swiftui_dev", full: false)

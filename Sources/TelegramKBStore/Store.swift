@@ -65,6 +65,9 @@ public struct Store: Sendable {
         case channelIDConflict(String)
         /// Another live process holds the channel's lease.
         case channelLeaseHeld(channel: String, pid: Int32)
+        /// A write found this process no longer named in the channel's lease row — the lease
+        /// was stolen (or never taken) and the run must stop, not interleave with the new holder.
+        case channelLeaseLost(channel: String)
         public var description: String {
             switch self {
             case .schemaNotMigrated:
@@ -76,6 +79,8 @@ public struct Store: Sendable {
                 return why
             case .channelLeaseHeld(let c, let pid):
                 return "@\(c) is already being written by another tgkb process (pid \(pid))"
+            case .channelLeaseLost(let c):
+                return "@\(c)'s lease was claimed by another writer mid-run — this run's writes stopped"
             }
         }
     }
@@ -368,6 +373,7 @@ extension Store {
     public func recordCrawlState(channel username: String, lowest: Int?, highest: Int?,
                                  backfillComplete: Bool) throws {
         try dbPool.write { db in
+            try Self.assertChannelLease(in: db, channel: username)
             try db.execute(sql: """
                 UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
                        backfillComplete = ?, lastSyncedAt = ?
@@ -386,6 +392,7 @@ extension Store {
     /// reconciliation at a nonexistent chat. Insert-if-absent has no such failure mode.
     public func ensureChannel(username: String, reachability: Channel.Reachability) throws {
         try dbPool.write { db in
+            try Self.assertChannelLease(in: db, channel: username)
             try db.execute(sql: """
                 INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
                 ON CONFLICT(username) DO NOTHING
@@ -400,6 +407,7 @@ extension Store {
     public func updateIdentity(channel username: String, rawChannelID: Int64,
                                reachability: Channel.Reachability) throws {
         try dbPool.write { db in
+            try Self.assertChannelLease(in: db, channel: username)
             try db.execute(sql: """
                 UPDATE channel SET rawChannelID = ?, reachability = ? WHERE username = ?
                 """, arguments: [rawChannelID, reachability.rawValue, username])
@@ -454,6 +462,7 @@ extension Store {
     public func commitPage(_ posts: [Post], channel: String, lowest: Int?, highest: Int?,
                            backfillComplete: Bool, policy: WritePolicy = .replace) throws {
         try dbPool.write { db in
+            try Self.assertChannelLease(in: db, channel: channel)
             for post in posts { try Self.write(post, into: db, policy: policy) }
             try db.execute(sql: """
                 UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
@@ -502,13 +511,20 @@ extension Store {
         }
     }
 
-    /// Renews the lease's heartbeat — called on each committed batch, so a live holder never
-    /// approaches the TTL.
-    public func touchChannelLease(for username: String) throws {
-        try dbPool.write { db in
-            try db.execute(sql: """
-                UPDATE channelLease SET heartbeat = ? WHERE channelUsername = ? AND pid = ?
-                """, arguments: [Date(), username, Self.processID])
+    /// Renews the lease's heartbeat **inside a channel-scoped write transaction** — and refuses
+    /// the write when no row names this pid.
+    ///
+    /// A holder suspended past the TTL can resume to find its lease stolen; a renewal that ran
+    /// apart from the write would update zero rows and say nothing, letting the displaced writer
+    /// interleave its remaining writes with the stealer's (PR #3, review round 3). Asserting in
+    /// the same transaction as the posts, identity, or crawl-state write is what stops that.
+    /// `upsert` stays unleased — it is the seeding/fixture primitive, not the run path.
+    static func assertChannelLease(in db: Database, channel username: String) throws {
+        try db.execute(sql: """
+            UPDATE channelLease SET heartbeat = ? WHERE channelUsername = ? AND pid = ?
+            """, arguments: [Date(), username, processID])
+        if try Int.fetchOne(db, sql: "SELECT changes()") == 0 {
+            throw StoreError.channelLeaseLost(channel: username)
         }
     }
 
@@ -530,6 +546,7 @@ extension Store {
     public func claimChannelIdentity(username: String, rawChannelID: Int64?,
                                      reachability: Channel.Reachability) throws {
         try dbPool.write { db in
+            try Self.assertChannelLease(in: db, channel: username)
             if let row = try Row.fetchOne(db, sql: """
                 SELECT rawChannelID, reachability FROM channel WHERE username = ?
                 """, arguments: [username]) {

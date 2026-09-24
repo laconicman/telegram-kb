@@ -75,7 +75,6 @@ public struct ChannelSync: Sendable {
             try store.commitPage(posts, channel: channel, lowest: next.lowest,
                                  highest: next.highest, backfillComplete: next.backfillComplete,
                                  policy: full ? .replace : .keepExisting)
-            try store.touchChannelLease(for: channel)
         }
 
         if let raw = result.rawChannelID {
