@@ -327,10 +327,14 @@ another process: two `tgkb sync` commands share no memory, and `Task(name:)` (Sw
 debugging label, not an identity — verified: two tasks with the same name run side by side. The
 cross-process guard therefore lives where both processes can see it — the database itself, as the
 `channelLease` row carrying the channel name, a pid and a heartbeat, claimed in one `IMMEDIATE`
-write transaction with its staleness check (`Store.acquireChannelLease`). A holder's heartbeat is
-renewed on every committed page; a claimant steals the lease only from a dead pid or a heartbeat
-older than the 120 s TTL. No lock file. That was `TD-21`'s discharge; PR #3's review supplied the
-import-side instance that made it real.
+write transaction with its staleness check (`Store.acquireChannelLease`). Every channel-scoped
+write transaction renews the heartbeat **and asserts the row still names this pid**
+(`Store.assertChannelLease`): a holder suspended past the TTL resumes to find its lease stolen,
+and its next write is refused rather than interleaving with the stealer's — a renewal that ran
+apart from the write would have updated zero rows and said nothing (PR #3, review round 3). A
+claimant steals the lease only from a dead pid or a heartbeat older than the 120 s TTL. The
+`upsert` primitives stay unleased — they are the seeding/fixture path, not a run. No lock file.
+That was `TD-21`'s discharge; PR #3's review supplied the import-side instance that made it real.
 
 ## Channel identity is `rawChannelID`, not the username
 

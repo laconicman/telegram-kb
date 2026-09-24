@@ -446,9 +446,12 @@ these tables anyway — two migrations of the same code, not one.
 
 **Status: Discharged (2026-09-24)** — `channelLease` (schema `v6`) is the lease row described
 below; `ChannelSync` and `ChatImport` both claim it before writing and hold it to the last
-commit, heartbeating per page. PR #3's review found the same hole on the *import* path —
+commit. PR #3's review found the same hole on the *import* path —
 concurrent `run` calls passed the identity checks against the same old state and interleaved
-batches under one username — which is what made the discharge land.
+batches under one username — which is what made the discharge land. A later round hardened the
+hold: every channel-scoped write transaction renews the heartbeat and refuses when the row no
+longer names this pid, so a holder suspended past the TTL cannot resume and interleave with the
+stealer (`Store.assertChannelLease`).
 
 `busyMode = .timeout(10)` makes a second writer wait rather than fail instantly, which is right
 for two writers on *different* channels sharing one file. Two on the *same* channel now see the
