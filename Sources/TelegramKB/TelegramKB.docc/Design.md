@@ -351,7 +351,8 @@ stolen, and its next write is refused rather than interleaving with the stealer'
 that ran apart from the write would have updated zero rows and said nothing (PR #3, review
 round 3). The nonce is per `Store` value, which is what the pid cannot be: two stores in one
 process share a pid, so only the value that acquired the lease passes its assertion, and a
-release cannot delete a sibling's row (review round 4). A claimant steals the lease only from a
+release cannot delete a sibling's row (review round 4) nor erase a *reacquisition's* token —
+the token map's remove is conditional on the nonce the releaser captured (round 5). A claimant steals the lease only from a
 dead pid or a heartbeat older than the 120 s TTL. The `upsert` primitives stay unleased — they
 are the seeding/fixture path, not a run. No lock file.
 That was `TD-21`'s discharge; PR #3's review supplied the import-side instance that made it real.
