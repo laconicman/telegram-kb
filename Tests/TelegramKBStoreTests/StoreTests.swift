@@ -147,6 +147,58 @@ struct StoreTests {
                 "a FAILED resolution still keys on canonical — a dead link stays joinable to itself")
     }
 
+    /// The seam contract behind `find_links`: match on the link's EFFECTIVE URL against the
+    /// query's — a shortener query must find the destination's posts, and a destination query
+    /// must find every spelling that resolved to it (S6).
+    @Test("links(to:) joins a shortener and its destination both ways")
+    func linksFollowResolution() throws {
+        let (store, _) = try Self.seeded()
+        let short = "https://clck.ru/33ABCD"
+        let dest = "https://habr.com/ru/post/1"
+        try store.upsert(posts: [
+            Self.post(1, "через сокращатель", links: [LinkRef(urlRaw: short)]),
+            Self.post(2, "напрямую", links: [LinkRef(urlRaw: dest + "?utm_source=tg")]),
+            Self.post(3, "не то", links: [LinkRef(urlRaw: "https://example.com/other")]),
+        ])
+        let shortCanonical = try #require(URLCanonicaliser.canonicalise(short))
+        let destCanonical = try #require(URLCanonicaliser.canonicalise(dest))
+
+        // Before any resolution the shortener is a destination of its own.
+        #expect(try store.links(to: short).map(\.id.messageID) == [1])
+        #expect(try store.links(to: dest).map(\.id.messageID) == [2])
+
+        try store.upsert(resolutions: [URLResolution(
+            urlCanonical: shortCanonical, resolvedCanonical: destCanonical,
+            httpStatus: "200", hops: 1, resolvedAt: Date())])
+
+        // Once resolved, the shortener query finds the destination post too — and vice versa.
+        #expect(try store.links(to: short).map(\.id.messageID) == [1, 2])
+        #expect(try store.links(to: dest).map(\.id.messageID) == [1, 2])
+        let hit = try store.links(to: dest).first { $0.id.messageID == 1 }
+        #expect(hit?.urlRaw == short)
+        #expect(hit?.effectiveURL == destCanonical)
+    }
+
+    @Test("links(to:) falls back to the raw spelling when the URL cannot be canonicalised")
+    func linksMatchRawWhenNotCanonicalisable() throws {
+        let (store, _) = try Self.seeded()
+        // ftp:// is a real URL Telegram renders, but the canonical spec is http(s)-only,
+        // so the link is stored with urlCanonical NULL.
+        try store.upsert(posts: [
+            Self.post(4, "файл", links: [LinkRef(urlRaw: "ftp://files.example.com/x")])])
+        #expect(try store.links(to: "ftp://files.example.com/x").map(\.id.messageID) == [4])
+    }
+
+    @Test("posts(ids:) hydrates a page in input order and skips a missing post")
+    func postsHydrateInOrder() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "a"), Self.post(2, "b"), Self.post(3, "c")])
+        let ids = [Post.ID(channelUsername: "iosgr", messageID: 3),
+                   Post.ID(channelUsername: "iosgr", messageID: 99),
+                   Post.ID(channelUsername: "iosgr", messageID: 1)]
+        #expect(try store.posts(ids: ids).map(\.id.messageID) == [3, 1])
+    }
+
     @Test("a reader opens read-only while a writer holds the database")
     func crossProcessRead() throws {
         let (writer, path) = try Self.seeded()

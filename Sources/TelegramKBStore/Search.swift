@@ -220,6 +220,13 @@ extension Store {
         try dbPool.read { db in try Self.loadPost(id, from: db) }
     }
 
+    /// The posts behind a page of hits, hydrated in **one** read so a page cannot mix snapshots —
+    /// N calls to ``post(_:)`` would each see a different moment while a sync runs underneath.
+    /// Order follows `ids`; a post deleted since its hit was computed is simply absent.
+    public func posts(ids: [Post.ID]) throws -> [Post] {
+        try dbPool.read { db in try ids.compactMap { try Self.loadPost($0, from: db) } }
+    }
+
     /// The join key for a link: its resolution when known, else its canonical form.
     public func effectiveURL(forCanonical urlCanonical: String) throws -> String {
         try dbPool.read { db in
@@ -229,12 +236,64 @@ extension Store {
             return resolved ?? urlCanonical
         }
     }
+
+    /// A link-bearing post: which post carried the URL, and in which spelling.
+    public struct LinkHit: Sendable, Hashable {
+        public var id: Post.ID
+        /// The URL exactly as it appeared in the post — never rewritten.
+        public var urlRaw: String
+        /// Its canonical form (`NULL` when the raw string was not canonicalisable).
+        public var urlCanonical: String?
+        /// `COALESCE(resolvedCanonical, urlCanonical)` — where the link actually leads.
+        public var effectiveURL: String?
+    }
+
+    /// Posts whose links lead to the same destination as `url`.
+    ///
+    /// The match key is the link's **effective** URL — its canonical form, or what resolution
+    /// recorded for it — compared against the effective URL of the *query*. Because resolution is
+    /// keyed on the canonical string, that one predicate covers both directions the tool promises:
+    /// a shortener query finds the destination's posts, and a destination query finds every
+    /// spelling that resolved to it. A query that cannot be canonicalised at all falls back to a
+    /// literal `urlRaw` match — the raw column exists so that spelling is still findable.
+    public func links(to url: String, limit: Int = maxPageSize) throws -> [LinkHit] {
+        try dbPool.read { db in
+            guard let canonical = URLCanonicaliser.canonicalise(url) else {
+                return try LinkHit.fetchAll(db, sql: """
+                    SELECT l.channelUsername AS cu, l.messageID AS mid,
+                           l.urlRaw, l.urlCanonical, NULL AS eff
+                    FROM link l
+                    WHERE l.urlRaw = ?
+                    ORDER BY l.channelUsername, l.messageID LIMIT ?
+                    """, arguments: [url, max(0, limit)])
+            }
+            let effective = try String.fetchOne(db,
+                sql: "SELECT resolvedCanonical FROM urlResolution WHERE urlCanonical = ?",
+                arguments: [canonical]) ?? canonical
+            return try LinkHit.fetchAll(db, sql: """
+                SELECT l.channelUsername AS cu, l.messageID AS mid,
+                       l.urlRaw, l.urlCanonical,
+                       COALESCE(r.resolvedCanonical, l.urlCanonical) AS eff
+                FROM link l LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
+                WHERE COALESCE(r.resolvedCanonical, l.urlCanonical) = ?
+                ORDER BY l.channelUsername, l.messageID LIMIT ?
+                """, arguments: [effective, max(0, limit)])
+        }
+    }
 }
 
 extension Store.Hit: FetchableRecord {
     public init(row: Row) {
         self.init(id: Post.ID(channelUsername: row["cu"], messageID: row["mid"]),
                   rank: row["rank"] ?? 0)
+    }
+}
+
+extension Store.LinkHit: FetchableRecord {
+    public init(row: Row) {
+        self.init(id: Post.ID(channelUsername: row["cu"], messageID: row["mid"]),
+                  urlRaw: row["urlRaw"], urlCanonical: row["urlCanonical"],
+                  effectiveURL: row["eff"])
     }
 }
 

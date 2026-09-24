@@ -14,6 +14,14 @@ public struct Store: Sendable {
 
     // MARK: - Opening
 
+    /// The conventional on-disk location, owned here so `tgkb` and `tgkb-mcp` open the same
+    /// file by default — a convention duplicated per executable is one that drifts.
+    public static var defaultPath: String {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first ?? URL(fileURLWithPath: NSHomeDirectory())
+        return base.appendingPathComponent("telegram-kb/kb.sqlite").path
+    }
+
     /// Opens for writing and runs migrations.
     public static func openForWriting(at path: String) throws -> Store {
         var config = Configuration()
