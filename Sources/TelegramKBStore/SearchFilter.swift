@@ -19,15 +19,23 @@ extension Store {
         /// Inclusive bounds on the post's own date, not on when it was crawled.
         public var from: Date?
         public var to: Date?
+        /// Exclusive upper bound: "everything before this instant". A whole calendar day is
+        /// `before: nextMidnight` — an inclusive `to` at the day's "last" instant has no exact
+        /// representation, and whatever approximates it drops the posts stamped after it.
+        public var before: Date?
 
-        public init(channel: String? = nil, kind: PostKind? = nil, from: Date? = nil, to: Date? = nil) {
+        public init(channel: String? = nil, kind: PostKind? = nil, from: Date? = nil, to: Date? = nil,
+                    before: Date? = nil) {
             self.channel = channel.map { $0.lowercased() }
             self.kind = kind
             self.from = from
             self.to = to
+            self.before = before
         }
 
-        public var isEmpty: Bool { channel == nil && kind == nil && from == nil && to == nil }
+        public var isEmpty: Bool {
+            channel == nil && kind == nil && from == nil && to == nil && before == nil
+        }
 
         /// `(join, where, arguments)` — empty strings when nothing is filtered, so an unfiltered
         /// search runs exactly the SQL it ran before this existed.
@@ -39,6 +47,7 @@ extension Store {
             if let kind { conditions.append("p.kind = ?"); arguments.append(kind.rawValue) }
             if let from { conditions.append("p.date >= ?"); arguments.append(from) }
             if let to { conditions.append("p.date <= ?"); arguments.append(to) }
+            if let before { conditions.append("p.date < ?"); arguments.append(before) }
             let join = """
                 JOIN post p ON p.channelUsername = m.channelUsername AND p.messageID = m.messageID
                 """
@@ -57,7 +66,7 @@ extension Store {
     ///
     /// The fingerprint binds a cursor to the query and filter that produced it, so a cursor from
     /// one search cannot silently page through another. `links(to:)` pages with the same cursor,
-    /// fingerprinted over its match key, so the two tools cannot continue each other either.
+    /// fingerprinted over its query URL, so the two tools cannot continue each other either.
     enum Cursor {
         /// Far past any corpus this indexes, and far from `Int.max`, so the page arithmetic has
         /// room. A cursor beyond it is refused as malformed.
@@ -121,7 +130,8 @@ extension Store {
             fingerprint(fields: [TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue,
                                  filter.channel ?? "", filter.kind?.rawValue ?? "",
                                  filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
-                                 filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""])
+                                 filter.to.map { "\($0.timeIntervalSince1970)" } ?? "",
+                                 filter.before.map { "\($0.timeIntervalSince1970)" } ?? ""])
         }
 
         /// Length-prefixed, not separator-joined: with a separator, a field CONTAINING it could
