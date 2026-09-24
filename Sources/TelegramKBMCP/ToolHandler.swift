@@ -130,10 +130,10 @@ public enum TGKBServer {
         try Task.checkCancellation()
         let url = try args.require("url")
         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
-        let hits = try store.links(to: url, limit: limit)
-        let byID = try store.posts(ids: hits.map(\.id))
+        let results = try store.links(to: url, limit: limit)
+        let byID = try store.posts(ids: results.hits.map(\.id))
             .reduce(into: [:]) { $0[$1.id] = $1 }
-        let links = hits.map { hit -> LinkHitRecord in
+        let links = results.hits.map { hit -> LinkHitRecord in
             let post = byID[hit.id]
             return LinkHitRecord(
                 post: "@\(hit.id.channelUsername)/\(hit.id.messageID)",
@@ -146,8 +146,8 @@ public enum TGKBServer {
                 link: "https://t.me/\(hit.id.channelUsername)/\(hit.id.messageID)")
         }
         return try CallTool.Result(
-            content: [.text(text: render(links), annotations: nil, _meta: nil)],
-            structuredContent: FindLinksOutput(links: links, total: links.count))
+            content: [.text(text: render(links, total: results.total), annotations: nil, _meta: nil)],
+            structuredContent: FindLinksOutput(links: links, total: results.total))
     }
 
     // MARK: - get_post
@@ -198,7 +198,7 @@ public enum TGKBServer {
         return lines.joined(separator: "\n")
     }
 
-    static func render(_ links: [LinkHitRecord]) -> String {
+    static func render(_ links: [LinkHitRecord], total: Int) -> String {
         guard !links.isEmpty else { return "No posts link to that URL." }
         return links.map {
             var line = "\($0.date.prefix(10))  \($0.link)\n    \($0.url_raw)"
@@ -208,7 +208,9 @@ public enum TGKBServer {
             return line
         }
         .joined(separator: "\n")
-        + "\n\n\(links.count) post(s)"
+        + (links.count < total
+            ? "\n\n\(links.count) of \(total) post(s) — raise limit for the rest"
+            : "\n\n\(links.count) post(s)")
     }
 
     static func render(_ p: Post) -> String {
