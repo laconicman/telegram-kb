@@ -208,9 +208,12 @@ public enum TGKBServer {
 
     // MARK: - Text renderings for clients that show only `content`
 
+    /// One hit per pair of lines: `date  permalink  [by author]  [♥n]`, then the snippet. The
+    /// permalink names the channel; a signed post's author has nowhere else to appear in text.
     static func render(_ posts: [PostSummary], total: Int, nextCursor: String?) -> String {
         var lines = posts.map {
-            "\($0.date.prefix(10))  \($0.link)\($0.reactions > 0 ? "  ♥\($0.reactions)" : "")\n    \($0.snippet)"
+            "\($0.date.prefix(10))  \($0.link)\($0.author.map { "  by \($0)" } ?? "")"
+                + "\($0.reactions > 0 ? "  ♥\($0.reactions)" : "")\n    \($0.snippet)"
         }
         lines.append("\n" + footer(posts.count, of: total, noun: "result", nextCursor: nextCursor))
         return lines.joined(separator: "\n")

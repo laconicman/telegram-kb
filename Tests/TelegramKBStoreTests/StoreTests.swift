@@ -272,6 +272,35 @@ struct StoreTests {
         }
     }
 
+    /// 🟡 The page query ordered by `(channel, messageID)` only, so a post carrying the URL twice
+    /// gave two rows the same key — and nothing in the SQL made consecutive `OFFSET` reads agree
+    /// on which came first. A page could repeat one spelling and never show the other, with no
+    /// drift to warn of it. Every key is total now: ties fall back to the link's insertion order.
+    @Test("tied link hits page in a total order — one post's several links, each seen once")
+    func tiedLinkHitsPageInATotalOrder() throws {
+        let (store, _) = try Self.seeded()
+        let dest = "https://habr.com/ru/post/1"
+        let spellings = ["#a", "?utm_source=tg", "#b", "?utm_medium=x", ""].map { dest + $0 }
+        try store.upsert(posts: [
+            Self.post(1, "один", links: [LinkRef(urlRaw: dest)]),
+            Self.post(2, "пять раз", links: spellings.map { LinkRef(urlRaw: $0) }),
+            Self.post(3, "три", links: [LinkRef(urlRaw: dest + "?utm_source=x")]),
+        ])
+        var walked: [(Int, String)] = []
+        var cursor: String?
+        repeat {
+            let page = try store.links(to: dest, limit: 1, cursor: cursor)
+            #expect(page.hits.count == 1 && page.total == 7)
+            walked += page.hits.map { ($0.id.messageID, $0.urlRaw) }
+            cursor = page.nextCursor
+        } while cursor != nil
+        #expect(walked.map(\.0) == [1, 2, 2, 2, 2, 2, 3])
+        #expect(walked.filter { $0.0 == 2 }.map(\.1) == spellings,
+                "the post's links, each exactly once, in the order the post carried them")
+        #expect(walked.map(\.1) == (try store.links(to: dest).hits.map(\.urlRaw)),
+                "the page walk and the single read agree")
+    }
+
     /// 🟡 The link cursor was fingerprinted over the query's *resolved* key. A resolution
     /// written mid-walk changed that key, so the walker's own cursor came back as
     /// `cursorDoesNotMatchQuery` — corpus movement disguised as a caller error. The cursor is
