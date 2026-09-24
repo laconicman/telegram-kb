@@ -1,17 +1,49 @@
+diff --git a/Scripts/mutants/embedWithoutPeer.patch b/Scripts/mutants/embedWithoutPeer.patch
+index 7050637..e69de29 100644
+--- a/Scripts/mutants/embedWithoutPeer.patch
++++ b/Scripts/mutants/embedWithoutPeer.patch
+@@ -1,27 +0,0 @@
+-diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+-index 4c6a774..c5ab91e 100644
+---- a/Sources/TelegramKBSync/ChatImport.swift
+-+++ b/Sources/TelegramKBSync/ChatImport.swift
+-@@ -159,7 +159,7 @@ public struct ChatImport: Sendable {
+-     /// Confirms the export against `t.me`, newest message with text first. A message deleted since
+-     /// the export was taken is skipped; a failed request is not — it is an error, not an answer.
+-     func verify(_ posts: [Post], channel: String,
+--                fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64) {
+-+                fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64?) {
+-         let newest = posts.reversed().filter { !$0.text.isEmpty }.prefix(Self.candidates)
+-         for post in newest {
+-             let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
+-@@ -176,12 +176,7 @@ public struct ChatImport: Sendable {
+-             guard offset == 0 else {
+-                 throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
+-             }
+--            // A verified page that names no chat cannot feed the identity checks — returning nil
+--            // here once let a marked-verified import skip them and store identity 0 (PR #3).
+--            guard let rawID = try MessageEmbed.rawChannelID(html: page.body) else {
+--                throw ImportError.malformedEmbed(url)
+--            }
+--            return (post.id.messageID, rawID)
+-+            return (post.id.messageID, try MessageEmbed.rawChannelID(html: page.body))
+-         }
+-         throw ImportError.notFound(channel: channel, tried: newest.map(\.id.messageID))
+-     }
 diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 4c6a774..c5ab91e 100644
+index 00c7fd1..442a841 100644
 --- a/Sources/TelegramKBSync/ChatImport.swift
 +++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -159,7 +159,7 @@ public struct ChatImport: Sendable {
-     /// Confirms the export against `t.me`, newest message with text first. A message deleted since
-     /// the export was taken is skipped; a failed request is not — it is an error, not an answer.
+@@ -173,7 +173,7 @@ public struct ChatImport: Sendable {
+     /// text check then compares two empty strings and contributes nothing — accepted trade-off,
+     /// since the alternative is refusing a valid export (PR #3, review round 2).
      func verify(_ posts: [Post], channel: String,
 -                fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64) {
 +                fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64?) {
-         let newest = posts.reversed().filter { !$0.text.isEmpty }.prefix(Self.candidates)
-         for post in newest {
-             let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
-@@ -176,12 +176,7 @@ public struct ChatImport: Sendable {
+         let newest = posts.reversed()
+         let candidates = newest.filter { !$0.text.isEmpty } + newest.filter { $0.text.isEmpty }
+         let newestCandidates = candidates.prefix(Self.candidates)
+@@ -192,12 +192,7 @@ public struct ChatImport: Sendable {
              guard offset == 0 else {
                  throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
              }
@@ -23,5 +55,5 @@ index 4c6a774..c5ab91e 100644
 -            return (post.id.messageID, rawID)
 +            return (post.id.messageID, try MessageEmbed.rawChannelID(html: page.body))
          }
-         throw ImportError.notFound(channel: channel, tried: newest.map(\.id.messageID))
+         throw ImportError.notFound(channel: channel, tried: newestCandidates.map(\.id.messageID))
      }

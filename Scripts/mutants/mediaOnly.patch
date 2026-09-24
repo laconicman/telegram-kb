@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 00c7fd1..dccfbe6 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -174,9 +174,7 @@ public struct ChatImport: Sendable {
+     /// since the alternative is refusing a valid export (PR #3, review round 2).
+     func verify(_ posts: [Post], channel: String,
+                 fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64) {
+-        let newest = posts.reversed()
+-        let candidates = newest.filter { !$0.text.isEmpty } + newest.filter { $0.text.isEmpty }
+-        let newestCandidates = candidates.prefix(Self.candidates)
++        let newestCandidates = posts.reversed().filter { !$0.text.isEmpty }.prefix(Self.candidates)
+         for post in newestCandidates {
+             let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
+             let page = try await fetcher.fetch(url)
