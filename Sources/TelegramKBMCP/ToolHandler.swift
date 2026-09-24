@@ -144,7 +144,7 @@ public enum TGKBServer {
             return LinkHitRecord(
                 post: "@\(hit.id.channelUsername)/\(hit.id.messageID)",
                 channel: hit.id.channelUsername,
-                date: post?.date.formatted(.iso8601) ?? "",
+                date: post?.date.tgkbISO8601 ?? "",
                 url_raw: hit.urlRaw,
                 url_canonical: hit.urlCanonical,
                 resolved_url: hit.effectiveURL,
@@ -236,7 +236,7 @@ public enum TGKBServer {
     /// get it.
     static func footer(_ shown: Int, of total: Int, noun: String, nextCursor: String?) -> String {
         if let nextCursor {
-            return "\(shown) of \(total) \(noun)(s) — for the rest, pass next_cursor: \(nextCursor)"
+            return "\(shown) of \(total) \(noun)(s) — for the rest, call again with cursor: \(nextCursor)"
         }
         return shown < total ? "\(shown) of \(total) \(noun)(s)" : "\(shown) \(noun)(s)"
     }
@@ -244,7 +244,7 @@ public enum TGKBServer {
     /// A poll's question and options are its content, so a text-only client sees them too —
     /// beside the body when there is one, in place of it when there is not.
     static func render(_ p: Post) -> String {
-        var lines = ["\(p.permalink)  \(p.date.formatted(.iso8601))"]
+        var lines = ["\(p.permalink)  \(p.date.tgkbISO8601)"]
         if let author = p.authorName { lines.append("by \(author)") }
         if !p.text.isEmpty { lines.append(p.text) }
         if let poll = p.poll {

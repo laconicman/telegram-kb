@@ -209,7 +209,7 @@ struct MCPServerTests {
         guard case .text(let text, _, _) = page1.content.first else {
             Issue.record("expected a text content block"); return
         }
-        #expect(text.contains("next_cursor"), "the text rendering tells a model how to continue")
+        #expect(text.contains("cursor"), "the text rendering tells a model how to continue")
 
         let page2 = try await client.callTool(
             name: "find_links", arguments: ["url": "https://clck.ru/33ABCD", "limit": .int(1),
@@ -254,7 +254,7 @@ struct MCPServerTests {
         let first = try await client.callTool(
             name: "find_links", arguments: ["url": url, "limit": .int(1)]).value
         let cursor = try #require(try Self.decode(first, as: FindLinksOutput.self).next_cursor)
-        #expect(try text(first).contains("1 of 2 post(s) — for the rest, pass next_cursor"))
+        #expect(try text(first).contains("1 of 2 post(s) — for the rest, call again with cursor"))
 
         let last = try await client.callTool(
             name: "find_links", arguments: ["url": url, "limit": .int(1), "cursor": .string(cursor)]).value
@@ -276,8 +276,9 @@ struct MCPServerTests {
 
     /// 🔴 The footer told text-only clients to "pass next_cursor" but the cursor was only in
     /// `structuredContent`, which those clients never see — so every page after the first was
-    /// unreachable for them.
-    @Test("the text footer carries the cursor itself, not just the news that one exists")
+    /// unreachable for them. And `next_cursor` is not a parameter: the one to pass is `cursor`,
+    /// so a client that did as told got -32602.
+    @Test("the text footer carries the cursor itself and names the parameter that takes it")
     func footerCarriesTheCursor() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let first = try await client.callTool(
@@ -286,7 +287,54 @@ struct MCPServerTests {
         guard case .text(let s, _, _) = first.content.first else {
             Issue.record("expected a text content block"); return
         }
-        #expect(s.hasSuffix("pass next_cursor: \(cursor)"), "the cursor a text-only client must copy")
+        #expect(s.hasSuffix("call again with cursor: \(cursor)"), "the cursor a text-only client must copy")
+        #expect(!s.contains("next_cursor"), "that is the output field, not the argument")
+    }
+
+    /// 🟡 `from`/`to` were declared `format: date-time`, which a validating client enforces
+    /// as a full RFC 3339 timestamp — refusing the `YYYY-MM-DD` spelling the decoder accepts and
+    /// the description advertises.
+    @Test("the date bounds' schema admits the date-only spelling the decoder does")
+    func dateBoundsSchemaAdmitsDateOnly() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        let (tools, _) = try await client.listTools()
+        let search = try #require(tools.first { $0.name == "search_posts" })
+        let properties = try #require(search.inputSchema.objectValue?["properties"]?.objectValue)
+        for key in ["from", "to"] {
+            let bound = try #require(properties[key]?.objectValue)
+            #expect(bound["format"] == nil, "\(key): `date-time` would reject YYYY-MM-DD")
+            #expect(bound["description"]?.stringValue?.contains("YYYY-MM-DD") == true)
+        }
+    }
+
+    /// 🟡 Records rendered dates with `.iso8601`, which drops the fraction — so a post at
+    /// `.500` came back as `…59Z`, and passing that back as an inclusive `to` excluded the very
+    /// post it was read from.
+    @Test("a returned date, passed back as an inclusive bound, still admits its own post")
+    func returnedDatesRoundTripAsBounds() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 3),
+                 date: Date(timeIntervalSince1970: 1_700_006_399.5),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн в половину"),
+            Post(id: .init(channelUsername: "iosgr", messageID: 4),
+                 date: Date(timeIntervalSince1970: 1_700_006_399.75),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн позже"),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let all = try Self.decode(try await client.callTool(
+            name: "search_posts", arguments: ["query": "дедлайн"]).value, as: SearchPostsOutput.self)
+        let half = try #require(all.posts.first { $0.post == "@iosgr/3" })
+        #expect(half.date == "2023-11-14T23:59:59.500Z", "the precision the store keeps")
+
+        let upTo = try Self.decode(try await client.callTool(
+            name: "search_posts", arguments: ["query": "дедлайн", "to": .string(half.date)]).value,
+                                   as: SearchPostsOutput.self)
+        #expect(upTo.posts.map(\.post) == ["@iosgr/3"], "its own date is inclusive of it, and of nothing later")
+
+        let detail = try Self.decode(try await client.callTool(
+            name: "get_post", arguments: ["post": "@iosgr/3"]).value, as: PostDetail.self)
+        #expect(detail.date == half.date, "get_post and search_posts agree on the spelling")
     }
 
     /// 🟡 `Date.ISO8601FormatStyle()` does not parse fractional seconds, so `to: "…23:59:59.500Z"`

@@ -22,7 +22,7 @@ struct PostSummary: Codable, Sendable, Equatable {
     /// `@channel/id` — the literal ``get_post`` takes.
     var post: String
     var channel: String
-    /// ISO-8601, UTC-rendered — the post's own date, not the crawl's.
+    /// ISO-8601 with fractional seconds, UTC-rendered — the post's own date, not the crawl's.
     var date: String
     var author: String?
     var kind: String
@@ -37,7 +37,7 @@ struct PostSummary: Codable, Sendable, Equatable {
     init(_ post: Post) {
         self.post = "@\(post.id.channelUsername)/\(post.id.messageID)"
         self.channel = post.id.channelUsername
-        self.date = post.date.formatted(.iso8601)
+        self.date = post.date.tgkbISO8601
         self.author = post.authorName
         self.kind = post.kind.rawValue
         self.snippet = Self.snippet(post.text.isEmpty ? (post.poll?.question ?? "") : post.text)
@@ -151,7 +151,7 @@ struct PostDetail: Codable, Sendable, Equatable {
         channel = p.id.channelUsername
         message_id = p.id.messageID
         link = p.permalink
-        date = p.date.formatted(.iso8601)
+        date = p.date.tgkbISO8601
         author = p.authorName
         kind = p.kind.rawValue
         media_count = p.mediaCount
@@ -173,12 +173,20 @@ struct PostDetail: Codable, Sendable, Equatable {
                        preview: l.preview.map {
                            .init(site_name: $0.siteName, title: $0.title,
                                  description: $0.description, resolved_url: $0.resolvedURL,
-                                 observed_at: $0.observedAt.formatted(.iso8601))
+                                 observed_at: $0.observedAt.tgkbISO8601)
                        })
         }
         reactions = p.reactions.map { .init(emoji: $0.emoji, count: $0.count, is_paid: $0.isPaid) }
         poll = p.poll.map { .init(question: $0.question, options: $0.options,
                                   total_votes: $0.totalVotes) }
         views = p.views.map { .init(value: $0.value, is_approximate: $0.isApproximate) }
+    }
+}
+
+extension Date {
+    /// Every date a tool emits, at the precision the store keeps: a returned date passed back as
+    /// an inclusive `to` must still admit the post it was read from.
+    var tgkbISO8601: String {
+        formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
     }
 }
