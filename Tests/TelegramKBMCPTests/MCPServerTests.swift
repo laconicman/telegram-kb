@@ -254,7 +254,7 @@ struct MCPServerTests {
         let first = try await client.callTool(
             name: "find_links", arguments: ["url": url, "limit": .int(1)]).value
         let cursor = try #require(try Self.decode(first, as: FindLinksOutput.self).next_cursor)
-        #expect(try text(first).hasSuffix("1 of 2 post(s) — pass next_cursor for the rest"))
+        #expect(try text(first).contains("1 of 2 post(s) — for the rest, pass next_cursor"))
 
         let last = try await client.callTool(
             name: "find_links", arguments: ["url": url, "limit": .int(1), "cursor": .string(cursor)]).value
@@ -272,6 +272,42 @@ struct MCPServerTests {
         let end = try await client.callTool(
             name: "search_posts", arguments: ["query": "про", "limit": .int(1), "cursor": .string(more)]).value
         #expect(try text(end).hasSuffix("1 of 2 result(s)"))
+    }
+
+    /// 🔴 The footer told text-only clients to "pass next_cursor" but the cursor was only in
+    /// `structuredContent`, which those clients never see — so every page after the first was
+    /// unreachable for them.
+    @Test("the text footer carries the cursor itself, not just the news that one exists")
+    func footerCarriesTheCursor() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        let first = try await client.callTool(
+            name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
+        let cursor = try #require(try Self.decode(first, as: SearchPostsOutput.self).next_cursor)
+        guard case .text(let s, _, _) = first.content.first else {
+            Issue.record("expected a text content block"); return
+        }
+        #expect(s.hasSuffix("pass next_cursor: \(cursor)"), "the cursor a text-only client must copy")
+    }
+
+    /// 🟡 `Date.ISO8601FormatStyle()` does not parse fractional seconds, so `to: "…23:59:59.500Z"`
+    /// — a bound at the precision the store actually keeps — was refused as malformed.
+    @Test("a bound with fractional seconds is a bound, not an invalid parameter")
+    func fractionalSecondBoundsAreAccepted() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 3),
+                 date: Date(timeIntervalSince1970: 1_700_006_399.5),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн в половину"),
+            Post(id: .init(channelUsername: "iosgr", messageID: 4),
+                 date: Date(timeIntervalSince1970: 1_700_006_399.75),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн позже"),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let result = try await client.callTool(
+            name: "search_posts",
+            arguments: ["query": "дедлайн", "to": "2023-11-14T23:59:59.500Z"]).value
+        #expect(try Self.decode(result, as: SearchPostsOutput.self).posts.map(\.post) == ["@iosgr/3"],
+                "inclusive at .500, so .750 is out")
     }
 
     /// 🔴 `Args.int` converted a whole-valued double with `Int(_:)`, which traps past ±2^63 — so
@@ -293,7 +329,9 @@ struct MCPServerTests {
     }
 
     /// 🔴 A date-only `to` became `T23:59:59Z`, so a post stamped inside the day's final second was
-    /// outside an "inclusive" bound on the day it belongs to.
+    /// outside an "inclusive" bound on the day it belongs to. Then it became `start + 86_399.999`,
+    /// a Double the store formats to whichever millisecond it lands on: the day has no last
+    /// instant to approximate, so the bound is *before the next day*, exactly.
     @Test("a date-only `to` includes the whole day it names, and nothing after it")
     func dateOnlyToCoversTheWholeDay() async throws {
         let store = try Self.seededStore()
@@ -305,13 +343,16 @@ struct MCPServerTests {
             Post(id: .init(channelUsername: "iosgr", messageID: 4),
                  date: Date(timeIntervalSince1970: 1_700_006_400),
                  kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн в полночь"),
+            Post(id: .init(channelUsername: "iosgr", messageID: 5),
+                 date: Date(timeIntervalSince1970: 1_700_006_399.999),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн в последний миг"),
         ])
         let (client, _) = try await Self.connected(store)
         let result = try await client.callTool(
             name: "search_posts", arguments: ["query": "дедлайн", "to": "2023-11-14"]).value
         let out = try Self.decode(result, as: SearchPostsOutput.self)
-        #expect(out.posts.map(\.post) == ["@iosgr/3"] && out.total == 1,
-                "23:59:59.5 is still the 14th; 00:00:00 of the 15th is not")
+        #expect(Set(out.posts.map(\.post)) == ["@iosgr/3", "@iosgr/5"] && out.total == 2,
+                "23:59:59.5 and 23:59:59.999 are still the 14th; 00:00:00 of the 15th is not")
 
         let from = try await client.callTool(
             name: "search_posts", arguments: ["query": "дедлайн", "from": "2023-11-15"]).value

@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index db231ff..96bf920 100644
+index 50544ca..a6b18a6 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -302,7 +302,7 @@ struct Args {
-         if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") {
-             switch bound {
-             case .lower: return start
--            case .upper: return start.addingTimeInterval(86_400 - 0.001)
-+            case .upper: return start.addingTimeInterval(86_399)
-             }
+@@ -106,7 +106,7 @@ public enum TGKBServer {
          }
-         throw MCPError.invalidParams("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
+         switch try args.date("to") {
+         case .instant(let d)?: filter.to = d
+-        case .day(start: let d)?: filter.before = d.addingTimeInterval(86_400)
++        case .day(start: let d)?: filter.to = d.addingTimeInterval(86_400)
+         case nil: break
+         }
+         let mode = try args.enumerated("mode", as: Store.SearchMode.self) ?? .both

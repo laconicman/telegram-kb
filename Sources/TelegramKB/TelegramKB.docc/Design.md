@@ -416,15 +416,18 @@ details the spec-level decisions left open:
   a resolution written mid-walk then reads as `index_moved_since_cursor`, the drift signal the
   tool advertises, rather than as a cursor for some other query. The text footer follows
   `next_cursor` too — a final page smaller than `total` is the end of the walk, not an
-  invitation to fetch more.
+  invitation to fetch more — and prints the cursor itself, since a client that shows only
+  `content` has no other way to obtain it.
 - **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
   load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
   from a second read would pair them with bodies from whatever a concurrent sync had committed
   in between — the same two-snapshot fault `Store.search` already refuses between its two
   indexes.
-- **A date-only `to` is the whole day.** `YYYY-MM-DD` as an upper bound becomes the day's last
-  millisecond (the store's date precision), not `23:59:59` — the bound is inclusive and a post
-  stamped inside the final second is still that day's.
+- **A date-only `to` is the whole day.** `YYYY-MM-DD` as an upper bound becomes
+  `SearchFilter.before: nextMidnight`, an exclusive bound — not `23:59:59`, and not the day's
+  "last millisecond" either: a day has no last instant, and any approximation of one excludes
+  the posts stamped after it. An explicit timestamp, with or without fractional seconds, stays
+  the inclusive `to`.
 - **The post reference is a grammar of three forms** — `@channel/id` (what records emit),
   `channel/id`, `https://t.me/channel/id` (what people paste). All fold to the lowercase key.
 - **Server assembly lives in the library** (`TGKBServer.makeServer`), so `TelegramKBMCPTests`
