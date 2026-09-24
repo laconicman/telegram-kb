@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewParser.swift b/Sources/TelegramKBIngest/WebPreviewParser.swift
+index d5e07ae..a940833 100644
+--- a/Sources/TelegramKBIngest/WebPreviewParser.swift
++++ b/Sources/TelegramKBIngest/WebPreviewParser.swift
+@@ -36,7 +36,7 @@ public enum WebPreviewParser {
+         // The selector is deliberately NOT `[data-post]`: a message div missing the attribute
+         // can never become a post — it has no channel/id — but it IS an unreadable block, and
+         // `post(from:)` returning nil for it is what `skippedBlocks` exists to count.
+-        let blocks = try doc.select("div.tgme_widget_message")
++        let blocks = try doc.select("div.tgme_widget_message[data-post]")
+         let posts = try blocks.compactMap(post(from:))
+         return Page(posts: posts, skippedBlocks: blocks.count - posts.count)
+     }

@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
+index d4f740f..99c65d3 100644
+--- a/Sources/TelegramKBIngest/WebPreviewSource.swift
++++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
+@@ -130,7 +130,7 @@ public struct WebPreviewSource: Sendable {
+             // second false-completion path beside the one it closed. The same goes for a page
+             // whose blocks are all unreadable: the posts exist, we just cannot read them, and
+             // sealing the backfill here would bury them behind a false completion.
+-            guard !parsed.isEmpty else { reachedEnd = page.skippedBlocks == 0; break }
++            guard !parsed.isEmpty else { reachedEnd = true; break }
+             let posts = parsed.filter { $0.id.channelUsername == channel.lowercased() }
+             foreignBlocks += parsed.count - posts.count
+             guard !posts.isEmpty else { break }
