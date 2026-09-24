@@ -248,6 +248,13 @@ extension Store {
         public var effectiveURL: String?
     }
 
+    /// A `links(to:)` page: the hits, and every match — counted in the same read, so a truncated
+    /// list can never present itself as complete.
+    public struct LinkResults: Sendable {
+        public var hits: [LinkHit]
+        public var total: Int
+    }
+
     /// Posts whose links lead to the same destination as `url`.
     ///
     /// The match key is the link's **effective** URL — its canonical form, or what resolution
@@ -256,28 +263,34 @@ extension Store {
     /// a shortener query finds the destination's posts, and a destination query finds every
     /// spelling that resolved to it. A query that cannot be canonicalised at all falls back to a
     /// literal `urlRaw` match — the raw column exists so that spelling is still findable.
-    public func links(to url: String, limit: Int = maxPageSize) throws -> [LinkHit] {
+    public func links(to url: String, limit: Int = maxPageSize) throws -> LinkResults {
         try dbPool.read { db in
-            guard let canonical = URLCanonicaliser.canonicalise(url) else {
-                return try LinkHit.fetchAll(db, sql: """
-                    SELECT l.channelUsername AS cu, l.messageID AS mid,
-                           l.urlRaw, l.urlCanonical, NULL AS eff
-                    FROM link l
-                    WHERE l.urlRaw = ?
-                    ORDER BY l.channelUsername, l.messageID LIMIT ?
-                    """, arguments: [url, max(0, limit)])
+            let predicate: String
+            let arguments: [any DatabaseValueConvertible]
+            if let canonical = URLCanonicaliser.canonicalise(url) {
+                let effective = try String.fetchOne(db,
+                    sql: "SELECT resolvedCanonical FROM urlResolution WHERE urlCanonical = ?",
+                    arguments: [canonical]) ?? canonical
+                predicate = "COALESCE(r.resolvedCanonical, l.urlCanonical) = ?"
+                arguments = [effective]
+            } else {
+                predicate = "l.urlRaw = ?"
+                arguments = [url]
             }
-            let effective = try String.fetchOne(db,
-                sql: "SELECT resolvedCanonical FROM urlResolution WHERE urlCanonical = ?",
-                arguments: [canonical]) ?? canonical
-            return try LinkHit.fetchAll(db, sql: """
+            let hits = try LinkHit.fetchAll(db, sql: """
                 SELECT l.channelUsername AS cu, l.messageID AS mid,
                        l.urlRaw, l.urlCanonical,
                        COALESCE(r.resolvedCanonical, l.urlCanonical) AS eff
                 FROM link l LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
-                WHERE COALESCE(r.resolvedCanonical, l.urlCanonical) = ?
+                WHERE \(predicate)
                 ORDER BY l.channelUsername, l.messageID LIMIT ?
-                """, arguments: [effective, max(0, limit)])
+                """, arguments: StatementArguments(arguments + [max(0, limit)]))
+            let total = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM link l
+                LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
+                WHERE \(predicate)
+                """, arguments: StatementArguments(arguments)) ?? 0
+            return LinkResults(hits: hits, total: total)
         }
     }
 }

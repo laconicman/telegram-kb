@@ -164,17 +164,20 @@ struct StoreTests {
         let destCanonical = try #require(URLCanonicaliser.canonicalise(dest))
 
         // Before any resolution the shortener is a destination of its own.
-        #expect(try store.links(to: short).map(\.id.messageID) == [1])
-        #expect(try store.links(to: dest).map(\.id.messageID) == [2])
+        #expect(try store.links(to: short).hits.map(\.id.messageID) == [1])
+        #expect(try store.links(to: dest).hits.map(\.id.messageID) == [2])
 
         try store.upsert(resolutions: [URLResolution(
             urlCanonical: shortCanonical, resolvedCanonical: destCanonical,
             httpStatus: "200", hops: 1, resolvedAt: Date())])
 
         // Once resolved, the shortener query finds the destination post too — and vice versa.
-        #expect(try store.links(to: short).map(\.id.messageID) == [1, 2])
-        #expect(try store.links(to: dest).map(\.id.messageID) == [1, 2])
-        let hit = try store.links(to: dest).first { $0.id.messageID == 1 }
+        #expect(try store.links(to: short).hits.map(\.id.messageID) == [1, 2])
+        #expect(try store.links(to: dest).hits.map(\.id.messageID) == [1, 2])
+        // `total` counts every match, not the page — truncation is never silent.
+        let capped = try store.links(to: dest, limit: 1)
+        #expect(capped.hits.count == 1 && capped.total == 2)
+        let hit = try store.links(to: dest).hits.first { $0.id.messageID == 1 }
         #expect(hit?.urlRaw == short)
         #expect(hit?.effectiveURL == destCanonical)
     }
@@ -186,7 +189,7 @@ struct StoreTests {
         // so the link is stored with urlCanonical NULL.
         try store.upsert(posts: [
             Self.post(4, "файл", links: [LinkRef(urlRaw: "ftp://files.example.com/x")])])
-        #expect(try store.links(to: "ftp://files.example.com/x").map(\.id.messageID) == [4])
+        #expect(try store.links(to: "ftp://files.example.com/x").hits.map(\.id.messageID) == [4])
     }
 
     @Test("posts(ids:) hydrates a page in input order and skips a missing post")
