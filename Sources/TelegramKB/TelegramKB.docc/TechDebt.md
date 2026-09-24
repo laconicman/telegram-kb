@@ -484,7 +484,8 @@ still pins.
 page for the length of a backfill, and `tgkb-mcp` reading in another process. Individually short
 reads are fine; *continuously overlapping* ones are not, because some snapshot is then always
 pinned near the start of the WAL and the file grows for the whole backfill. Nobody has measured
-ours — a 116-page backfill is short, and the reader has not been built yet.
+ours — a 116-page backfill is short. The reader exists as of S6 (`tgkb-mcp` opens the same file
+in a second process), so the measurement this entry asks for is now runnable.
 
 **Discharge.** Measure first: watch the `-wal` file during a full backfill with a reader looping
 against it. If it grows without bound, call `db.checkpoint(.passive)` from the writer on a cadence
