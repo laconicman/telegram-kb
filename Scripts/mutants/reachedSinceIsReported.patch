@@ -1,9 +1,9 @@
 diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
-index 64ebf39..cb1bc5b 100644
+index 07eee7e..fdc4db6 100644
 --- a/Sources/TelegramKBIngest/WebPreviewSource.swift
 +++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
-@@ -124,7 +124,7 @@ public struct WebPreviewSource: Sendable {
-                     lowestMessageID: lowestSeen ?? 0, updatedAt: Date(), isBackfillComplete: false))
+@@ -155,7 +155,7 @@ public struct WebPreviewSource: Sendable {
+                                  rawChannelID)
              }
  
 -            if let since, ids.allSatisfy({ $0 <= since }) { reachedSince = true; break }

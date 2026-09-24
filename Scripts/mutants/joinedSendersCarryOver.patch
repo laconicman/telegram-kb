@@ -1,8 +1,8 @@
 diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
-index 0ed9e4e..b4d50b6 100644
+index fccc07d..8da6da7 100644
 --- a/Sources/TelegramKBIngest/ChatExportParser.swift
 +++ b/Sources/TelegramKBIngest/ChatExportParser.swift
-@@ -91,13 +91,13 @@ public enum ChatExportParser {
+@@ -110,13 +110,13 @@ public enum ChatExportParser {
          guard let body = try block.select("> div.body").first() else { return nil }
          // The sender first, even from a block that turns out unreadable: the "joined" message
          // after it still continues from this sender, not from the one before.
@@ -17,5 +17,5 @@ index 0ed9e4e..b4d50b6 100644
 -              let dateEl = try body.select("> div.date").first(),
 -              let date = dates.date(from: try dateEl.attr("title")) else { return nil }
          let textEl = try body.select("> div.text").first()
-         let text = try textEl.map(NodeText.text(of:)) ?? ""
- 
+         var text = try textEl.map(NodeText.text(of:)) ?? ""
+         if text.isEmpty {

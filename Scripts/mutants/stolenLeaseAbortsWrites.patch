@@ -1,14 +1,14 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index 49e33b0..5585fdc 100644
+index 33047f6..5eb9c1f 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
-@@ -523,9 +523,6 @@ extension Store {
-         try db.execute(sql: """
-             UPDATE channelLease SET heartbeat = ? WHERE channelUsername = ? AND pid = ?
-             """, arguments: [Date(), username, processID])
+@@ -574,9 +574,6 @@ extension Store {
+             UPDATE channelLease SET heartbeat = ?
+             WHERE channelUsername = ? AND pid = ? AND nonce = ?
+             """, arguments: [Date(), username, Self.processID, leaseTokens.token(for: username)])
 -        if try Int.fetchOne(db, sql: "SELECT changes()") == 0 {
 -            throw StoreError.channelLeaseLost(channel: username)
 -        }
      }
  
-     /// Releases the lease **only if this process still holds it** — a stolen lease is the
+     /// Releases the lease **only if this `Store` still holds it** — a stolen lease is the

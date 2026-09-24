@@ -1,15 +1,16 @@
 diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 4c6a774..2bbdd01 100644
+index 64619a7..ea9c06e 100644
 --- a/Sources/TelegramKBSync/ChatImport.swift
 +++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -172,10 +172,6 @@ public struct ChatImport: Sendable {
-             guard Self.sameText(online.text, post.text) else {
+@@ -231,10 +231,7 @@ public struct ChatImport: Sendable {
                  throw ImportError.notThisChat(channel: channel, messageID: post.id.messageID)
              }
--            let offset = post.date.timeIntervalSince(online.date)
--            guard offset == 0 else {
--                throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
--            }
-             // A verified page that names no chat cannot feed the identity checks — returning nil
-             // here once let a marked-verified import skip them and store identity 0 (PR #3).
-             guard let rawID = try MessageEmbed.rawChannelID(html: page.body) else {
+         }
+-        let offset = post.date.timeIntervalSince(online.date)
+-        guard offset == 0 else {
+-            throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
+-        }
++
+         // A verified page that names no chat cannot feed the identity checks — returning nil
+         // here once let a marked-verified import skip them and store identity 0 (PR #3).
+         guard let rawID = try MessageEmbed.rawChannelID(html: page.body) else {

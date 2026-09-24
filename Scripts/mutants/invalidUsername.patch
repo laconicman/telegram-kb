@@ -13,7 +13,7 @@ index 77391aa..b9cc2e2 100644
          let result = try await Self.successful(fetcher.fetch(preview), preview)
          // A 200 whose body actually holds messages. Following the redirect would look like a
 diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 00c7fd1..3ceb1f7 100644
+index 64619a7..9814b8e 100644
 --- a/Sources/TelegramKBSync/ChatImport.swift
 +++ b/Sources/TelegramKBSync/ChatImport.swift
 @@ -109,9 +109,6 @@ public struct ChatImport: Sendable {
@@ -25,4 +25,4 @@ index 00c7fd1..3ceb1f7 100644
 -        guard Channel.isUsername(channel) else { throw Channel.InvalidUsername(name: channel) }
  
          let files = try ChatExportParser.pageFiles(in: directory)
-         guard let first = files.first else { throw ImportError.notAnExport(directory) }
+         guard !files.isEmpty else { throw ImportError.notAnExport(directory) }
