@@ -25,6 +25,10 @@ there rather than re-arguing the decision.
 - Require a channel's posts or identity writes to happen while the writer holds that channel's
   `channelLease` (`Store.acquireChannelLease`, schema v6): a check-then-write that is not inside
   the lease's scope can interleave with a second process and mix two chats under one username.
+- Flag a `rawChannelID` learned from a page or an embed that is checked outside the write
+  transaction consuming it — `Store.commitPage` re-checks it against the stored row inside its
+  own `dbPool.write`, so a username reassigned between the check and the write cannot merge two
+  chats under one name.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
