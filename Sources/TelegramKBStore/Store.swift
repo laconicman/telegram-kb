@@ -190,8 +190,9 @@ public struct Store: Sendable {
         return (indexed, stale)
     }
 
-    /// Records that the search indexes changed. Every path that writes or deletes an index row
-    /// calls this, so a cursor from before the change can tell.
+    /// Records that a paged result set may have moved. Every path that writes or deletes an index
+    /// row calls this, and so does a resolution write — it re-keys links — so a cursor from before
+    /// the change can tell.
     ///
     /// It counts WRITES, not revisions: a batch of twenty posts, or a migration's rebuild, moves it
     /// by twenty. Compare generations for equality only; the difference means nothing.
@@ -252,6 +253,7 @@ public struct Store: Sendable {
                       canonicalSpecVersion=excluded.canonicalSpecVersion
                     """, arguments: [r.urlCanonical, r.resolvedCanonical, r.httpStatus,
                                      r.hops, r.resolvedAt, r.canonicalSpecVersion])
+                try Self.bumpIndexGeneration(in: db)
             }
         }
     }

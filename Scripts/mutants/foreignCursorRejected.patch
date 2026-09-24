@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index f715f0c..13c6b0c 100644
+index db231ff..775bce7 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -109,7 +109,7 @@ public enum TGKBServer {
+@@ -158,7 +158,7 @@ public enum TGKBServer {
+         do {
+             return try body()
          } catch let e as Store.SearchError {
-             // The cursor is a parameter; a stale or foreign one is an invalid argument, not a
-             // tool failure — -32602 is the honest signal.
 -            throw MCPError.invalidParams(e.description)
 +            throw MCPError.internalError(e.description)
          }
-         try Task.checkCancellation()
-         let posts = try store.posts(ids: results.hits.map(\.id)).map(PostSummary.init)
+     }
+ 
