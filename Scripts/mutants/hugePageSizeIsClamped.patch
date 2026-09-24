@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
-index a56457d..065c0cf 100644
+index 8e93257..a76f5a9 100644
 --- a/Sources/TelegramKBStore/Search.swift
 +++ b/Sources/TelegramKBStore/Search.swift
-@@ -133,7 +133,7 @@ extension Store {
+@@ -157,7 +157,7 @@ extension Store {
          // Clamped both ways. `Int.max` as a page size made the substring bound `end + words.count`
          // overflow and trap (PR #2, round 2); with the page and the offset both bounded, every sum
          // below stays far from the edge.
--        let cap = min(max(limit, 0), Self.maxPageSize)
+-        let cap = min(max(limit, 0), maxPageSize)
 +        let cap = max(limit, 0)
          let fingerprint = Cursor.fingerprint(query: query, mode: mode, filter: filter)
-         var offset = 0, cursorGeneration: UInt64?
-         if let cursor {
+         let (offset, end, cursorGeneration) = try Cursor.resume(cursor, fingerprint: fingerprint, cap: cap)
+ 

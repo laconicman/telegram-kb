@@ -201,14 +201,85 @@ struct StoreTests {
         #expect(try store.links(to: "ftp://files.example.com/x").hits.map(\.id.messageID) == [4])
     }
 
-    @Test("posts(ids:) hydrates a page in input order and skips a missing post")
-    func postsHydrateInOrder() throws {
+    /// 🔴 The page and its posts came from two `dbPool.read`s, so a sync committing between them
+    /// paired one snapshot's hits, total and cursor with another's bodies. The hydrated forms
+    /// read both in one snapshot; this pins that they carry the same page, post for hit.
+    @Test("searchPosts and linkedPosts hydrate the hits they return, in hit order")
+    func hydratedPagesMatchTheirHits() throws {
         let (store, _) = try Self.seeded()
-        try store.upsert(posts: [Self.post(1, "a"), Self.post(2, "b"), Self.post(3, "c")])
-        let ids = [Post.ID(channelUsername: "iosgr", messageID: 3),
-                   Post.ID(channelUsername: "iosgr", messageID: 99),
-                   Post.ID(channelUsername: "iosgr", messageID: 1)]
-        #expect(try store.posts(ids: ids).map(\.id.messageID) == [3, 1])
+        let dest = "https://habr.com/ru/post/1"
+        try store.upsert(posts: [
+            Self.post(1, "swift один", links: [LinkRef(urlRaw: dest)]),
+            Self.post(2, "swift два", links: [LinkRef(urlRaw: dest + "?utm_source=tg")]),
+            Self.post(3, "swift три"),
+        ])
+        let search = try store.searchPosts("swift", mode: .both, limit: 2)
+        #expect(search.results.hits.count == 2 && search.results.total == 3)
+        #expect(search.posts.map(\.id) == search.results.hits.map(\.id))
+        #expect(search.posts.allSatisfy { $0.text.hasPrefix("swift") })
+
+        let links = try store.linkedPosts(to: dest, limit: 1)
+        #expect(links.results.hits.count == 1 && links.results.total == 2)
+        #expect(links.posts.map(\.id) == links.results.hits.map(\.id))
+        #expect(links.posts.first?.links.first?.urlRaw == dest)
+    }
+
+    /// 🔴 `links(to:)` had a page cap and no continuation, so every match past `limit` was
+    /// unreachable — `total` said they existed and nothing could fetch them.
+    @Test("links(to:) pages through a cursor bound to the match key")
+    func linksPageThroughACursor() throws {
+        let (store, _) = try Self.seeded()
+        let short = "https://clck.ru/33ABCD"
+        let dest = "https://habr.com/ru/post/1"
+        try store.upsert(posts: [
+            Self.post(1, "один", links: [LinkRef(urlRaw: dest)]),
+            Self.post(2, "два", links: [LinkRef(urlRaw: dest + "?utm_source=tg")]),
+            Self.post(3, "три", links: [LinkRef(urlRaw: short)]),
+        ])
+        try store.upsert(resolutions: [URLResolution(
+            urlCanonical: try #require(URLCanonicaliser.canonicalise(short)),
+            resolvedCanonical: try #require(URLCanonicaliser.canonicalise(dest)),
+            httpStatus: "200", hops: 1, resolvedAt: Date())])
+
+        var walked: [Int] = []
+        var cursor: String?
+        repeat {
+            let page = try store.links(to: dest, limit: 1, cursor: cursor)
+            #expect(page.hits.count == 1 && page.total == 3)
+            #expect(!page.indexMovedSinceCursor)
+            walked += page.hits.map(\.id.messageID)
+            cursor = page.nextCursor
+        } while cursor != nil
+        #expect(walked == [1, 2, 3], "every match is reachable, once, in order")
+
+        // The shortener and its destination name ONE result set, so they share a cursor …
+        let first = try #require(try store.links(to: short, limit: 1).nextCursor)
+        #expect(try store.links(to: dest, limit: 1, cursor: first).hits.map(\.id.messageID) == [2])
+        // … and a cursor for another URL, or from a search, is refused rather than misapplied.
+        #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
+            try store.links(to: "https://example.com/other", limit: 1, cursor: first)
+        }
+        #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
+            try store.search("один", mode: .both, limit: 1, cursor: first)
+        }
+    }
+
+    /// 🟡 A resolution write re-keys links, so it moves a link walk exactly as an index write moves
+    /// a search walk — and the cursor's generation must say so.
+    @Test("a resolution written between link pages is reported as drift")
+    func resolutionWriteReportsLinkDrift() throws {
+        let (store, _) = try Self.seeded()
+        let dest = "https://habr.com/ru/post/1"
+        try store.upsert(posts: [
+            Self.post(1, "один", links: [LinkRef(urlRaw: dest)]),
+            Self.post(2, "два", links: [LinkRef(urlRaw: dest + "?utm_source=tg")]),
+        ])
+        let cursor = try #require(try store.links(to: dest, limit: 1).nextCursor)
+        try store.upsert(resolutions: [URLResolution(
+            urlCanonical: try #require(URLCanonicaliser.canonicalise("https://clck.ru/33ABCD")),
+            resolvedCanonical: try #require(URLCanonicaliser.canonicalise(dest)),
+            httpStatus: "200", hops: 1, resolvedAt: Date())])
+        #expect(try store.links(to: dest, limit: 1, cursor: cursor).indexMovedSinceCursor)
     }
 
     @Test("a reader opens read-only while a writer holds the database")

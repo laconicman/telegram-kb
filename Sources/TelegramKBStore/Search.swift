@@ -132,54 +132,62 @@ extension Store {
     /// stays a small page: asking for 20 of `swift` no longer materialises 6,672 rows.
     public func search(_ query: String, mode: SearchMode, filter: SearchFilter = .init(),
                        limit: Int, cursor: String? = nil) throws -> SearchResults {
+        try dbPool.read { db in
+            try Self.search(query, mode: mode, filter: filter, limit: limit, cursor: cursor, in: db)
+        }
+    }
+
+    /// ``search(_:mode:filter:limit:cursor:)`` with the page's posts loaded in the same read.
+    ///
+    /// Hydrating from a second read hands the caller posts from a later snapshot than the hits,
+    /// total and cursor came from — a sync committing in between makes one response describe
+    /// two corpora.
+    public func searchPosts(_ query: String, mode: SearchMode, filter: SearchFilter = .init(),
+                            limit: Int, cursor: String? = nil) throws -> Hydrated<SearchResults> {
+        try dbPool.read { db in
+            let results = try Self.search(query, mode: mode, filter: filter, limit: limit,
+                                          cursor: cursor, in: db)
+            return Hydrated(results: results,
+                            posts: try Self.loadPosts(results.hits.map(\.id), from: db))
+        }
+    }
+
+    static func search(_ query: String, mode: SearchMode, filter: SearchFilter, limit: Int,
+                       cursor: String?, in db: Database) throws -> SearchResults {
         // Clamped both ways. `Int.max` as a page size made the substring bound `end + words.count`
         // overflow and trap (PR #2, round 2); with the page and the offset both bounded, every sum
         // below stays far from the edge.
-        let cap = min(max(limit, 0), Self.maxPageSize)
+        let cap = min(max(limit, 0), maxPageSize)
         let fingerprint = Cursor.fingerprint(query: query, mode: mode, filter: filter)
-        var offset = 0, cursorGeneration: UInt64?
-        if let cursor {
-            guard let decoded = Cursor.decode(cursor) else { throw SearchError.cursorMalformed }
-            // A cursor from another query would return a slice of a different result set while
-            // looking like a continuation — the kind of wrongness nobody notices.
-            guard decoded.fingerprint == fingerprint else { throw SearchError.cursorDoesNotMatchQuery }
-            offset = decoded.offset
-            cursorGeneration = decoded.generation
-        }
-        // `offset` is bounded by the decoder and `cap` by the caller, but the sum is still
-        // checked rather than assumed: an overflow here would trap the process.
-        let (end, overflowed) = offset.addingReportingOverflow(cap)
-        guard !overflowed else { throw SearchError.cursorMalformed }
+        let (offset, end, cursorGeneration) = try Cursor.resume(cursor, fingerprint: fingerprint, cap: cap)
 
-        return try dbPool.read { db in
-            // Read to the END of the page, not to its size: everything before `offset` still has
-            // to be skipped, and the bound stays a page-sized multiple rather than the corpus.
-            let words = mode == .substring ? [] : try Self.wordHits(query, limit: end, filter: filter, in: db)
-            var merged = words
-            if mode != .words, words.count < end {
-                // Fewer word hits came back than the page's end, so the word set is COMPLETE —
-                // which is what makes "not in the word set" mean substring-only. At most
-                // `words.count` of the substring candidates can be duplicates of it, so asking
-                // for that many extra guarantees enough unique ones to fill the page.
-                var seen = Set(words.map(\.id))
-                for hit in try Self.substringHits(query, limit: end + words.count, filter: filter, in: db)
-                where seen.insert(hit.id).inserted {
-                    merged.append(hit)
-                    if merged.count == end { break }
-                }
+        // Read to the END of the page, not to its size: everything before `offset` still has
+        // to be skipped, and the bound stays a page-sized multiple rather than the corpus.
+        let words = mode == .substring ? [] : try wordHits(query, limit: end, filter: filter, in: db)
+        var merged = words
+        if mode != .words, words.count < end {
+            // Fewer word hits came back than the page's end, so the word set is COMPLETE —
+            // which is what makes "not in the word set" mean substring-only. At most
+            // `words.count` of the substring candidates can be duplicates of it, so asking
+            // for that many extra guarantees enough unique ones to fill the page.
+            var seen = Set(words.map(\.id))
+            for hit in try substringHits(query, limit: end + words.count, filter: filter, in: db)
+            where seen.insert(hit.id).inserted {
+                merged.append(hit)
+                if merged.count == end { break }
             }
-            let page = Array(merged.dropFirst(offset).prefix(cap))
-            // Counted in the SAME read as the page, so the two cannot describe different corpora.
-            let total = try Self.matchCount(query, mode: mode, filter: filter, in: db)
-            let generation = try Cursor.generation(in: db)
-            let consumed = offset + page.count
-            return SearchResults(
-                hits: page, total: total,
-                nextCursor: consumed < total && !page.isEmpty
-                    ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
-                    : nil,
-                indexMovedSinceCursor: cursorGeneration.map { $0 != generation } ?? false)
         }
+        let page = Array(merged.dropFirst(offset).prefix(cap))
+        // Counted in the SAME read as the page, so the two cannot describe different corpora.
+        let total = try matchCount(query, mode: mode, filter: filter, in: db)
+        let generation = try Cursor.generation(in: db)
+        let consumed = offset + page.count
+        return SearchResults(
+            hits: page, total: total,
+            nextCursor: consumed < total && !page.isEmpty
+                ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
+                : nil,
+            indexMovedSinceCursor: cursorGeneration.map { $0 != generation } ?? false)
     }
 
     /// Every match, counted in SQLite rather than in Swift. A truncated page reports what it
@@ -220,11 +228,13 @@ extension Store {
         try dbPool.read { db in try Self.loadPost(id, from: db) }
     }
 
-    /// The posts behind a page of hits, hydrated in **one** read so a page cannot mix snapshots —
-    /// N calls to ``post(_:)`` would each see a different moment while a sync runs underneath.
-    /// Order follows `ids`; a post deleted since its hit was computed is simply absent.
-    public func posts(ids: [Post.ID]) throws -> [Post] {
-        try dbPool.read { db in try ids.compactMap { try Self.loadPost($0, from: db) } }
+    /// A page and the posts behind its hits, read in **one** snapshot.
+    ///
+    /// `posts` follows the hit order. Within one read a hit's post row can only be missing when
+    /// the index itself is stale, so a shorter `posts` is an index fault, not a race.
+    public struct Hydrated<Results: Sendable>: Sendable {
+        public var results: Results
+        public var posts: [Post]
     }
 
     /// The join key for a link: its resolution when known, else its canonical form.
@@ -249,10 +259,15 @@ extension Store {
     }
 
     /// A `links(to:)` page: the hits, and every match — counted in the same read, so a truncated
-    /// list can never present itself as complete.
+    /// list can never present itself as complete. Pages with the same cursor as ``search``.
     public struct LinkResults: Sendable {
         public var hits: [LinkHit]
         public var total: Int
+        /// Pass back to continue after this page; `nil` when nothing follows it.
+        public var nextCursor: String?
+        /// A link or resolution write landed between the cursor's page and this one, so the
+        /// offset may have skipped or repeated a post. Always `false` for a first page.
+        public var indexMovedSinceCursor = false
     }
 
     /// Posts whose links lead to the same destination as `url`.
@@ -263,35 +278,62 @@ extension Store {
     /// a shortener query finds the destination's posts, and a destination query finds every
     /// spelling that resolved to it. A query that cannot be canonicalised at all falls back to a
     /// literal `urlRaw` match — the raw column exists so that spelling is still findable.
-    public func links(to url: String, limit: Int = maxPageSize) throws -> LinkResults {
+    ///
+    /// The cursor is bound to the match key, not the spelling: a shortener and its destination
+    /// name one result set and may continue each other's walk.
+    public func links(to url: String, limit: Int = maxPageSize, cursor: String? = nil) throws
+        -> LinkResults {
+        try dbPool.read { db in try Self.links(to: url, limit: limit, cursor: cursor, in: db) }
+    }
+
+    /// ``links(to:limit:cursor:)`` with the linking posts loaded in the same read.
+    public func linkedPosts(to url: String, limit: Int = maxPageSize, cursor: String? = nil) throws
+        -> Hydrated<LinkResults> {
         try dbPool.read { db in
-            let predicate: String
-            let arguments: [any DatabaseValueConvertible]
-            if let canonical = URLCanonicaliser.canonicalise(url) {
-                let effective = try String.fetchOne(db,
-                    sql: "SELECT resolvedCanonical FROM urlResolution WHERE urlCanonical = ?",
-                    arguments: [canonical]) ?? canonical
-                predicate = "COALESCE(r.resolvedCanonical, l.urlCanonical) = ?"
-                arguments = [effective]
-            } else {
-                predicate = "l.urlRaw = ?"
-                arguments = [url]
-            }
-            let hits = try LinkHit.fetchAll(db, sql: """
-                SELECT l.channelUsername AS cu, l.messageID AS mid,
-                       l.urlRaw, l.urlCanonical,
-                       COALESCE(r.resolvedCanonical, l.urlCanonical) AS eff
-                FROM link l LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
-                WHERE \(predicate)
-                ORDER BY l.channelUsername, l.messageID LIMIT ?
-                """, arguments: StatementArguments(arguments + [max(0, limit)]))
-            let total = try Int.fetchOne(db, sql: """
-                SELECT COUNT(*) FROM link l
-                LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
-                WHERE \(predicate)
-                """, arguments: StatementArguments(arguments)) ?? 0
-            return LinkResults(hits: hits, total: total)
+            let results = try Self.links(to: url, limit: limit, cursor: cursor, in: db)
+            return Hydrated(results: results,
+                            posts: try Self.loadPosts(results.hits.map(\.id), from: db))
         }
+    }
+
+    static func links(to url: String, limit: Int, cursor: String?, in db: Database) throws
+        -> LinkResults {
+        let predicate: String
+        let argument: String
+        if let canonical = URLCanonicaliser.canonicalise(url) {
+            argument = try String.fetchOne(db,
+                sql: "SELECT resolvedCanonical FROM urlResolution WHERE urlCanonical = ?",
+                arguments: [canonical]) ?? canonical
+            predicate = "COALESCE(r.resolvedCanonical, l.urlCanonical) = ?"
+        } else {
+            predicate = "l.urlRaw = ?"
+            argument = url
+        }
+        let cap = min(max(limit, 0), maxPageSize)
+        let fingerprint = Cursor.fingerprint(fields: ["links", predicate, argument])
+        let (offset, _, cursorGeneration) = try Cursor.resume(cursor, fingerprint: fingerprint, cap: cap)
+
+        let hits = try LinkHit.fetchAll(db, sql: """
+            SELECT l.channelUsername AS cu, l.messageID AS mid,
+                   l.urlRaw, l.urlCanonical,
+                   COALESCE(r.resolvedCanonical, l.urlCanonical) AS eff
+            FROM link l LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
+            WHERE \(predicate)
+            ORDER BY l.channelUsername, l.messageID LIMIT ? OFFSET ?
+            """, arguments: [argument, cap, offset])
+        let total = try Int.fetchOne(db, sql: """
+            SELECT COUNT(*) FROM link l
+            LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
+            WHERE \(predicate)
+            """, arguments: [argument]) ?? 0
+        let generation = try Cursor.generation(in: db)
+        let consumed = offset + hits.count
+        return LinkResults(
+            hits: hits, total: total,
+            nextCursor: consumed < total && !hits.isEmpty
+                ? Cursor.encode(offset: consumed, fingerprint: fingerprint, generation: generation)
+                : nil,
+            indexMovedSinceCursor: cursorGeneration.map { $0 != generation } ?? false)
     }
 }
 
@@ -311,6 +353,11 @@ extension Store.LinkHit: FetchableRecord {
 }
 
 extension Store {
+    /// In `ids` order; an id without a row is skipped.
+    static func loadPosts(_ ids: [Post.ID], from db: Database) throws -> [Post] {
+        try ids.compactMap { try loadPost($0, from: db) }
+    }
+
     static func loadPost(_ id: Post.ID, from db: Database) throws -> Post? {
         guard let row = try Row.fetchOne(db,
             sql: "SELECT * FROM post WHERE channelUsername = ? AND messageID = ?",

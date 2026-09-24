@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 8e93257..5d1362c 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -320,7 +320,7 @@ extension Store {
+             FROM link l LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
+             WHERE \(predicate)
+             ORDER BY l.channelUsername, l.messageID LIMIT ? OFFSET ?
+-            """, arguments: [argument, cap, offset])
++            """, arguments: [argument, cap, 0])
+         let total = try Int.fetchOne(db, sql: """
+             SELECT COUNT(*) FROM link l
+             LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical

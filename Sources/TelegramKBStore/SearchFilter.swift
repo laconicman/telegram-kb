@@ -56,7 +56,8 @@ extension Store {
     /// between pages, which for a corpus synced a few times a day is a fair trade.
     ///
     /// The fingerprint binds a cursor to the query and filter that produced it, so a cursor from
-    /// one search cannot silently page through another.
+    /// one search cannot silently page through another. `links(to:)` pages with the same cursor,
+    /// fingerprinted over its match key, so the two tools cannot continue each other either.
     enum Cursor {
         /// Far past any corpus this indexes, and far from `Int.max`, so the page arithmetic has
         /// room. A cursor beyond it is refused as malformed.
@@ -80,6 +81,26 @@ extension Store {
             return (offset, fingerprint, generation)
         }
 
+        /// Where a page starts and ends given an optional cursor: `(offset, end, generation)`,
+        /// with `generation` the one the cursor carried, or `nil` for a first page.
+        static func resume(_ cursor: String?, fingerprint: UInt64, cap: Int) throws
+            -> (offset: Int, end: Int, generation: UInt64?) {
+            var offset = 0, cursorGeneration: UInt64?
+            if let cursor {
+                guard let decoded = decode(cursor) else { throw SearchError.cursorMalformed }
+                // A cursor from another query would return a slice of a different result set while
+                // looking like a continuation — the kind of wrongness nobody notices.
+                guard decoded.fingerprint == fingerprint else { throw SearchError.cursorDoesNotMatchQuery }
+                offset = decoded.offset
+                cursorGeneration = decoded.generation
+            }
+            // `offset` is bounded by the decoder and `cap` by the caller, but the sum is still
+            // checked rather than assumed: an overflow here would trap the process.
+            let (end, overflowed) = offset.addingReportingOverflow(cap)
+            guard !overflowed else { throw SearchError.cursorMalformed }
+            return (offset, end, cursorGeneration)
+        }
+
         /// What the corpus looked like when a page was served.
         ///
         /// An offset into a result set is only meaningful while the set holds still. A write
@@ -97,14 +118,17 @@ extension Store {
         /// `Вёрстка` and `верстка` fold to one query and must not produce cursors that refuse
         /// each other.
         static func fingerprint(query: String, mode: SearchMode, filter: SearchFilter) -> UInt64 {
-            // Length-prefixed, not separator-joined: with a separator, a query CONTAINING it could
-            // shift the field boundaries so two different searches produced one fingerprint and
-            // accepted each other's cursors (PR #2, round 2).
-            let fields = [TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue,
-                          filter.channel ?? "", filter.kind?.rawValue ?? "",
-                          filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
-                          filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""]
-            return hash(fields.map { "\($0.utf8.count):\($0)" }.joined())
+            fingerprint(fields: [TextNormalizer.normalizeQuery(query).lowercased(), mode.rawValue,
+                                 filter.channel ?? "", filter.kind?.rawValue ?? "",
+                                 filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
+                                 filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""])
+        }
+
+        /// Length-prefixed, not separator-joined: with a separator, a field CONTAINING it could
+        /// shift the boundaries so two different result sets produced one fingerprint and
+        /// accepted each other's cursors (PR #2, round 2).
+        static func fingerprint(fields: [String]) -> UInt64 {
+            hash(fields.map { "\($0.utf8.count):\($0)" }.joined())
         }
 
         static func hash(_ material: String) -> UInt64 {
