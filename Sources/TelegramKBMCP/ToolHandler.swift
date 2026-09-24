@@ -102,17 +102,13 @@ public enum TGKBServer {
         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
         let cursor = try args.string("cursor")
 
-        let results: Store.SearchResults
-        do {
-            results = try store.search(query, mode: mode, filter: filter,
-                                       limit: limit, cursor: cursor)
-        } catch let e as Store.SearchError {
-            // The cursor is a parameter; a stale or foreign one is an invalid argument, not a
-            // tool failure — -32602 is the honest signal.
-            throw MCPError.invalidParams(e.description)
+        // Hits and their posts from ONE read: a sync committing between two would pair this
+        // page's total and cursor with bodies from a corpus they were not computed against.
+        let page = try invalidParamsOnSearchError {
+            try store.searchPosts(query, mode: mode, filter: filter, limit: limit, cursor: cursor)
         }
-        try Task.checkCancellation()
-        let posts = try store.posts(ids: results.hits.map(\.id)).map(PostSummary.init)
+        let results = page.results
+        let posts = page.posts.map(PostSummary.init)
         let output = SearchPostsOutput(
             posts: posts, total: results.total,
             next_cursor: results.nextCursor,
@@ -126,13 +122,16 @@ public enum TGKBServer {
     // MARK: - find_links
 
     static func findLinks(_ args: Args, store: Store) throws -> CallTool.Result {
-        try args.expecting(["url", "limit"])
+        try args.expecting(["url", "limit", "cursor"])
         try Task.checkCancellation()
         let url = try args.require("url")
         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
-        let results = try store.links(to: url, limit: limit)
-        let byID = try store.posts(ids: results.hits.map(\.id))
-            .reduce(into: [:]) { $0[$1.id] = $1 }
+        let cursor = try args.string("cursor")
+        let page = try invalidParamsOnSearchError {
+            try store.linkedPosts(to: url, limit: limit, cursor: cursor)
+        }
+        let results = page.results
+        let byID = page.posts.reduce(into: [:]) { $0[$1.id] = $1 }
         let links = results.hits.map { hit -> LinkHitRecord in
             let post = byID[hit.id]
             return LinkHitRecord(
@@ -147,7 +146,20 @@ public enum TGKBServer {
         }
         return try CallTool.Result(
             content: [.text(text: render(links, total: results.total), annotations: nil, _meta: nil)],
-            structuredContent: FindLinksOutput(links: links, total: results.total))
+            structuredContent: FindLinksOutput(
+                links: links, total: results.total,
+                next_cursor: results.nextCursor,
+                index_moved_since_cursor: results.indexMovedSinceCursor))
+    }
+
+    /// The cursor is a parameter; a stale or foreign one is an invalid argument, not a tool
+    /// failure — -32602 is the honest signal.
+    static func invalidParamsOnSearchError<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try body()
+        } catch let e as Store.SearchError {
+            throw MCPError.invalidParams(e.description)
+        }
     }
 
     // MARK: - get_post
@@ -209,14 +221,23 @@ public enum TGKBServer {
         }
         .joined(separator: "\n")
         + (links.count < total
-            ? "\n\n\(links.count) of \(total) post(s) — raise limit for the rest"
+            ? "\n\n\(links.count) of \(total) post(s) — pass next_cursor for the rest"
             : "\n\n\(links.count) post(s)")
     }
 
+    /// A poll's question and options are its content, so a text-only client sees them too —
+    /// beside the body when there is one, in place of it when there is not.
     static func render(_ p: Post) -> String {
         var lines = ["\(p.permalink)  \(p.date.formatted(.iso8601))"]
         if let author = p.authorName { lines.append("by \(author)") }
-        lines.append(p.text.isEmpty ? "[\(p.kind.rawValue), no text]" : p.text)
+        if !p.text.isEmpty { lines.append(p.text) }
+        if let poll = p.poll {
+            lines.append("Poll: \(poll.question)")
+            lines.append(contentsOf: poll.options.map { "  • \($0)" })
+            if let votes = poll.totalVotes { lines.append("  \(votes) vote(s)") }
+        } else if p.text.isEmpty {
+            lines.append("[\(p.kind.rawValue), no text]")
+        }
         return lines.joined(separator: "\n")
     }
 }
@@ -272,12 +293,17 @@ struct Args {
 
     /// ISO-8601, or a bare `YYYY-MM-DD` — which a model produces constantly. A date-only `from`
     /// means the day's start; a date-only `to` means its end, or the filter would exclude the
-    /// day it names.
+    /// day it names. The end is the day's last millisecond — the store keeps dates to the
+    /// millisecond — not `23:59:59`: the bound is inclusive, and a post stamped inside the final
+    /// second is still that day's.
     func date(_ key: String, bound: Bound) throws -> Date? {
         guard let s = try string(key) else { return nil }
         if let d = try? Self.iso.parse(s) { return d }
-        if s.count == 10, let d = try? Self.iso.parse(s + (bound == .lower ? "T00:00:00Z" : "T23:59:59Z")) {
-            return d
+        if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") {
+            switch bound {
+            case .lower: return start
+            case .upper: return start.addingTimeInterval(86_400 - 0.001)
+            }
         }
         throw MCPError.invalidParams("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
     }

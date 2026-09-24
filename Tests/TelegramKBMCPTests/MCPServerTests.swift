@@ -188,6 +188,97 @@ struct MCPServerTests {
         #expect(link.resolved_url == "https://habr.com/ru/post/1")
     }
 
+    /// 🔴 `find_links` clamped `limit` to 100 and had no cursor, so the 101st match was unreachable
+    /// while `total` advertised it.
+    @Test("find_links pages through an opaque cursor")
+    func findLinksPages() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 3),
+                 date: Date(timeIntervalSince1970: 1_700_000_003),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "тот же сократитель",
+                 links: [LinkRef(urlRaw: "https://clck.ru/33ABCD")]),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let page1 = try await client.callTool(
+            name: "find_links", arguments: ["url": "https://clck.ru/33ABCD", "limit": .int(1)]).value
+        let out1 = try Self.decode(page1, as: FindLinksOutput.self)
+        #expect(out1.links.count == 1 && out1.total == 2)
+        #expect(out1.index_moved_since_cursor == false)
+        let cursor = try #require(out1.next_cursor)
+        guard case .text(let text, _, _) = page1.content.first else {
+            Issue.record("expected a text content block"); return
+        }
+        #expect(text.contains("next_cursor"), "the text rendering tells a model how to continue")
+
+        let page2 = try await client.callTool(
+            name: "find_links", arguments: ["url": "https://clck.ru/33ABCD", "limit": .int(1),
+                                            "cursor": .string(cursor)]).value
+        let out2 = try Self.decode(page2, as: FindLinksOutput.self)
+        #expect(out2.links.map(\.post) == ["@iosgr/3"], "the second page must not repeat")
+        #expect(out2.next_cursor == nil)
+
+        // A link cursor is bound to its URL, and to find_links: neither misuse pages silently.
+        await Self.expectInvalidParams("cursor for another URL") {
+            try await client.callTool(
+                name: "find_links", arguments: ["url": "https://example.com", "cursor": .string(cursor)]).value
+        }
+        await Self.expectInvalidParams("link cursor passed to search_posts") {
+            try await client.callTool(
+                name: "search_posts", arguments: ["query": "про", "cursor": .string(cursor)]).value
+        }
+    }
+
+    /// 🔴 A date-only `to` became `T23:59:59Z`, so a post stamped inside the day's final second was
+    /// outside an "inclusive" bound on the day it belongs to.
+    @Test("a date-only `to` includes the whole day it names, and nothing after it")
+    func dateOnlyToCoversTheWholeDay() async throws {
+        let store = try Self.seededStore()
+        // 1_700_006_400 is 2023-11-15T00:00:00Z.
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 3),
+                 date: Date(timeIntervalSince1970: 1_700_006_399.5),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн перед полуночью"),
+            Post(id: .init(channelUsername: "iosgr", messageID: 4),
+                 date: Date(timeIntervalSince1970: 1_700_006_400),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "дедлайн в полночь"),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let result = try await client.callTool(
+            name: "search_posts", arguments: ["query": "дедлайн", "to": "2023-11-14"]).value
+        let out = try Self.decode(result, as: SearchPostsOutput.self)
+        #expect(out.posts.map(\.post) == ["@iosgr/3"] && out.total == 1,
+                "23:59:59.5 is still the 14th; 00:00:00 of the 15th is not")
+
+        let from = try await client.callTool(
+            name: "search_posts", arguments: ["query": "дедлайн", "from": "2023-11-15"]).value
+        #expect(try Self.decode(from, as: SearchPostsOutput.self).posts.map(\.post) == ["@iosgr/4"])
+    }
+
+    /// 🔴 A poll post has no body, so its text rendering was `[poll, no text]` — a client that shows
+    /// only `content` could not read the one thing the post says.
+    @Test("get_post renders a poll's question and options for text-only clients")
+    func pollRendersAsText() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 5),
+                 date: Date(timeIntervalSince1970: 1_700_000_005),
+                 kind: .poll, formatSource: .web, mediaCount: 0, text: "",
+                 poll: Poll(question: "Какой архитектурный паттерн?",
+                            options: ["MVVM", "TCA", "VIPER"], totalVotes: 42)),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let result = try await client.callTool(
+            name: "get_post", arguments: ["post": "@iosgr/5"]).value
+        guard case .text(let text, _, _) = result.content.first else {
+            Issue.record("expected a text content block"); return
+        }
+        #expect(text.contains("Какой архитектурный паттерн?"))
+        for option in ["MVVM", "TCA", "VIPER"] { #expect(text.contains(option)) }
+        #expect(text.contains("42"))
+        #expect(!text.contains("no text"), "a poll is not an empty post")
+    }
+
     @Test("get_post returns the full record; a missing post is a tool error, not silence")
     func getPost() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
