@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBMCP/Tools.swift b/Sources/TelegramKBMCP/Tools.swift
+index b20e2b8..2d3d92a 100644
+--- a/Sources/TelegramKBMCP/Tools.swift
++++ b/Sources/TelegramKBMCP/Tools.swift
+@@ -55,9 +55,9 @@ enum TGKBTools {
+                 ]),
+                 // No `format: date-time` — a validating client would refuse the YYYY-MM-DD
+                 // spelling the decoder accepts.
+-                "from": .object(["type": "string",
++                "from": .object(["type": "string", "format": "date-time",
+                                  "description": "Oldest post date, inclusive; ISO-8601 or YYYY-MM-DD."]),
+-                "to": .object(["type": "string",
++                "to": .object(["type": "string", "format": "date-time",
+                                "description": "Newest post date, inclusive; ISO-8601 or YYYY-MM-DD."]),
+                 "mode": .object(["type": "string", "enum": ["words", "substring", "both"],
+                                  "default": "both"]),

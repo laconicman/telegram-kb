@@ -416,8 +416,9 @@ details the spec-level decisions left open:
   a resolution written mid-walk then reads as `index_moved_since_cursor`, the drift signal the
   tool advertises, rather than as a cursor for some other query. The text footer follows
   `next_cursor` too — a final page smaller than `total` is the end of the walk, not an
-  invitation to fetch more — and prints the cursor itself, since a client that shows only
-  `content` has no other way to obtain it.
+  invitation to fetch more — and prints the cursor itself, under the name of the argument
+  that takes it (`cursor`, not the `next_cursor` field it came from), since a client that
+  shows only `content` has no other way to obtain it.
 - **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
   load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
   from a second read would pair them with bodies from whatever a concurrent sync had committed
@@ -427,7 +428,11 @@ details the spec-level decisions left open:
   `SearchFilter.before: nextMidnight`, an exclusive bound — not `23:59:59`, and not the day's
   "last millisecond" either: a day has no last instant, and any approximation of one excludes
   the posts stamped after it. An explicit timestamp, with or without fractional seconds, stays
-  the inclusive `to`.
+  the inclusive `to`. The schema declares `from`/`to` as plain strings, not `format:
+  date-time` — a validating client would otherwise refuse the date-only spelling.
+- **Dates go out at the precision the store keeps.** Every `date` a record carries is ISO-8601
+  with fractional seconds, so a date read from one result and passed back as an inclusive `to`
+  still admits the post it came from; the fraction-less rendering excluded it.
 - **The post reference is a grammar of three forms** — `@channel/id` (what records emit),
   `channel/id`, `https://t.me/channel/id` (what people paste). All fold to the lowercase key.
 - **Server assembly lives in the library** (`TGKBServer.makeServer`), so `TelegramKBMCPTests`

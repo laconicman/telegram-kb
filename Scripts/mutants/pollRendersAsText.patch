@@ -1,10 +1,10 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index db231ff..b2541fa 100644
+index 2f90a62..befd23f 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -230,14 +230,7 @@ public enum TGKBServer {
+@@ -246,14 +246,7 @@ public enum TGKBServer {
      static func render(_ p: Post) -> String {
-         var lines = ["\(p.permalink)  \(p.date.formatted(.iso8601))"]
+         var lines = ["\(p.permalink)  \(p.date.tgkbISO8601)"]
          if let author = p.authorName { lines.append("by \(author)") }
 -        if !p.text.isEmpty { lines.append(p.text) }
 -        if let poll = p.poll {
