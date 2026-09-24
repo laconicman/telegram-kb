@@ -281,10 +281,11 @@ queries take a `Database` rather than the pool, so they cannot open a snapshot o
 **What `total` buys.** Truncation stops being loss: the CLI prints `3 of 3741`, and the MCP surface
 will carry `total` beside an opaque cursor, so the tail is reachable rather than silently gone.
 
-## One writer per store: a busy timeout now, single-flight next
+## One writer per store: a busy timeout, and a lease row per channel
 
 **Decision.** The writer sets `busyMode = .timeout(10)`. One database file stays. A second
-`tgkb sync` on the same channel is still not prevented — that is recorded as `TD-21`.
+writer for the same *channel* is refused outright: `channelLease` (schema `v6`) is claimed
+before any write and held to the end of the run, by sync and import alike — `TD-21` discharged.
 
 SQLite allows **one writer per database file, across processes**, and GRDB's default is
 `.immediateError`. Measured with one process holding the write lock for three seconds: without a
@@ -312,10 +313,13 @@ of channels. **One file, one writer, bounded waiting.**
 **What single-flight does and does not solve.** An actor keyed by channel identity is the right
 shape *within* one process, and will matter when sync crawls channels concurrently. It cannot see
 another process: two `tgkb sync` commands share no memory, and `Task(name:)` (Swift 6.2) is a
-debugging label, not an identity — verified: two tasks with the same name run side by side. A
-cross-process guard therefore has to live where both processes can see it, which means the
-database itself: a lease row carrying the channel identity, a pid and a heartbeat, taken in the
-same transaction discipline as everything else. No lock file. That is `TD-21`'s discharge.
+debugging label, not an identity — verified: two tasks with the same name run side by side. The
+cross-process guard therefore lives where both processes can see it — the database itself, as the
+`channelLease` row carrying the channel name, a pid and a heartbeat, claimed in one `IMMEDIATE`
+write transaction with its staleness check (`Store.acquireChannelLease`). A holder's heartbeat is
+renewed on every committed page; a claimant steals the lease only from a dead pid or a heartbeat
+older than the 120 s TTL. No lock file. That was `TD-21`'s discharge; PR #3's review supplied the
+import-side instance that made it real.
 
 ## Channel identity is `rawChannelID`, not the username
 

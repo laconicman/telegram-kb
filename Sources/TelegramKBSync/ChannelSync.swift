@@ -51,6 +51,12 @@ public struct ChannelSync: Sendable {
             return Outcome(channel: channel, skipped: reachability)
         }
 
+        // One writer per channel, enforced across processes (TD-21): a second sync — or an
+        // import — of this channel fails fast instead of interleaving crawl-state reads and
+        // writes. Held until the walk's last commit; a dead holder's lease is stolen.
+        try store.acquireChannelLease(for: channel)
+        defer { try? store.releaseChannelLease(for: channel) }
+
         // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign key and
         // pages are written as they arrive. Insert-if-absent, never an upsert, so a previously
         // learned `rawChannelID` is not overwritten by the placeholder.
@@ -69,6 +75,7 @@ public struct ChannelSync: Sendable {
             try store.commitPage(posts, channel: channel, lowest: next.lowest,
                                  highest: next.highest, backfillComplete: next.backfillComplete,
                                  policy: full ? .replace : .keepExisting)
+            try store.touchChannelLease(for: channel)
         }
 
         if let raw = result.rawChannelID {

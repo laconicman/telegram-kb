@@ -1,3 +1,4 @@
+import Darwin           // kill/errno — lease holder liveness
 import Foundation
 import GRDB
 import SQLite3          // sqlite3_file_control / SQLITE_FCNTL_PERSIST_WAL
@@ -56,13 +57,25 @@ public struct Store: Sendable {
         return Store(dbPool: pool)
     }
 
-    public enum StoreError: Error, CustomStringConvertible {
+    public enum StoreError: Error, CustomStringConvertible, Equatable {
         case schemaNotMigrated
+        /// The channel is crawled from its web preview; a second source would mix.
+        case channelCrawled(String)
+        /// The claimed identity disagrees with what is stored; the message says how.
+        case channelIDConflict(String)
+        /// Another live process holds the channel's lease.
+        case channelLeaseHeld(channel: String, pid: Int32)
         public var description: String {
             switch self {
             case .schemaNotMigrated:
                 return "The database schema is older than this binary expects. Run `tgkb sync` "
                      + "(the writer) to migrate it; a read-only process cannot."
+            case .channelCrawled(let c):
+                return "@\(c) is crawled from its web preview"
+            case .channelIDConflict(let why):
+                return why
+            case .channelLeaseHeld(let c, let pid):
+                return "@\(c) is already being written by another tgkb process (pid \(pid))"
             }
         }
     }
@@ -446,6 +459,109 @@ extension Store {
                 UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
                        backfillComplete = ?, lastSyncedAt = ? WHERE username = ?
                 """, arguments: [lowest, highest, backfillComplete, Date(), channel])
+        }
+    }
+}
+
+extension Store {
+    /// How long a lease heartbeat may go unanswered before another process may take the channel.
+    /// Comfortably larger than `busyMode`'s 10 s, as TD-21 requires, and larger than one fetch's
+    /// 30 s timeout — the longest gap between heartbeats a live holder can produce.
+    static let channelLeaseTTL: TimeInterval = 120
+
+    static var processID: Int32 { ProcessInfo.processInfo.processIdentifier }
+
+    /// Claims exclusive write access to a channel for this process — "one writer per channel"
+    /// enforced across processes, where the busy timeout could only bound the symptom (TD-21).
+    ///
+    /// A lease already held is stolen when its heartbeat is older than `channelLeaseTTL` or its
+    /// pid is dead — covering a crashed holder (stolen at once) and a pid reused by an unrelated
+    /// process (stolen once the heartbeat lapses). The staleness check and the claim share one
+    /// `dbPool.write`: GRDB begins write transactions as IMMEDIATE, so the write lock is held
+    /// before the row is read. A read that later escalates would be the one `SQLITE_BUSY` a
+    /// timeout cannot prevent.
+    public func acquireChannelLease(for username: String) throws {
+        try dbPool.write { db in
+            let cutoff = Date().addingTimeInterval(-Self.channelLeaseTTL)
+            if let lease = try Row.fetchOne(db, sql: """
+                SELECT pid, heartbeat FROM channelLease WHERE channelUsername = ?
+                """, arguments: [username]) {
+                let pid: Int32 = lease["pid"]
+                let fresh = (lease["heartbeat"] as Date) > cutoff
+                // ESRCH means dead; EPERM means alive but another user's — not ours to steal from.
+                let alive = kill(pid, 0) == 0 || errno == EPERM
+                if fresh && alive {
+                    throw StoreError.channelLeaseHeld(channel: username, pid: pid)
+                }
+                try db.execute(sql: "DELETE FROM channelLease WHERE channelUsername = ?",
+                               arguments: [username])
+            }
+            try db.execute(sql: """
+                INSERT INTO channelLease (channelUsername, pid, heartbeat) VALUES (?,?,?)
+                """, arguments: [username, Self.processID, Date()])
+        }
+    }
+
+    /// Renews the lease's heartbeat — called on each committed batch, so a live holder never
+    /// approaches the TTL.
+    public func touchChannelLease(for username: String) throws {
+        try dbPool.write { db in
+            try db.execute(sql: """
+                UPDATE channelLease SET heartbeat = ? WHERE channelUsername = ? AND pid = ?
+                """, arguments: [Date(), username, Self.processID])
+        }
+    }
+
+    /// Releases the lease **only if this process still holds it** — a stolen lease is the
+    /// stealer's, and deleting it would re-open the channel mid-run.
+    public func releaseChannelLease(for username: String) throws {
+        try dbPool.write { db in
+            try db.execute(sql: "DELETE FROM channelLease WHERE channelUsername = ? AND pid = ?",
+                           arguments: [username, Self.processID])
+        }
+    }
+
+    /// Claims `username` for the chat `rawChannelID`, **atomically**: the checks and the write
+    /// share one transaction, so a concurrent claimant cannot pass the same checks against the
+    /// same old state (PR #3, review round 1). The caller holds the channel's lease.
+    ///
+    /// `nil` id means the caller could not learn the chat's id (an unverified import): the row
+    /// is ensured, its identity left alone.
+    public func claimChannelIdentity(username: String, rawChannelID: Int64?,
+                                     reachability: Channel.Reachability) throws {
+        try dbPool.write { db in
+            if let row = try Row.fetchOne(db, sql: """
+                SELECT rawChannelID, reachability FROM channel WHERE username = ?
+                """, arguments: [username]) {
+                if row["reachability"] as String == Channel.Reachability.webPreview.rawValue {
+                    throw StoreError.channelCrawled(username)
+                }
+                let known: Int64 = row["rawChannelID"]
+                if let rawChannelID, known != 0, known != rawChannelID {
+                    throw StoreError.channelIDConflict(
+                        "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
+                }
+            }
+            if let rawChannelID {
+                let others = try String.fetchAll(db, sql: """
+                    SELECT username FROM channel WHERE rawChannelID = ? AND username != ?
+                    ORDER BY username
+                    """, arguments: [rawChannelID, username])
+                if !others.isEmpty {
+                    throw StoreError.channelIDConflict(
+                        "chat \(rawChannelID) is already stored as @\(others.joined(separator: ", @")) — renamed? "
+                      + "Until S7 one chat can have only one row")
+                }
+            }
+            try db.execute(sql: """
+                INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
+                ON CONFLICT(username) DO NOTHING
+                """, arguments: [username, reachability.rawValue])
+            if let rawChannelID {
+                try db.execute(sql: """
+                    UPDATE channel SET rawChannelID = ?, reachability = ? WHERE username = ?
+                    """, arguments: [rawChannelID, reachability.rawValue, username])
+            }
         }
     }
 }

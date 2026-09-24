@@ -206,3 +206,22 @@ extension SyncTests {
         #expect(outcome.postCount == 20)
     }
 }
+
+extension SyncTests {
+    @Test("a sync refuses a channel whose lease another writer holds")
+    func concurrentSyncRefused() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-sync-\(UUID().uuidString).sqlite").path
+        let holder = try Store.openForWriting(at: path)
+        try holder.acquireChannelLease(for: "swiftui_dev")
+        defer { try? holder.releaseChannelLease(for: "swiftui_dev") }
+
+        let store = try Store.openForWriting(at: path)
+        await #expect(throws: Store.StoreError.channelLeaseHeld(
+                        channel: "swiftui_dev", pid: ProcessInfo.processInfo.processIdentifier)) {
+            try await ChannelSync(store: store, fetcher: try Self.twoPages())
+                .sync(channel: "swiftui_dev")
+        }
+        #expect(try store.identity(forChannel: "swiftui_dev") == nil)
+    }
+}

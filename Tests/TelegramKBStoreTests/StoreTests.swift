@@ -1068,4 +1068,46 @@ extension StoreTests {
         try store.upsert(posts: [Self.post(1, "one")])
         #expect(try store.integrity(forChannel: "iosgr")?.reachability == .webPreview)
     }
+
+    // MARK: - The channel lease (TD-21)
+
+    @Test("a lease held by a live process refuses; released, dead, or silent ones are taken")
+    func channelLease() throws {
+        let (store, _) = try Self.seeded()
+        let pid = ProcessInfo.processInfo.processIdentifier
+
+        // Live holder, fresh heartbeat: a claimant is refused and names the holder.
+        try store.acquireChannelLease(for: "iosgr")
+        #expect(throws: Store.StoreError.channelLeaseHeld(channel: "iosgr", pid: pid)) {
+            try store.acquireChannelLease(for: "iosgr")
+        }
+
+        // Released: claimable again.
+        try store.releaseChannelLease(for: "iosgr")
+        try store.acquireChannelLease(for: "iosgr")
+        try store.releaseChannelLease(for: "iosgr")
+
+        // Dead holder: stolen at once, without waiting out the TTL.
+        let dead = Process()
+        dead.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try dead.run()
+        dead.waitUntilExit()
+        try store.dbPool.write { db in
+            try db.execute(sql: """
+                INSERT INTO channelLease (channelUsername, pid, heartbeat) VALUES (?,?,?)
+                """, arguments: ["iosgr", dead.processIdentifier, Date()])
+        }
+        try store.acquireChannelLease(for: "iosgr")
+        try store.releaseChannelLease(for: "iosgr")
+
+        // Live pid but a heartbeat past the TTL — a suspended or stuck holder is stolen from
+        // once the heartbeat lapses, which is what the TTL is for.
+        try store.dbPool.write { db in
+            try db.execute(sql: """
+                INSERT INTO channelLease (channelUsername, pid, heartbeat) VALUES (?,?,?)
+                """, arguments: ["iosgr", pid, Date().addingTimeInterval(-Store.channelLeaseTTL - 1)])
+        }
+        try store.acquireChannelLease(for: "iosgr")
+        try store.releaseChannelLease(for: "iosgr")
+    }
 }

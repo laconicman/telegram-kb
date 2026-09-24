@@ -22,6 +22,9 @@ there rather than re-arguing the decision.
   `Store.commitPage` transaction. One exception, and only this one: the final state write in
   `Sources/TelegramKBSync/ChannelSync.swift` after a walk ends, because completion is knowable
   only once the walk stops — a crash before it costs a re-crawl, never a false completion.
+- Require a channel's posts or identity writes to happen while the writer holds that channel's
+  `channelLease` (`Store.acquireChannelLease`, schema v6): a check-then-write that is not inside
+  the lease's scope can interleave with a second process and mix two chats under one username.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and

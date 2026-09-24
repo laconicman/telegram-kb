@@ -184,6 +184,19 @@ public enum Schema {
             try Schema.createIndexState(in: db)
         }
 
+        m.registerMigration("v6-channel-lease") { db in
+            // One writer per channel, as a row rather than a convention (TD-21). Sync and import
+            // both claim this lease before writing and hold it to the end of the run; a claimant
+            // steals it only from a dead or silent holder.
+            //
+            // No foreign key: the lease is taken BEFORE the channel row it protects may exist.
+            try db.create(table: "channelLease") { t in
+                t.primaryKey("channelUsername", .text)
+                t.column("pid", .integer).notNull()
+                t.column("heartbeat", .datetime).notNull()
+            }
+        }
+
         return m
     }
 }

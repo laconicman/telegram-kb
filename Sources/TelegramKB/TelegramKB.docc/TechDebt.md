@@ -444,31 +444,26 @@ these tables anyway — two migrations of the same code, not one.
 
 ## TD-21 — Two syncs of the same channel are not prevented
 
-**Status: Open** — the writer's busy timeout (2026-09-16) bounds the *symptom*, not the cause.
+**Status: Discharged (2026-09-24)** — `channelLease` (schema `v6`) is the lease row described
+below; `ChannelSync` and `ChatImport` both claim it before writing and hold it to the last
+commit, heartbeating per page. PR #3's review found the same hole on the *import* path —
+concurrent `run` calls passed the identity checks against the same old state and interleaved
+batches under one username — which is what made the discharge land.
 
 `busyMode = .timeout(10)` makes a second writer wait rather than fail instantly, which is right
-for two syncs of *different* channels sharing one file. Two syncs of the *same* channel still
-interleave: each reads the crawl state at its own start, so the second can write back a state
-older than the first's progress. That costs re-crawling, not lost posts — but it is unproven
-either way, which is the objection.
+for two writers on *different* channels sharing one file. Two on the *same* channel now see the
+lease row and refuse. The staleness check and the claim share one `dbPool.write`: GRDB begins
+write transactions as `IMMEDIATE`, so the write lock is held before the lease row is read — a
+read that later escalates would be the one `SQLITE_BUSY` a timeout cannot prevent. No
+`BEGIN EXCLUSIVE`, which would block WAL readers (`tgkb-mcp`). The TTL is 120 s: comfortably
+larger than the 10 s timeout, as the DeepWiki consult (2026-09-16, <doc:Research>) required, and
+larger than one fetch's 30 s ceiling — the longest gap a live holder can leave between
+heartbeats.
 
-**Cost.** Wasted requests, and a state machine whose invariants were reasoned about for one writer.
-
-**Discharge.** A lease row in the database — channel identity, pid, heartbeat, taken in a
-transaction — so both processes can see it without a lock file. Within a process, an actor keyed
-by channel identity gives the same guarantee for concurrent channel crawls; it cannot help across
-processes, and `Task(name:)` is a debugging label, not an identity (verified: two tasks may share
-a name).
-
-**How to write it, from a DeepWiki consult on GRDB (2026-09-16, <doc:Research>).** GRDB has no
-lease primitive, and none is needed: it begins every write transaction as `IMMEDIATE`, so the
-write lock is taken before the lease row is read. Put the staleness check and the claim in **one**
-`dbPool.write` — never read the row in one access and claim it in another, because a read that
-later escalates to a write is the one `SQLITE_BUSY` a timeout cannot prevent. Do not reach for
-`BEGIN EXCLUSIVE`: it would block WAL readers, which is `tgkb-mcp`. One constraint that falls out
-of our own settings: **the staleness threshold must be comfortably larger than `busyMode`'s 10
-seconds**, or two processes contending for a takeover fail on the timeout instead of cleanly
-losing the race.
+**Residual.** Within one process, an actor keyed by channel identity would still be the right
+shape when sync crawls channels concurrently; the lease already serialises them correctly, the
+actor would only avoid the failed-second-run. `Task(name:)` (Swift 6.2) is a debugging label,
+not an identity (verified: two tasks may share a name).
 
 ## TD-22 — WAL growth during a long backfill is unmanaged and unmeasured
 
