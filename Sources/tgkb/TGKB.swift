@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import TelegramKBStore
 
 /// The ingestion CLI. Owns all network and, later, all credentials.
 ///
@@ -21,13 +22,7 @@ struct TGKB: AsyncParsableCommand {
 /// Options every subcommand shares.
 struct StoreOptions: ParsableArguments {
     @Option(name: [.customLong("db")], help: "Path to the SQLite store.")
-    var databasePath: String = Self.defaultPath
-
-    static var defaultPath: String {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? URL(fileURLWithPath: NSHomeDirectory())
-        return base.appendingPathComponent("telegram-kb/kb.sqlite").path
-    }
+    var databasePath: String = Store.defaultPath
 
     func ensureDirectory() throws {
         try FileManager.default.createDirectory(
