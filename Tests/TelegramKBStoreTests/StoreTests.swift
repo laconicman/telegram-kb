@@ -237,20 +237,31 @@ extension StoreTests {
         let reader = try Store.openForReading(at: path)
 
         // Park a read transaction so its snapshot pins the WAL. The semaphores bracket the
-        // hold: the read has begun before truncateWAL runs, and it ends only after.
+        // hold: the read has begun before truncateWAL runs, and it ends only after. A setup
+        // failure signals too — otherwise this test hangs instead of reporting the error.
+        final class ErrBox: @unchecked Sendable { var error: (any Error)? }
+        let setupError = ErrBox()
         let acquired = DispatchSemaphore(value: 0)
         let release = DispatchSemaphore(value: 0)
         let done = DispatchSemaphore(value: 0)
         Thread.detachNewThread {
-            try? reader.dbPool.read { db in
-                // A deferred transaction pins no snapshot until it reads — make it read.
-                _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM post")
+            do {
+                try reader.dbPool.read { db in
+                    // A deferred transaction pins no snapshot until it reads — make it read.
+                    _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM post")
+                    acquired.signal()
+                    release.wait()
+                }
+            } catch {
+                setupError.error = error   // written before `acquired` signals — safe handoff
                 acquired.signal()
-                release.wait()
             }
             done.signal()
         }
         acquired.wait()
+        if let error = setupError.error {
+            throw error   // the reader never pinned a snapshot — say so, don't hang
+        }
 
         let started = Date()
         try store.truncateWAL()   // BUSY — a reader holds the WAL — and must NOT wait it out

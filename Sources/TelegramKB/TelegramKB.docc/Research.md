@@ -61,7 +61,9 @@ not with missed pages. `tgkb doctor` reports this per channel.
   19 passive checkpoints slip through the gaps. A snapshot *pinned* for 240 s starves them: the
   file climbed to 44.3 MB and stayed (writer unblocked throughout — WAL semantics). The residue
   outlives the writer while any reader holds the file open — even past `SIGTERM` — and clears on
-  the next writer's checkpoint. Hence `Store.truncateWAL()` deferred in `Sync.run` (TD-22).
+  the next writer's checkpoint. Hence `Store.truncateWAL()` at the end of `ChannelSync.sync`'s
+  write session — with an immediate busy policy, so a pinned reader is skipped rather than
+  waited out — and on `--import-resolutions`, which bypasses it (TD-22).
 
 ### Packaging — `research/spm-traits-binarytarget.md`
 - **SwiftPM traits gate `binaryTarget` downloads.** Trait off: no download, and
