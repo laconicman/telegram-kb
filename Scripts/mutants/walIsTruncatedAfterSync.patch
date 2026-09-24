@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 8470304..b13fc46 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -80,7 +80,7 @@ public struct Store: Sendable {
+     public func truncateWAL() throws {
+         try dbPool.barrierWriteWithoutTransaction { db in
+             do {
+-                try db.checkpoint(.truncate)
++                try db.checkpoint(.passive)
+             } catch let e as DatabaseError where e.resultCode.primaryResultCode == .SQLITE_BUSY {
+                 // A reader holds a snapshot mid-WAL — the residue stays until it releases,
+                 // which is the measured outcome, not a failure.
