@@ -230,8 +230,9 @@ extension Store {
 
     /// A page and the posts behind its hits, read in **one** snapshot.
     ///
-    /// `posts` follows the hit order. Within one read a hit's post row can only be missing when
-    /// the index itself is stale, so a shorter `posts` is an index fault, not a race.
+    /// `posts` follows the hit order, one per distinct post. Within one read a hit's post row can
+    /// only be missing when the index itself is stale, so a `posts` shorter than the distinct hit
+    /// ids is an index fault, not a race.
     public struct Hydrated<Results: Sendable>: Sendable {
         public var results: Results
         public var posts: [Post]
@@ -279,8 +280,9 @@ extension Store {
     /// spelling that resolved to it. A query that cannot be canonicalised at all falls back to a
     /// literal `urlRaw` match — the raw column exists so that spelling is still findable.
     ///
-    /// The cursor is bound to the match key, not the spelling: a shortener and its destination
-    /// name one result set and may continue each other's walk.
+    /// The cursor is bound to the query's canonical URL, not to where it currently resolves: a
+    /// resolution written mid-walk re-keys the result set and is reported as drift through the
+    /// generation, rather than refused as a cursor for some other query.
     public func links(to url: String, limit: Int = maxPageSize, cursor: String? = nil) throws
         -> LinkResults {
         try dbPool.read { db in try Self.links(to: url, limit: limit, cursor: cursor, in: db) }
@@ -291,8 +293,10 @@ extension Store {
         -> Hydrated<LinkResults> {
         try dbPool.read { db in
             let results = try Self.links(to: url, limit: limit, cursor: cursor, in: db)
-            return Hydrated(results: results,
-                            posts: try Self.loadPosts(results.hits.map(\.id), from: db))
+            // A post with several matching links is one hit per link; load it once.
+            var seen = Set<Post.ID>()
+            let ids = results.hits.map(\.id).filter { seen.insert($0).inserted }
+            return Hydrated(results: results, posts: try Self.loadPosts(ids, from: db))
         }
     }
 
@@ -300,7 +304,9 @@ extension Store {
         -> LinkResults {
         let predicate: String
         let argument: String
+        let key: String
         if let canonical = URLCanonicaliser.canonicalise(url) {
+            key = canonical
             argument = try String.fetchOne(db,
                 sql: "SELECT resolvedCanonical FROM urlResolution WHERE urlCanonical = ?",
                 arguments: [canonical]) ?? canonical
@@ -308,9 +314,10 @@ extension Store {
         } else {
             predicate = "l.urlRaw = ?"
             argument = url
+            key = url
         }
         let cap = min(max(limit, 0), maxPageSize)
-        let fingerprint = Cursor.fingerprint(fields: ["links", predicate, argument])
+        let fingerprint = Cursor.fingerprint(fields: ["links", predicate, key])
         let (offset, _, cursorGeneration) = try Cursor.resume(cursor, fingerprint: fingerprint, cap: cap)
 
         let hits = try LinkHit.fetchAll(db, sql: """

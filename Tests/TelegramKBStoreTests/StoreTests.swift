@@ -222,11 +222,18 @@ struct StoreTests {
         #expect(links.results.hits.count == 1 && links.results.total == 2)
         #expect(links.posts.map(\.id) == links.results.hits.map(\.id))
         #expect(links.posts.first?.links.first?.urlRaw == dest)
+
+        // A post carrying the URL twice is two hits but one post — hydrated once.
+        try store.upsert(posts: [
+            Self.post(4, "swift четыре", links: [LinkRef(urlRaw: dest), LinkRef(urlRaw: dest + "#a")])])
+        let twice = try store.linkedPosts(to: dest, limit: 10)
+        #expect(twice.results.hits.filter { $0.id.messageID == 4 }.count == 2)
+        #expect(twice.posts.map(\.id.messageID) == [1, 2, 4])
     }
 
     /// 🔴 `links(to:)` had a page cap and no continuation, so every match past `limit` was
     /// unreachable — `total` said they existed and nothing could fetch them.
-    @Test("links(to:) pages through a cursor bound to the match key")
+    @Test("links(to:) pages through a cursor bound to the query URL")
     func linksPageThroughACursor() throws {
         let (store, _) = try Self.seeded()
         let short = "https://clck.ru/33ABCD"
@@ -252,16 +259,49 @@ struct StoreTests {
         } while cursor != nil
         #expect(walked == [1, 2, 3], "every match is reachable, once, in order")
 
-        // The shortener and its destination name ONE result set, so they share a cursor …
-        let first = try #require(try store.links(to: short, limit: 1).nextCursor)
-        #expect(try store.links(to: dest, limit: 1, cursor: first).hits.map(\.id.messageID) == [2])
-        // … and a cursor for another URL, or from a search, is refused rather than misapplied.
+        // Equivalent spellings of the query share a cursor; another URL's, or a search's, is
+        // refused rather than misapplied.
+        let first = try #require(try store.links(to: dest, limit: 1).nextCursor)
+        #expect(try store.links(to: dest + "?utm_source=x", limit: 1, cursor: first)
+                    .hits.map(\.id.messageID) == [2])
         #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
             try store.links(to: "https://example.com/other", limit: 1, cursor: first)
         }
         #expect(throws: Store.SearchError.cursorDoesNotMatchQuery) {
             try store.search("один", mode: .both, limit: 1, cursor: first)
         }
+    }
+
+    /// 🟡 The link cursor was fingerprinted over the query's *resolved* key. A resolution
+    /// written mid-walk changed that key, so the walker's own cursor came back as
+    /// `cursorDoesNotMatchQuery` — corpus movement disguised as a caller error. The cursor is
+    /// bound to the query URL now; the movement is reported through the generation instead.
+    @Test("a shortener's walk survives its resolution changing, and says the corpus moved")
+    func linkCursorSurvivesReresolution() throws {
+        let (store, _) = try Self.seeded()
+        let short = "https://clck.ru/33ABCD"
+        let a = "https://a.example.com/post", b = "https://b.example.com/post"
+        try store.upsert(posts: [
+            Self.post(1, "один", links: [LinkRef(urlRaw: a)]),
+            Self.post(2, "два", links: [LinkRef(urlRaw: a + "?utm_source=tg")]),
+            Self.post(3, "три", links: [LinkRef(urlRaw: b)]),
+        ])
+        let shortCanonical = try #require(URLCanonicaliser.canonicalise(short))
+        try store.upsert(resolutions: [URLResolution(
+            urlCanonical: shortCanonical,
+            resolvedCanonical: try #require(URLCanonicaliser.canonicalise(a)),
+            httpStatus: "200", hops: 1, resolvedAt: Date())])
+        let page1 = try store.links(to: short, limit: 1)
+        #expect(page1.hits.map(\.id.messageID) == [1] && page1.total == 2)
+        let cursor = try #require(page1.nextCursor)
+
+        try store.upsert(resolutions: [URLResolution(
+            urlCanonical: shortCanonical,
+            resolvedCanonical: try #require(URLCanonicaliser.canonicalise(b)),
+            httpStatus: "200", hops: 1, resolvedAt: Date())])
+        let page2 = try store.links(to: short, limit: 1, cursor: cursor)
+        #expect(page2.indexMovedSinceCursor, "the re-resolution is drift, not a foreign cursor")
+        #expect(page2.total == 1, "the walk now follows the new destination")
     }
 
     /// 🟡 A resolution write re-keys links, so it moves a link walk exactly as an index write moves
