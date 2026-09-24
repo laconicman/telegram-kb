@@ -1128,8 +1128,8 @@ extension StoreTests {
         dead.waitUntilExit()
         try store.dbPool.write { db in
             try db.execute(sql: """
-                INSERT INTO channelLease (channelUsername, pid, heartbeat) VALUES (?,?,?)
-                """, arguments: ["iosgr", dead.processIdentifier, Date()])
+                INSERT INTO channelLease (channelUsername, pid, nonce, heartbeat) VALUES (?,?,?,?)
+                """, arguments: ["iosgr", dead.processIdentifier, "dead-holder", Date()])
         }
         try store.acquireChannelLease(for: "iosgr")
         try store.releaseChannelLease(for: "iosgr")
@@ -1138,8 +1138,9 @@ extension StoreTests {
         // once the heartbeat lapses, which is what the TTL is for.
         try store.dbPool.write { db in
             try db.execute(sql: """
-                INSERT INTO channelLease (channelUsername, pid, heartbeat) VALUES (?,?,?)
-                """, arguments: ["iosgr", pid, Date().addingTimeInterval(-Store.channelLeaseTTL - 1)])
+                INSERT INTO channelLease (channelUsername, pid, nonce, heartbeat) VALUES (?,?,?,?)
+                """, arguments: ["iosgr", pid, "stale-holder",
+                                 Date().addingTimeInterval(-Store.channelLeaseTTL - 1)])
         }
         try store.acquireChannelLease(for: "iosgr")
         try store.releaseChannelLease(for: "iosgr")
@@ -1187,5 +1188,34 @@ extension StoreTests {
         try store.commitPage([Self.post(50, "lost")], channel: "iosgr",
                              lowest: 50, highest: 50, backfillComplete: false)
         #expect(try store.storedMessageIDs(forChannel: "iosgr") == [50])
+    }
+
+    /// 🔍 Round-4 review: the assertion bound `(channel, pid)`, and two `Store` values in one
+    /// process share a pid — a second store could write under the first's lease. The nonce is
+    /// per-`Store`, so only the value that acquired the lease passes its assertion.
+    @Test("a second Store in the same process cannot write under another's lease")
+    func leaseTokenBindsTheHolder() throws {
+        let (first, path) = try Self.seeded()
+        let second = try Store.openForWriting(at: path)
+        try first.acquireChannelLease(for: "iosgr")
+
+        #expect(throws: Store.StoreError.channelLeaseLost(channel: "iosgr")) {
+            try second.commitPage([Self.post(50, "x")], channel: "iosgr",
+                                  lowest: 50, highest: 50, backfillComplete: false)
+        }
+        #expect(try second.storedMessageIDs(forChannel: "iosgr").isEmpty,
+                "the refused page must not have written its posts")
+
+        // And release binds too: the holder's `DELETE` carries its nonce, so a same-process
+        // sibling cannot release the row, and releasing does not leave the releaser able to
+        // write — its token is gone with the row.
+        try second.releaseChannelLease(for: "iosgr")
+        try first.commitPage([Self.post(50, "x")], channel: "iosgr",
+                             lowest: 50, highest: 50, backfillComplete: false)
+        try first.releaseChannelLease(for: "iosgr")
+        #expect(throws: Store.StoreError.channelLeaseLost(channel: "iosgr")) {
+            try first.commitPage([Self.post(51, "y")], channel: "iosgr",
+                                 lowest: 51, highest: 51, backfillComplete: false)
+        }
     }
 }

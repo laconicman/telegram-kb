@@ -190,9 +190,11 @@ public enum Schema {
             // steals it only from a dead or silent holder.
             //
             // No foreign key: the lease is taken BEFORE the channel row it protects may exist.
+            // The nonce lets a lease tell two holders in one process apart — a pid cannot.
             try db.create(table: "channelLease") { t in
                 t.primaryKey("channelUsername", .text)
                 t.column("pid", .integer).notNull()
+                t.column("nonce", .text).notNull()
                 t.column("heartbeat", .datetime).notNull()
             }
         }
