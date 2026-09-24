@@ -472,24 +472,31 @@ losing the race.
 
 ## TD-22 — WAL growth during a long backfill is unmanaged and unmeasured
 
-**Status: Open** — named after a DeepWiki consult on GRDB (2026-09-16, <doc:Research>) turned a
-vague worry in the Research ledger into a specific mechanism.
+**Status: Discharged** — measured 2026-09-24 against a real `tgkb-mcp` reader
+(`research/td-22-wal-measurement.md`); the discharge is the measured answer, not the feared one.
 
 GRDB runs no background checkpointing. The only checkpoints are SQLite's own automatic one, which
 fires after a commit that leaves the WAL at 1,000+ pages and runs in `PASSIVE` mode, and whatever
 the application calls itself. A `PASSIVE` checkpoint can only reclaim frames no reader snapshot
 still pins.
 
-**Cost.** Our shape is exactly the one that starves it: a writer committing a small transaction per
-page for the length of a backfill, and `tgkb-mcp` reading in another process. Individually short
-reads are fine; *continuously overlapping* ones are not, because some snapshot is then always
-pinned near the start of the WAL and the file grows for the whole backfill. Nobody has measured
-ours — a 116-page backfill is short, and the reader has not been built yet.
+**What the measurement found.** Under the real reader shape — `tgkb-mcp` answering ~20 short
+`dbPool.read` calls a second — the WAL sawtooths 4–5.5 MB → ~0.4 MB, 19 checkpoints over a
+4,411-post backfill: the gaps between snapshots are enough. A *pinned* snapshot does starve the
+checkpointer (the WAL climbed to 44 MB and the writer was never blocked), but nothing holds one
+for minutes in our surface — every MCP call is a fresh short read. The unmanaged part was the
+**residue**: the file keeps its high-water size while any reader stays attached, and it outlives
+`SIGTERM`ed processes because no close-checkpoint runs.
 
-**Discharge.** Measure first: watch the `-wal` file during a full backfill with a reader looping
-against it. If it grows without bound, call `db.checkpoint(.passive)` from the writer on a cadence
-(every N pages), and a `.truncate` once at the end to give the space back. Do **not** use
-`.full`/`.restart`/`.truncate` mid-backfill: they block until readers release.
+**Discharged by:** `Store.truncateWAL()` — a `.truncate` checkpoint at the end of each
+`ChannelSync.sync` write session (and the `--import-resolutions` path, which bypasses it), so
+every write session ends by giving the space back. The attempt runs with an immediate busy
+policy — the writer's 10s timeout would otherwise stall cleanup behind a pinned reader.
+`SQLITE_BUSY` (a reader mid-snapshot) is tolerated: the residue then clears on the next
+writer's checkpoint; any other error surfaces as `Outcome.walCleanupFailed` (or, when the walk
+itself failed, as `ChannelSync.CleanupAlsoFailed` carrying both errors). No mid-backfill
+cadence — the measurement showed checkpoints already slip through; and never
+`.full`/`.restart`/`.truncate` mid-walk, which would block on readers.
 
 
 

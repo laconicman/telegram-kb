@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index e660103..2aa09c7 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -87,7 +87,7 @@ public struct Store: Sendable {
+             sqlite3_busy_timeout(db.sqliteConnection, 0)
+             defer { sqlite3_busy_timeout(db.sqliteConnection, CInt(timeout)) }
+             do {
+-                try db.checkpoint(.truncate)
++                try db.checkpoint(.passive)
+             } catch let e as DatabaseError where e.resultCode.primaryResultCode == .SQLITE_BUSY {
+                 // A reader holds a snapshot mid-WAL — the residue stays until it releases,
+                 // which is the measured outcome, not a failure.

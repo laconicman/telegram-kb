@@ -38,10 +38,51 @@ public struct ChannelSync: Sendable {
         /// Blocks the parser could not read. Non-zero means posts are missing from the index
         /// below the recorded mark, where no later incremental run will look for them.
         public var unreadableBlocks = 0
+        /// The end-of-session WAL reclaim failed with a real error (`TD-22` — BUSY, a reader
+        /// mid-snapshot, is absorbed inside `Store.truncateWAL` and does not set this). The
+        /// sync itself is complete; the residue is reclaimed by a later write instead.
+        public var walCleanupFailed = false
+    }
+
+    /// The walk failed, and the session-end WAL reclaim after it failed too — with a real
+    /// error, not BUSY. The walk's is the error to act on and leads; the cleanup's rides along
+    /// so it is reported rather than lost. Mirrors `Outcome.walCleanupFailed` for the path
+    /// that has no `Outcome` to carry a flag.
+    public struct CleanupAlsoFailed: Error, CustomStringConvertible {
+        public let walk: any Error
+        public let cleanup: any Error
+        public var description: String {
+            "\(walk) — and the WAL cleanup after it failed too (\(cleanup)); "
+                + "the space is reclaimed by the next write instead"
+        }
     }
 
     /// - Parameter full: re-walk from the newest page, overwriting stored copies. Never removes.
     public func sync(channel name: String, full: Bool = false) async throws -> Outcome {
+        var outcome: Outcome
+        do {
+            outcome = try await walk(channel: name, full: full)
+        } catch let walkError {
+            // A failed walk still committed pages, so the reclaim is still attempted. The
+            // walk's own error is the one the caller must act on, so it leads either way.
+            do {
+                try store.truncateWAL()
+            } catch {
+                throw CleanupAlsoFailed(walk: walkError, cleanup: error)
+            }
+            throw walkError
+        }
+        do {
+            try store.truncateWAL()
+        } catch {
+            outcome.walCleanupFailed = true
+        }
+        return outcome
+    }
+
+    /// Classify, crawl, write each page, record what the walk proved. `sync` wraps this in
+    /// the session-end WAL reclaim, which is why the flag lives on `Outcome`.
+    private func walk(channel name: String, full: Bool) async throws -> Outcome {
         // Telegram usernames are case-insensitive ASCII; SQLite keys are not. A mismatch with the
         // parsed `data-post` fails the post → channel foreign key.
         let channel = name.lowercased()

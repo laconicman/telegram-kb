@@ -1,8 +1,9 @@
 import Foundation
+import GRDB
 import Testing
 import TelegramKBIngest
 import TelegramKBModel
-import TelegramKBStore
+@testable import TelegramKBStore
 @testable import TelegramKBSync
 
 /// End-to-end sync: a real store, a stub fetcher, and the whole loop between them.
@@ -204,5 +205,43 @@ extension SyncTests {
         let outcome = try await ChannelSync(store: store, fetcher: stub).sync(channel: "swiftui_dev")
         #expect(outcome.unreadableBlocks == 1)
         #expect(outcome.postCount == 20)
+    }
+}
+
+extension SyncTests {
+    /// TD-22: the session-end reclaim lives in `ChannelSync` precisely so a test can see it —
+    /// `tgkb`'s `run` cannot be imported. If the call is removed this goes green nowhere.
+    @Test("a finished sync hands the WAL's space back")
+    func syncLeavesWALTruncated() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-sync-\(UUID().uuidString).sqlite").path
+        let store = try Store.openForWriting(at: path)
+        let outcome = try await ChannelSync(store: store, fetcher: try Self.twoPages())
+            .sync(channel: "swiftui_dev")
+
+        #expect(!outcome.walCleanupFailed)
+        let wal = (try? FileManager.default
+            .attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal == 0, "the file stays (PERSIST_WAL); its contents are given back")
+    }
+
+    /// TD-22's error path: a failed walk still reclaims, and if THAT fails with a real error the
+    /// walk's error still leads — the cleanup's rides along instead of vanishing into `try?`.
+    /// The fetch fails before the store is touched; the closed pool then fails the reclaim.
+    @Test("a failed walk whose cleanup also fails reports both, the walk's error first")
+    func failedWalkReportsFailedCleanup() async throws {
+        let store = try Self.store()
+        let stub = StubFetcher([
+            "https://t.me/s/swiftui_dev": FetchResult(
+                body: "<html>rate limited</html>", statusCode: 429,
+                finalURL: URL(string: "https://t.me/s/swiftui_dev")!),
+        ])
+        try store.dbPool.close()
+
+        let error = await #expect(throws: ChannelSync.CleanupAlsoFailed.self) {
+            try await ChannelSync(store: store, fetcher: stub).sync(channel: "swiftui_dev")
+        }
+        #expect(error?.walk is WebPreviewSource.CrawlError, "the walk's own error is the one to act on")
+        #expect(error?.cleanup is DatabaseError, "and the reclaim's failure is named, not dropped")
     }
 }

@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index e660103..6a71846 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -83,9 +83,6 @@ public struct Store: Sendable {
+             // only mean waiting out a reader's snapshot — exactly what a best-effort cleanup
+             // must not do, so the attempt runs with an immediate busy policy instead. The C
+             // call cannot throw, which is why it and not `PRAGMA busy_timeout` restores.
+-            let timeout = try Int.fetchOne(db, sql: "PRAGMA busy_timeout") ?? 10_000
+-            sqlite3_busy_timeout(db.sqliteConnection, 0)
+-            defer { sqlite3_busy_timeout(db.sqliteConnection, CInt(timeout)) }
+             do {
+                 try db.checkpoint(.truncate)
+             } catch let e as DatabaseError where e.resultCode.primaryResultCode == .SQLITE_BUSY {

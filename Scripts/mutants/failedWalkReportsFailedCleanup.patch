@@ -1,0 +1,17 @@
+diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
+index e8e9c20..4825741 100644
+--- a/Sources/TelegramKBSync/ChannelSync.swift
++++ b/Sources/TelegramKBSync/ChannelSync.swift
+@@ -65,11 +65,7 @@ public struct ChannelSync: Sendable {
+         } catch let walkError {
+             // A failed walk still committed pages, so the reclaim is still attempted. The
+             // walk's own error is the one the caller must act on, so it leads either way.
+-            do {
+-                try store.truncateWAL()
+-            } catch {
+-                throw CleanupAlsoFailed(walk: walkError, cleanup: error)
+-            }
++            try? store.truncateWAL()
+             throw walkError
+         }
+         do {

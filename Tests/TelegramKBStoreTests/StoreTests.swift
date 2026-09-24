@@ -211,6 +211,69 @@ extension StoreTests {
         try store.upsert(posts: [Self.post(1, "now fine")])
         #expect(try store.post(.init(channelUsername: "iosgr", messageID: 1)) != nil)
     }
+
+    /// TD-22, measured in `research/td-22-wal-measurement.md`: the WAL keeps its high-water size
+    /// until a TRUNCATE checkpoint gives the space back — a passive one cannot shrink the file.
+    /// `PERSIST_WAL` keeps the file itself for readers; only the contents are reclaimed.
+    @Test("truncateWAL empties the file a write session left behind")
+    func walIsTruncatedAfterSync() throws {
+        let (store, path) = try Self.seeded()
+        try store.upsert(posts: (1...40).map { Self.post($0, "post \($0)") })
+        let walPath = path + "-wal"
+        let walSize = { (try? FileManager.default
+            .attributesOfItem(atPath: walPath)[.size] as? Int) ?? 0 }
+        #expect(walSize() > 0, "the write session must leave frames to reclaim")
+        try store.truncateWAL()
+        #expect(walSize() == 0, "the file stays (PERSIST_WAL) but its contents are returned")
+    }
+
+    /// A TRUNCATE checkpoint waits on readers' snapshots. The writer's 10s busy timeout would
+    /// make a best-effort cleanup stall behind a pinned reader; it gets an immediate policy
+    /// instead, so the residue waits for the next writer rather than the exit waiting for it.
+    @Test("a pinned reader makes cleanup skip, not stall")
+    func truncateWALDoesNotWaitOnReaders() throws {
+        let (store, path) = try Self.seeded()
+        try store.upsert(posts: (1...40).map { Self.post($0, "post \($0)") })
+        let reader = try Store.openForReading(at: path)
+
+        // Park a read transaction so its snapshot pins the WAL. The semaphores bracket the
+        // hold: the read has begun before truncateWAL runs, and it ends only after. A setup
+        // failure signals too — otherwise this test hangs instead of reporting the error.
+        final class ErrBox: @unchecked Sendable { var error: (any Error)? }
+        let setupError = ErrBox()
+        let acquired = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let done = DispatchSemaphore(value: 0)
+        Thread.detachNewThread {
+            do {
+                try reader.dbPool.read { db in
+                    // A deferred transaction pins no snapshot until it reads — make it read.
+                    _ = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM post")
+                    acquired.signal()
+                    release.wait()
+                }
+            } catch {
+                setupError.error = error   // written before `acquired` signals — safe handoff
+                acquired.signal()
+            }
+            done.signal()
+        }
+        acquired.wait()
+        if let error = setupError.error {
+            throw error   // the reader never pinned a snapshot — say so, don't hang
+        }
+
+        let started = Date()
+        try store.truncateWAL()   // BUSY — a reader holds the WAL — and must NOT wait it out
+        let elapsed = Date().timeIntervalSince(started)
+        release.signal()
+        done.wait()
+
+        #expect(elapsed < 5, "with the writer's 10s timeout this call would stall behind the reader")
+        let wal = (try? FileManager.default
+            .attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal > 0, "the pinned snapshot keeps the residue — a later writer reclaims it")
+    }
 }
 
 extension StoreTests {
