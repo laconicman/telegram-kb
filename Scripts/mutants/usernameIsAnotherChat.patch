@@ -1,15 +1,16 @@
-diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 59cb9b4..06bd6c4 100644
---- a/Sources/TelegramKBSync/ChatImport.swift
-+++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -115,10 +115,6 @@ public struct ChatImport: Sendable {
-             outcome.rawChannelID = verified.rawChannelID
-         }
-         if let id = outcome.rawChannelID {
--            if let known, known.rawChannelID != 0, known.rawChannelID != id {
--                throw ImportError.identityConflict(
--                    "@\(channel) is stored as chat \(known.rawChannelID), but t.me says this export is chat \(id)")
--            }
-             let others = try store.channels(withRawChannelID: id).filter { $0 != channel }
-             if !others.isEmpty {
-                 throw ImportError.identityConflict(
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index fd5b62d..f7f241d 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -536,11 +536,6 @@ extension Store {
+                 if row["reachability"] as String == Channel.Reachability.webPreview.rawValue {
+                     throw StoreError.channelCrawled(username)
+                 }
+-                let known: Int64 = row["rawChannelID"]
+-                if let rawChannelID, known != 0, known != rawChannelID {
+-                    throw StoreError.channelIDConflict(
+-                        "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
+-                }
+             }
+             if let rawChannelID {
+                 let others = try String.fetchAll(db, sql: """

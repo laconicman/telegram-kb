@@ -1,17 +1,22 @@
-diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 59cb9b4..bbaa940 100644
---- a/Sources/TelegramKBSync/ChatImport.swift
-+++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -119,12 +119,6 @@ public struct ChatImport: Sendable {
-                 throw ImportError.identityConflict(
-                     "@\(channel) is stored as chat \(known.rawChannelID), but t.me says this export is chat \(id)")
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index fd5b62d..4b92290 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -542,17 +542,6 @@ extension Store {
+                         "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
+                 }
              }
--            let others = try store.channels(withRawChannelID: id).filter { $0 != channel }
--            if !others.isEmpty {
--                throw ImportError.identityConflict(
--                    "chat \(id) is already stored as @\(others.joined(separator: ", @")) — renamed? "
--                  + "Until S7 one chat can have only one row")
+-            if let rawChannelID {
+-                let others = try String.fetchAll(db, sql: """
+-                    SELECT username FROM channel WHERE rawChannelID = ? AND username != ?
+-                    ORDER BY username
+-                    """, arguments: [rawChannelID, username])
+-                if !others.isEmpty {
+-                    throw StoreError.channelIDConflict(
+-                        "chat \(rawChannelID) is already stored as @\(others.joined(separator: ", @")) — renamed? "
+-                      + "Until S7 one chat can have only one row")
+-                }
 -            }
-         }
- 
-         try store.ensureChannel(username: channel, reachability: .group)
+             try db.execute(sql: """
+                 INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
+                 ON CONFLICT(username) DO NOTHING
