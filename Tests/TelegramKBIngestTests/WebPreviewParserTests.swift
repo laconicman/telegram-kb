@@ -205,6 +205,32 @@ extension WebPreviewParserTests {
 }
 
 extension WebPreviewParserTests {
+    /// `TD-25`: the parser used to date a block with no readable `time[datetime]` to
+    /// `1970-01-01`, silently — a guessed value where `REVIEW.md` requires an unreadable row.
+    /// A layout change is exactly when that fallback would do its damage.
+    @Test("a block with no readable date is an unreadable block, not a 1970 post")
+    func undatedBlockIsUnreadable() throws {
+        let undated = #"""
+        <div class="tgme_widget_message" data-post="swiftui_dev/99999">
+          <div class="tgme_widget_message_text js-message_text">no date here</div>
+        </div>
+        """#
+        let unparseable = #"""
+        <div class="tgme_widget_message" data-post="swiftui_dev/99998">
+          <time datetime="next tuesday, probably"></time>
+          <div class="tgme_widget_message_text js-message_text">date that is not a date</div>
+        </div>
+        """#
+        let html = try Self.html("swiftui_dev")
+            .replacingOccurrences(of: "<body", with: "<body>\(undated)\(unparseable)<div hidden")
+        let page = try WebPreviewParser.page(html: html)
+        #expect(page.skippedBlocks == 2)
+        #expect(page.posts.count == 20, "the dated blocks on the same page still parse")
+        #expect(page.posts.allSatisfy { $0.date > Date(timeIntervalSince1970: 0) })
+    }
+}
+
+extension WebPreviewParserTests {
     /// Found by self-review before pushing, where a free DeepWiki pass could not reach: the parser
     /// accepted any integer as a message id — negatives included — and the id feeds span arithmetic
     /// that traps near Int.max.
