@@ -59,6 +59,13 @@ there rather than re-arguing the decision.
   `Sources/TelegramKBStore/Store.swift`; a phrase would straddle the join and match a post that
   contains it in neither form.
 - Flag `NLTagger` use without an explicit `setLanguage` in `Sources/TelegramKBStore/`.
+- Flag a `total` or count field derived from the returned page's contents in
+  `Sources/TelegramKBStore/` or `Sources/TelegramKBMCP/`; it must be a COUNT over the same
+  predicate, or a `limit`-truncated list reports itself complete.
+- Flag the error-channel split in `Sources/TelegramKBMCP/` crossing the wrong way: a malformed
+  argument (missing key, wrong type, unknown key, foreign cursor, `Store.SearchError`) must be
+  `MCPError.invalidParams`, not an `isError` result; a call that ran and failed (unknown tool
+  name, a `get_post` miss) must be `isError: true`, not a thrown protocol error.
 
 ## Anti-patterns to Flag
 
