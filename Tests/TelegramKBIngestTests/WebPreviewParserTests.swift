@@ -205,6 +205,32 @@ extension WebPreviewParserTests {
 }
 
 extension WebPreviewParserTests {
+    /// `TD-25`: the parser used to date a block with no readable `time[datetime]` to
+    /// `1970-01-01`, silently — a guessed value where `REVIEW.md` requires an unreadable row.
+    /// A layout change is exactly when that fallback would do its damage.
+    @Test("a block with no readable date is an unreadable block, not a 1970 post")
+    func undatedBlockIsUnreadable() throws {
+        let undated = #"""
+        <div class="tgme_widget_message" data-post="swiftui_dev/99999">
+          <div class="tgme_widget_message_text js-message_text">no date here</div>
+        </div>
+        """#
+        let unparseable = #"""
+        <div class="tgme_widget_message" data-post="swiftui_dev/99998">
+          <time datetime="next tuesday, probably"></time>
+          <div class="tgme_widget_message_text js-message_text">date that is not a date</div>
+        </div>
+        """#
+        let html = try Self.html("swiftui_dev")
+            .replacingOccurrences(of: "<body", with: "<body>\(undated)\(unparseable)<div hidden")
+        let page = try WebPreviewParser.page(html: html)
+        #expect(page.skippedBlocks == 2)
+        #expect(page.posts.count == 20, "the dated blocks on the same page still parse")
+        #expect(page.posts.allSatisfy { $0.date > Date(timeIntervalSince1970: 0) })
+    }
+}
+
+extension WebPreviewParserTests {
     /// Found by self-review before pushing, where a free DeepWiki pass could not reach: the parser
     /// accepted any integer as a message id — negatives included — and the id feeds span arithmetic
     /// that traps near Int.max.
@@ -219,5 +245,24 @@ extension WebPreviewParserTests {
         #expect(page.skippedBlocks == 3)
         #expect(page.posts.count == 20, "the real blocks on the same page still parse")
         #expect(page.posts.allSatisfy { $0.id.messageID > 0 })
+    }
+
+    /// A `tgme_widget_message` div without `data-post` can never become a post — it has no
+    /// channel/id — but it is still an unreadable block. Selecting `[data-post]` would make it
+    /// invisible to `skippedBlocks`, a hole between the two counts (PR #4, round 1).
+    @Test("a message block missing data-post counts as unreadable, not as nothing")
+    func missingDataPostIsCounted() throws {
+        let html = #"""
+        <div class="tgme_widget_message">
+          <div class="tgme_widget_message_text js-message_text">id-less block</div>
+        </div>
+        <div class="tgme_widget_message" data-post="c/7">
+          <div class="tgme_widget_message_text js-message_text">real post</div>
+          <a class="tgme_widget_message_date"><time datetime="2026-01-01T00:00:00+00:00"></time></a>
+        </div>
+        """#
+        let page = try WebPreviewParser.page(html: html)
+        #expect(page.posts.count == 1)
+        #expect(page.skippedBlocks == 1, "the id-less block is unreadable, not invisible")
     }
 }

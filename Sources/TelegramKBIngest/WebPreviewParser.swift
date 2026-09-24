@@ -23,7 +23,8 @@ public enum WebPreviewParser {
     /// incremental run — it would be missing from the index with nothing to say so.
     public struct Page: Sendable {
         public var posts: [Post]
-        /// Blocks carrying `data-post` that could not be read as `channel/id`.
+        /// Message blocks (`div.tgme_widget_message`) that could not be read as a post —
+        /// missing or malformed `data-post`, unreadable date, out-of-range id.
         public var skippedBlocks: Int
     }
 
@@ -33,7 +34,10 @@ public enum WebPreviewParser {
         // `tgme_widget_message_wrap`, but a single-post `?embed=1` page has no wrapper at all —
         // selecting the wrapper silently parses zero posts from every embed. The fixtures for
         // poll, forward, reply and album are all embeds, which is how this surfaced.
-        let blocks = try doc.select("div.tgme_widget_message[data-post]")
+        // The selector is deliberately NOT `[data-post]`: a message div missing the attribute
+        // can never become a post — it has no channel/id — but it IS an unreadable block, and
+        // `post(from:)` returning nil for it is what `skippedBlocks` exists to count.
+        let blocks = try doc.select("div.tgme_widget_message")
         let posts = try blocks.compactMap(post(from:))
         return Page(posts: posts, skippedBlocks: blocks.count - posts.count)
     }
@@ -66,9 +70,14 @@ public enum WebPreviewParser {
         let bodyEl = try message.select("div.tgme_widget_message_text.js-message_text").first()
         let text = try bodyEl.map(NodeText.text(of:)) ?? ""
 
-        let date = try message.select("time[datetime]").first()
-            .map { try $0.attr("datetime") }
-            .flatMap { try? Self.iso.parse($0) } ?? Date(timeIntervalSince1970: 0)
+        // No readable date means the block is unreadable, full stop — a guessed date is worse
+        // than a dropped block, because `1970-01-01` sorts into searches and date filters as if
+        // it were real. The skip is counted through `skippedBlocks` to the sync's warning, the
+        // same path a missing `data-post` takes (`TD-25`; `MessageEmbed.post` already refuses
+        // such a page for the same reason).
+        guard let date = try message.select("time[datetime]").first()
+            .map({ try $0.attr("datetime") })
+            .flatMap({ try? Self.iso.parse($0) }) else { return nil }
 
         let author = try message.select("span.tgme_widget_message_from_author").first()
             .map(NodeText.text(of:))

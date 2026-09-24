@@ -127,8 +127,10 @@ public struct WebPreviewSource: Sendable {
             // Only a page with NO message blocks at all proves exhaustion. A page whose blocks
             // all belong to someone else proves nothing about this channel's history, so it stops
             // the walk without claiming an end — the round-9 filter would otherwise have opened a
-            // second false-completion path beside the one it closed.
-            guard !parsed.isEmpty else { reachedEnd = true; break }
+            // second false-completion path beside the one it closed. The same goes for a page
+            // whose blocks are all unreadable: the posts exist, we just cannot read them, and
+            // sealing the backfill here would bury them behind a false completion.
+            guard !parsed.isEmpty else { reachedEnd = page.skippedBlocks == 0; break }
             let posts = parsed.filter { $0.id.channelUsername == channel.lowercased() }
             foreignBlocks += parsed.count - posts.count
             guard !posts.isEmpty else { break }

@@ -346,3 +346,30 @@ extension CrawlerTests {
                 "history below 262 was never visited, so the backfill must stay open")
     }
 }
+
+/// TD-25 review findings (PR #4, round 1).
+extension CrawlerTests {
+
+    /// 🔴 A page whose blocks are all unreadable yields zero posts — which the exhaustion
+    /// guard read as "no message blocks" and sealed the whole backfill. The history is there;
+    /// the walk just cannot read it, so the backfill must stay open and the skip surfaced.
+    @Test("a page whose blocks are all unreadable does not prove the end")
+    func allUnreadablePageIsNotExhaustion() async throws {
+        let undatedPage = #"""
+        <div class="tgme_widget_message" data-post="swiftui_dev/100">
+          <div class="tgme_widget_message_text js-message_text">no date element</div>
+        </div>
+        <div class="tgme_widget_message" data-post="swiftui_dev/99">
+          <div class="tgme_widget_message_text js-message_text">none either</div>
+        </div>
+        """#
+        let stub = StubFetcher(routes: [
+            "https://t.me/s/swiftui_dev": Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"),
+            "https://t.me/s/swiftui_dev?before=262": Self.ok(undatedPage, "https://t.me/s/swiftui_dev?before=262"),
+        ])
+        let result = try await WebPreviewSource(fetcher: stub).crawl(channel: "swiftui_dev")
+        #expect(result.unreadableBlocks == 2, "the unreadable blocks are counted, not vanished")
+        #expect(!result.reachedEnd && !result.watermark.isBackfillComplete,
+                "history below 262 was never visited, so the backfill must stay open")
+    }
+}
