@@ -9,13 +9,17 @@ import TelegramKBStore
 /// Like ``ChannelSync``, this is a library so its decisions can be tested; the CLI only reports.
 /// The sequence, and why each step is where it is:
 ///
-/// 1. **Parse.** Nothing is written from an export with no readable post.
+/// 1. **Parse.** Nothing is written from an export with no readable post, or from one with a
+///    hole in its page sequence — the exporter numbers pages contiguously, so a missing
+///    `messagesN.html` is a lost file, not a page it skipped.
 /// 2. **Never mix sources.** A username the store crawls from the web is a channel, not this
 ///    group, and the two sources disagree on albums.
 /// 3. **Verify against one embed**, when a fetcher is given: the newest message with text is fetched
 ///    from `t.me/<chat>/<id>?embed=1`. Different words mean the export is not this chat; a
-///    different moment means the export's zone is wrong — its dates carry no offset. The embed
-///    also names the chat's bare id, so the import learns `rawChannelID`. A page that verifies
+///    different moment means the export's zone is wrong — its dates carry no offset. With no
+///    text-bearing message at all (a media-only group) the check falls back to id, date and
+///    `data-peer`, which a media embed still carries. The embed also names the chat's bare id,
+///    so the import learns `rawChannelID`. A page that verifies
 ///    but names no chat is a format change, not an offline import — it throws, because the
 ///    identity checks below would otherwise be skipped while "verified" is recorded.
 /// 4. **One chat, one row — and one writer at a time.** The channel's lease is taken before the
@@ -105,6 +109,9 @@ public struct ChatImport: Sendable {
     public func run(export directory: URL, channel name: String, timeZone: TimeZone,
                     policy: Store.WritePolicy = .keepExisting) async throws -> Outcome {
         let channel = name.lowercased()
+        // Before it reaches `MessageEmbed.url`: a delimiter would fetch a different page than
+        // the name under which the posts are stored (PR #3, review round 2).
+        guard Channel.isUsername(channel) else { throw Channel.InvalidUsername(name: channel) }
 
         let files = try ChatExportParser.pageFiles(in: directory)
         guard let first = files.first else { throw ImportError.notAnExport(directory) }
@@ -158,10 +165,19 @@ public struct ChatImport: Sendable {
 
     /// Confirms the export against `t.me`, newest message with text first. A message deleted since
     /// the export was taken is skipped; a failed request is not — it is an error, not an answer.
+    ///
+    /// Text-bearing candidates come first because `sameText` is the strong check. An export
+    /// without any — a media-only group — still verifies, on the remaining evidence: the post's
+    /// **id, its date to the second, and `data-peer`** all bind it to the named chat (a media
+    /// message's embed carries all three; verified on `@beautifulpictures`, 2026-09-24). The
+    /// text check then compares two empty strings and contributes nothing — accepted trade-off,
+    /// since the alternative is refusing a valid export (PR #3, review round 2).
     func verify(_ posts: [Post], channel: String,
                 fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64) {
-        let newest = posts.reversed().filter { !$0.text.isEmpty }.prefix(Self.candidates)
-        for post in newest {
+        let newest = posts.reversed()
+        let candidates = newest.filter { !$0.text.isEmpty } + newest.filter { $0.text.isEmpty }
+        let newestCandidates = candidates.prefix(Self.candidates)
+        for post in newestCandidates {
             let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
             let page = try await fetcher.fetch(url)
             guard (200..<300).contains(page.statusCode) else {
@@ -183,7 +199,7 @@ public struct ChatImport: Sendable {
             }
             return (post.id.messageID, rawID)
         }
-        throw ImportError.notFound(channel: channel, tried: newest.map(\.id.messageID))
+        throw ImportError.notFound(channel: channel, tried: newestCandidates.map(\.id.messageID))
     }
 
     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and

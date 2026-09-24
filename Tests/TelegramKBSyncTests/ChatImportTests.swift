@@ -20,6 +20,8 @@ struct ChatImportTests {
         var title: String          // the export's date title, in the exporting Mac's zone
         var text: String
         var sender: String? = "Alice Example"
+        /// A photo with no caption: media markup instead of a `text` div.
+        var media = false
     }
 
     static let messages = [
@@ -36,7 +38,8 @@ struct ChatImportTests {
             <div class="body">
             <div class="pull_right date details" title="\(m.title)">00:00</div>
             \(m.sender.map { "<div class=\"from_name\">\($0)</div>" } ?? "")
-            <div class="text">\(m.text)</div>
+            \(m.media ? "<div class=\"media_wrap\"><a class=\"photo_wrap clearfix pull_left\"></a></div>"
+                      : "<div class=\"text\">\(m.text)</div>")
             </div>
             </div>
             """
@@ -68,6 +71,20 @@ struct ChatImportTests {
         <div class="tgme_widget_message js-widget_message" data-post="\(chat)/\(id)"\(dataPeer)>
         <div class="tgme_widget_message_bubble">
         <div class="tgme_widget_message_text js-message_text" dir="auto">\(text)</div>
+        <span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/\(chat)/\(id)"><time datetime="\(utc)" class="time">12:34</time></a></span>
+        </div></div></body></html>
+        """
+    }
+
+    /// A media message's embed: no `js-message_text`, but `<time>` and `data-peer` still present —
+    /// checked against `t.me/beautifulpictures/3?embed=1`, 2026-09-24.
+    static func embedMedia(_ chat: String, _ id: Int, utc: String, peer: Int64? = chatID) -> String {
+        let dataPeer = peer.map { " data-peer=\"c\($0)_-1111111111111111111\"" } ?? ""
+        return """
+        <html><body>
+        <div class="tgme_widget_message js-widget_message" data-post="\(chat)/\(id)"\(dataPeer)>
+        <div class="tgme_widget_message_bubble">
+        <a class="tgme_widget_message_photo" href="https://t.me/\(chat)/\(id)"></a>
         <span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/\(chat)/\(id)"><time datetime="\(utc)" class="time">12:34</time></a></span>
         </div></div></body></html>
         """
@@ -245,6 +262,34 @@ struct ChatImportTests {
                 .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
         }
         #expect(try store.identity(forChannel: "testgroup") == nil)
+    }
+
+    /// 🟡 An export whose posts carry no text used to find zero candidates and throw `notFound`
+    /// without ever asking t.me. A media-only group still verifies — on the post's id, its date
+    /// to the second, and `data-peer`, all of which a media embed carries (PR #3, round 2).
+    @Test("a media-only export verifies on id, date and the chat's bare id")
+    func mediaOnlyExportVerifies() async throws {
+        let store = try Self.store()
+        let media = [Message(id: 12, title: "3 April 2023, 12:34:07", text: "", media: true)]
+        let telegram = Stub(Dictionary(uniqueKeysWithValues: [
+            Self.route(12, Self.embedMedia("testgroup", 12, utc: "2023-04-03T09:34:07+00:00")),
+        ]))
+        let outcome = try await ChatImport(store: store, fetcher: telegram)
+            .run(export: try Self.exportDirectory(media), channel: "testgroup", timeZone: Self.moscow)
+        #expect(outcome.verifiedMessageID == 12 && outcome.rawChannelID == Self.chatID)
+        #expect(outcome.posts == 1 && outcome.written == 1)
+    }
+
+    /// 🟨 A name with a URL delimiter (`/`, `?`, a space) would fetch a different page than the
+    /// name the posts are stored under — or crash `URL(string:)`. Refused before any fetch
+    /// (PR #3, review round 2).
+    @Test("a channel name that cannot be a t.me path segment is refused before anything runs")
+    func invalidUsernameImportRefused() async throws {
+        await #expect(throws: Channel.InvalidUsername(name: "bad/name")) {
+            try await ChatImport(store: Self.store(), fetcher: Self.telegram())
+                .run(export: URL(fileURLWithPath: "/nonexistent"), channel: "bad/name",
+                     timeZone: Self.moscow)
+        }
     }
 
     @Test("a second writer for the same channel is refused while the lease is held")
