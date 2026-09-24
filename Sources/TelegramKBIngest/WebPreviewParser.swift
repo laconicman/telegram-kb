@@ -23,7 +23,8 @@ public enum WebPreviewParser {
     /// incremental run — it would be missing from the index with nothing to say so.
     public struct Page: Sendable {
         public var posts: [Post]
-        /// Blocks carrying `data-post` that could not be read as `channel/id`.
+        /// Message blocks (`div.tgme_widget_message`) that could not be read as a post —
+        /// missing or malformed `data-post`, unreadable date, out-of-range id.
         public var skippedBlocks: Int
     }
 
