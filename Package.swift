@@ -23,6 +23,10 @@ let package = Package(
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.7"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.8.2"),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.1"),
+        // Declared directly, not inherited through swift-sdk: tgkb-mcp imports them
+        // (LoggingSystem bootstrap; FileDescriptor for the stdout guard).
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+        .package(url: "https://github.com/apple/swift-system.git", from: "1.0.0"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin.git", from: "1.5.0"),
         // NB: TDLibKit tags are pre-release-shaped (`1.5.2-tdlib-1.8.66-022d6020`), so a version
         // *range* will not select them — SwiftPM excludes pre-releases from ranges. Must be .exact.
@@ -54,6 +58,8 @@ let package = Package(
         .target(name: "TelegramKBMCP", dependencies: [
             "TelegramKBModel", "TelegramKBStore",
             .product(name: "MCP", package: "swift-sdk"),
+            .product(name: "Logging", package: "swift-log"),
+            .product(name: "SystemPackage", package: "swift-system"),
         ]),
 
         // The fat binary by design: login, sync, query, doctor. Deliberately NOT `serve` —
@@ -75,7 +81,10 @@ let package = Package(
         // be exactly {TelegramKBMCP, TelegramKBStore, TelegramKBModel}. An allowlist fails
         // loudly on any addition; a check for the *absence* of TelegramKBIngestTDLib would
         // pass for the wrong reasons as the graph grows. Enforced by Scripts/check-invariants.sh.
-        .executableTarget(name: "tgkb-mcp", dependencies: ["TelegramKBMCP", "TelegramKBStore"]),
+        .executableTarget(name: "tgkb-mcp", dependencies: [
+            "TelegramKBMCP", "TelegramKBStore",
+            .product(name: "Logging", package: "swift-log"),
+        ]),
 
         // Runs Spec/url-canonical/fixtures.json — the co-owned seam contract with `artanl`.
         .testTarget(
@@ -98,6 +107,15 @@ let package = Package(
             name: "TelegramKBSyncTests",
             dependencies: ["TelegramKBSync"],
             resources: [.copy("Fixtures")]
+        ),
+        // Drives the real Server and a real Client over InMemoryTransport — the protocol
+        // wiring, not a re-implementation of it.
+        .testTarget(
+            name: "TelegramKBMCPTests",
+            dependencies: [
+                "TelegramKBMCP",
+                .product(name: "MCP", package: "swift-sdk"),
+            ]
         ),
     ]
 )
