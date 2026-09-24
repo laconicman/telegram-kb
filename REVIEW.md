@@ -22,6 +22,14 @@ there rather than re-arguing the decision.
   `Store.commitPage` transaction. One exception, and only this one: the final state write in
   `Sources/TelegramKBSync/ChannelSync.swift` after a walk ends, because completion is knowable
   only once the walk stops — a crash before it costs a re-crawl, never a false completion.
+- Require a channel's posts or identity writes to happen while the writer holds that channel's
+  `channelLease` (`Store.acquireChannelLease`, schema v6): a check-then-write that is not inside
+  the lease's scope can interleave with a second process and mix two chats under one username.
+- Flag a `rawChannelID` learned from a page or an embed that is checked outside the write
+  transaction consuming it — `Store.commitPage` re-checks it against the stored row inside its
+  own `dbPool.write`, so a username reassigned between the check and the write cannot merge two
+  chats under one name. An id of `0` (an unverified import) passes that check, so also flag a
+  web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
@@ -42,6 +50,9 @@ there rather than re-arguing the decision.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
   `Sources/TelegramKBIngest/WebPreviewParser.swift`.
+- Flag a channel username interpolated into a `t.me` URL without a `Channel.isUsername` check
+  first — a `/`, `?` or space fetches a different page than the name the posts are stored
+  under, and `URL(string:)` force-unwraps crash on some of them.
 - Require `Store.ensureChannel` before the first `commitPage` for a channel; `post` has a foreign
   key to `channel`.
 - Flag `upsert(channel:)` with a placeholder `rawChannelID` of 0; it overwrites a learned id.

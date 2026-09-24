@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
+index e20e8a6..3b684eb 100644
+--- a/Sources/TelegramKBIngest/ChatExportParser.swift
++++ b/Sources/TelegramKBIngest/ChatExportParser.swift
+@@ -53,9 +53,6 @@ public enum ChatExportParser {
+             guard let n = digits.isEmpty ? 1 : Int(digits) else { return nil }
+             return (n, directory.appendingPathComponent(name))
+         }.sorted { $0.0 < $1.0 }
+-        for (page, expected) in zip(pages.map(\.0), 1...) where page != expected {
+-            throw IncompleteExport(directory: directory, missing: expected)
+-        }
+         return pages.map(\.1)
+     }
+ 

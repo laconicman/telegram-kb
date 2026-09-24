@@ -20,4 +20,8 @@ public enum PostKind: String, Codable, Hashable, Sendable {
 /// back to its own inference on `.absent` rather than trusting a default.
 public enum FormatSource: String, Codable, Hashable, Sendable {
     case tdlib, web, absent
+    /// A chat export written by a Telegram client and loaded with `tgkb import`. The export marks
+    /// up every media type it writes — a file, a voice message, a sticker — so `kind` is as
+    /// complete as TDLib's, and it is the only source that reaches a group without logging in.
+    case export
 }

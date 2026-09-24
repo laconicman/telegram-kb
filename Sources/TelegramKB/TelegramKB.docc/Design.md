@@ -115,6 +115,85 @@ test oracle, never as a runtime dependency** — it is undocumented, its normali
 and it could vanish without notice. It has already earned its keep: comparing our index against
 it revealed a parser bug that would otherwise have shipped.
 
+## A chat export is the way in for a group
+
+**Decision (2026-09-21).** A public **group**, which has no web preview, is loaded from the chat
+export a Telegram client writes ("Export Chat History…"), with `tgkb import`. Its posts carry
+`formatSource: export`, a third source beside `web` and `tdlib`.
+
+**Why an export, and why its HTML.**
+- The web preview answers a group with a 302 (`ChannelClassifier`). TDLib, Phase 2, puts a
+  logged-in account on the critical path. An export needs neither: whoever wants the group in the
+  index exports it from their own client.
+- Telegram for macOS offers **no format choice for a single chat**; it writes HTML. Its
+  account-wide export offers JSON, but it selects kinds of chat, never one chat.
+- The markup follows Telegram Desktop's HTML exporter (`export_output_html.cpp`), but not
+  exactly: a cashtag goes through `ShowHashtag`. So **a real export, not the source, is the
+  authority**, and the test fixtures are modelled on one.
+
+**What the HTML lacks, and how import makes up for it.** The dates carry no offset: they are the
+exporting machine's local time. And the export does not name its chat. So `--timezone` and
+`--channel` are inputs; the name is checked against the username charset before it can reach a
+`t.me` path. Before anything is written, one message is fetched from
+`t.me/<chat>/<id>?embed=1`, the one web page a group's message has:
+- different words mean the export is not this chat;
+- a different moment means the zone is wrong;
+- its `data-peer` names the chat's bare id, so `rawChannelID` is learned for `S7`.
+
+An export with no text-bearing message still verifies — on the post's id, its date and
+`data-peer`, all of which a media-only embed carries (verified on `@beautifulpictures/3`).
+What is compared is then weaker — no words — so media posts get a candidate budget of their
+own rather than sharing the text posts': three newest text posts deleted since the export would
+otherwise spend it all, and a media-heavy export would read as `notFound` without asking
+(PR #3, review rounds 2 and 4).
+
+One verified instant pins the zone only *at* that instant. A claimed zone can share the true
+zone's offset there and diverge over the rest of the export's range — a DST transition it lacks,
+or keeps on different dates — silently misdating every post in the diverging span. So after a
+candidate verifies, probes sample the rest of the range: one post per distinct offset the
+claimed zone assigns, plus the oldest and midpoint posts. A probe deleted from `t.me` is skipped
+like any deletion; a live one that disagrees fails the import like the first. The residual: a
+wrong zone whose divergence windows contain no probed post still verifies — the check bounds
+the risk, not closes it (PR #3, review round 4).
+
+An uncaptioned document or audio file still names itself — the media block's title is the
+file's name — so the parser records it as the post's text, the only searchable text such a
+message has. A link preview's `observedAt` is the post's own date: the page file's modification
+time looks like the export's moment, but a copied folder rewrites it and misdates every preview
+it held (PR #3, review round 4).
+
+Measured on a 12,471-message export: seven of seven embeds sat exactly three hours from the
+export's dates, on a Mac in Europe/Moscow.
+
+The export is only as complete as its files: the pages are numbered contiguously
+(`messages.html`, `messages2.html`, … — tdesktop's `messagesFile`), so a missing `messagesN.html`
+is a lost file and `pageFiles` refuses a sequence with a hole rather than silently importing a
+partial history.
+
+**What this source is, and what it is not.**
+- **An independent oracle for Phase 2.** A TDLib crawl of the same group can be diffed against it
+  for presence, dates and text. **Not for albums:** the export writes each item of a media group
+  as its own message with no grouping id, so it cannot check the one reconciliation `TD-8` calls
+  hard.
+- **Sender names are the exporting account's view** (`TD-24`). Telegram shows a contact's saved
+  name in place of their profile name.
+- **A snapshot, not a walk.** An import never sets `backfillComplete`, and a group is never
+  synced. `doctor` reports a group's empty ids as what they are: service messages and deletions.
+
+**Rejected:**
+- *JSON only.* The machine-readable export is the better contract: UTC timestamps, typed
+  entities, user ids. But the macOS client writes it only for a whole account. `ChatImport`
+  takes posts from any parser, so a JSON reader can join when something produces the format.
+- *Importing unverified by default.* A wrong `--channel` or `--timezone` corrupts every post, and
+  nothing would say so. One request prevents both; `--no-verify` stays for a chat with no public
+  username.
+- *Waiting for TDLib.* That would have kept groups out for a whole phase.
+
+**Later: fetch through Telegram's own export.** The clients' exporters use the takeout API (the
+macOS client's error string says "Could not start the export"). A fetch path through it would
+remove the manual step and feed the same `ChatImport`. It needs a logged-in session, and Telegram
+may delay a data export on a new device by hours, so it belongs with Phase 2 in <doc:Roadmap>.
+
 ## A local index, because Telegram's search cannot be reasoned about
 
 **Decision.** SQLite FTS5 is the search engine. Telegram is ingestion only.
@@ -230,10 +309,11 @@ queries take a `Database` rather than the pool, so they cannot open a snapshot o
 **What `total` buys.** Truncation stops being loss: the CLI prints `3 of 3741`, and the MCP surface
 will carry `total` beside an opaque cursor, so the tail is reachable rather than silently gone.
 
-## One writer per store: a busy timeout now, single-flight next
+## One writer per store: a busy timeout, and a lease row per channel
 
 **Decision.** The writer sets `busyMode = .timeout(10)`. One database file stays. A second
-`tgkb sync` on the same channel is still not prevented — that is recorded as `TD-21`.
+writer for the same *channel* is refused outright: `channelLease` (schema `v6`) is claimed
+before any write and held to the end of the run, by sync and import alike — `TD-21` discharged.
 
 SQLite allows **one writer per database file, across processes**, and GRDB's default is
 `.immediateError`. Measured with one process holding the write lock for three seconds: without a
@@ -261,10 +341,21 @@ of channels. **One file, one writer, bounded waiting.**
 **What single-flight does and does not solve.** An actor keyed by channel identity is the right
 shape *within* one process, and will matter when sync crawls channels concurrently. It cannot see
 another process: two `tgkb sync` commands share no memory, and `Task(name:)` (Swift 6.2) is a
-debugging label, not an identity — verified: two tasks with the same name run side by side. A
-cross-process guard therefore has to live where both processes can see it, which means the
-database itself: a lease row carrying the channel identity, a pid and a heartbeat, taken in the
-same transaction discipline as everything else. No lock file. That is `TD-21`'s discharge.
+debugging label, not an identity — verified: two tasks with the same name run side by side. The
+cross-process guard therefore lives where both processes can see it — the database itself, as the
+`channelLease` row carrying the channel name, a pid, a heartbeat and a nonce, claimed in one
+`IMMEDIATE` write transaction with its staleness check (`Store.acquireChannelLease`). Every
+channel-scoped write transaction renews the heartbeat **and asserts the row still names this
+holder** (`Store.assertChannelLease`): a holder suspended past the TTL resumes to find its lease
+stolen, and its next write is refused rather than interleaving with the stealer's — a renewal
+that ran apart from the write would have updated zero rows and said nothing (PR #3, review
+round 3). The nonce is per `Store` value, which is what the pid cannot be: two stores in one
+process share a pid, so only the value that acquired the lease passes its assertion, and a
+release cannot delete a sibling's row (review round 4) nor erase a *reacquisition's* token —
+the token map's remove is conditional on the nonce the releaser captured (round 5). A claimant steals the lease only from a
+dead pid or a heartbeat older than the 120 s TTL. The `upsert` primitives stay unleased — they
+are the seeding/fixture path, not a run. No lock file.
+That was `TD-21`'s discharge; PR #3's review supplied the import-side instance that made it real.
 
 ## Channel identity is `rawChannelID`, not the username
 
@@ -275,9 +366,15 @@ channel may not have at all.
 
 The store contradicts this today: `channel.username` is the primary key and `post.channelUsername`
 its foreign key, so a rename would orphan an entire channel's history, and a second crawl under
-the new name would look like a new channel. Three review findings have already circled this —
-username casing breaking the foreign key, the identity placeholder `0`, and trusting the first
-`data-view` on a page.
+the new name would look like a new channel. Review findings have already circled this — username
+casing breaking the foreign key, the identity placeholder `0`, trusting the first `data-view` on
+a page, and a username Telegram reassigned to another chat. That last one is now refused where
+the write happens: a page's `data-view` names its channel's id, so `commitPage` checks it against
+the stored row inside the page transaction — before a post lands, and again on every page after
+(PR #3, review round 4). An id of `0` matches anything, and a group imported with `--no-verify`
+stores exactly that; for it the row's *kind* is the evidence: a group never becomes a broadcast
+channel, so `ensureChannel` refuses a web crawl of a `.group` row, under the lease, before the
+first page (the round-4 finding's second half).
 
 **The cost of the pivot, stated rather than waved away.** The id is not known until the first page
 is parsed, so a row must exist before it can be identified. That is acceptable: a crawl always
@@ -847,7 +944,7 @@ kind      : text | photo | album | video | videoNote | audio | voice
 modifiers : isForwarded (+ origin channel, origin post id, origin author)
             replyTo (post id)
             mediaCount (≥1; >1 means album)
-            formatSource: tdlib | web | absent
+            formatSource: tdlib | web | export | absent
 ```
 
 `kind` is **free and deterministic** where a source supplies it — TDLib's `SearchMessagesFilter`

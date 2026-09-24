@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 64619a7..839535e 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -219,9 +219,6 @@ public struct ChatImport: Sendable {
+     func probe(_ post: Post, channel: String, fetcher: PageFetcher) async throws -> Int64? {
+         let url = MessageEmbed.url(chat: channel, messageID: post.id.messageID)
+         let page = try await fetcher.fetch(url)
+-        guard (200..<300).contains(page.statusCode) else {
+-            throw ImportError.embedFailed(url, status: page.statusCode)
+-        }
+         guard let online = try MessageEmbed.post(html: page.body),
+               online.id == post.id else { return nil }
+         // An embed without a text div — a media-only message — has no words to compare, and

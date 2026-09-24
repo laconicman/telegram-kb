@@ -44,7 +44,7 @@ struct Sync: AsyncParsableCommand {
             // Its embeds still render a frame, but body text and media are withheld, so there is
             // nothing worth indexing until TDLib.
             "web preview disabled by the owner — needs TDLib (Phase 2)"
-        case .group:      "a group, not a broadcast channel — needs TDLib (Phase 2)"
+        case .group:      "a group, not a broadcast channel — load a chat export with `tgkb import`"
         case .unresolvable: "not publicly resolvable"
         case .webPreview: "crawlable"
         }

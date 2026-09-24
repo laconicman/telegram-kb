@@ -72,6 +72,13 @@ struct Doctor: AsyncParsableCommand {
         print("\nintegrity:")
         for name in names {
             guard let i = try db.integrity(forChannel: name) else { continue }
+            if i.reachability == .group {
+                // Imported, never crawled: there is no page to have missed and no sync to come, and a
+                // group's joins and pins take ids no post fills. The crawl alarms would all be false.
+                print("  @\(name): \(i.posts) posts, ids \(i.lowest)–\(i.highest) — a group, from a chat export")
+                print("    \(i.unexplained) ids hold no post: service messages (joins, pins) and deletions")
+                continue
+            }
             let pct = Double(i.covered) / Double(i.highest - i.lowest + 1) * 100
             print(String(format: "  @%@: %d posts, ids %d–%d, %.1f%% of the id range accounted for",
                          name, i.posts, i.lowest, i.highest, pct))
@@ -98,7 +105,7 @@ struct Doctor: AsyncParsableCommand {
             switch verdict {
             case .webPreview:      note = "crawlable now"
             case .previewDisabled: note = "owner disabled the preview — embeds render a frame but withhold content; needs TDLib"
-            case .group:           note = "a group, not a broadcast channel; needs TDLib"
+            case .group:           note = "a group, not a broadcast channel; load a chat export with `tgkb import`"
             case .unresolvable:    note = "not publicly resolvable"
             }
             print("  @\(channel): \(verdict.rawValue) — \(note)")

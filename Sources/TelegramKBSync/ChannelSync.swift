@@ -51,9 +51,16 @@ public struct ChannelSync: Sendable {
             return Outcome(channel: channel, skipped: reachability)
         }
 
+        // One writer per channel, enforced across processes (TD-21): a second sync — or an
+        // import — of this channel fails fast instead of interleaving crawl-state reads and
+        // writes. Held until the walk's last commit; a dead holder's lease is stolen.
+        try store.acquireChannelLease(for: channel)
+        defer { try? store.releaseChannelLease(for: channel) }
+
         // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign key and
         // pages are written as they arrive. Insert-if-absent, never an upsert, so a previously
-        // learned `rawChannelID` is not overwritten by the placeholder.
+        // learned `rawChannelID` is not overwritten by the placeholder. A row imported as a group
+        // is refused here: a group never becomes a channel, so this preview is another chat's.
         try store.ensureChannel(username: channel, reachability: .webPreview)
 
         let state = try store.crawlState(forChannel: channel)
@@ -61,14 +68,17 @@ public struct ChannelSync: Sendable {
 
         let result = try await source.crawl(channel: channel, since: since,
                                             resumeFrom: state.resumeFrom(full: full),
-                                            maxPages: maxPages) { posts, mark in
+                                            maxPages: maxPages) { posts, mark, pageChannelID in
             // One transaction per page: the posts and the state describing them commit together,
             // so an interruption cannot leave a mark for posts that were never written.
             let next = state.afterPage(lowest: mark.lowestMessageID,
                                        highest: mark.highestMessageID, full: full)
+            // `rawChannelID` makes the page prove it belongs to the stored chat — a username
+            // reassigned since the row was written fails the commit instead of mixing histories.
             try store.commitPage(posts, channel: channel, lowest: next.lowest,
                                  highest: next.highest, backfillComplete: next.backfillComplete,
-                                 policy: full ? .replace : .keepExisting)
+                                 policy: full ? .replace : .keepExisting,
+                                 rawChannelID: pageChannelID)
         }
 
         if let raw = result.rawChannelID {
