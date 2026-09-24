@@ -55,6 +55,13 @@ not with missed pages. `tgkb doctor` reports this per channel.
   `tgkb sync` fails with `SQLITE_BUSY` immediately rather than waiting. That is acceptable under
   the MVP's one-writer rule, but it should be a deliberate choice.
   [Conversation](https://deepwiki.com/search/second-opinion-on-a-two-proces_743b448a-1dae-4f2d-8bfb-1cae6fad3065?mode=deep).
+- **WAL growth under a concurrent MCP reader, measured** — `research/td-22-wal-measurement.md`
+  (2026-09-24, `@iosgr` backfill: 4,411 posts / 225 pages / 821 s, `-wal` polled each second):
+  under a `tgkb-mcp` loop answering ~20 short reads/s the WAL sawtooths 4–5.5 MB → ~0.4 MB —
+  19 passive checkpoints slip through the gaps. A snapshot *pinned* for 240 s starves them: the
+  file climbed to 44.3 MB and stayed (writer unblocked throughout — WAL semantics). The residue
+  outlives the writer while any reader holds the file open — even past `SIGTERM` — and clears on
+  the next writer's checkpoint. Hence `Store.truncateWAL()` deferred in `Sync.run` (TD-22).
 
 ### Packaging — `research/spm-traits-binarytarget.md`
 - **SwiftPM traits gate `binaryTarget` downloads.** Trait off: no download, and

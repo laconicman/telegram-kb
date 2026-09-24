@@ -211,6 +211,21 @@ extension StoreTests {
         try store.upsert(posts: [Self.post(1, "now fine")])
         #expect(try store.post(.init(channelUsername: "iosgr", messageID: 1)) != nil)
     }
+
+    /// TD-22, measured in `research/td-22-wal-measurement.md`: the WAL keeps its high-water size
+    /// until a TRUNCATE checkpoint gives the space back — a passive one cannot shrink the file.
+    /// `PERSIST_WAL` keeps the file itself for readers; only the contents are reclaimed.
+    @Test("truncateWAL empties the file a write session left behind")
+    func walIsTruncatedAfterSync() throws {
+        let (store, path) = try Self.seeded()
+        try store.upsert(posts: (1...40).map { Self.post($0, "post \($0)") })
+        let walPath = path + "-wal"
+        let walSize = { (try? FileManager.default
+            .attributesOfItem(atPath: walPath)[.size] as? Int) ?? 0 }
+        #expect(walSize() > 0, "the write session must leave frames to reclaim")
+        try store.truncateWAL()
+        #expect(walSize() == 0, "the file stays (PERSIST_WAL) but its contents are returned")
+    }
 }
 
 extension StoreTests {

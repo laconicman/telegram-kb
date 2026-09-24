@@ -53,6 +53,11 @@ struct Sync: AsyncParsableCommand {
     func run() async throws {
         try store.ensureDirectory()
         let db = try Store.openForWriting(at: store.databasePath)
+        // A backfill's WAL keeps whatever it grew to until the next checkpoint can truncate it —
+        // measured at 44MB for a 4,411-post channel under a pinned reader (TD-22). The file
+        // itself stays by design (PERSIST_WAL); only its contents need giving back. Busy means
+        // a reader is mid-snapshot — the next writer reclaims it then.
+        defer { try? db.truncateWAL() }
 
         if let path = importResolutions {
             let report = try db.importResolutions(fromJSONLAt: path)

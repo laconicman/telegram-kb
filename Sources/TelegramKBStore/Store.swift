@@ -67,6 +67,27 @@ public struct Store: Sendable {
         }
     }
 
+    /// Gives the WAL's space back after a write session (`TD-22`, measured in
+    /// `research/td-22-wal-measurement.md`).
+    ///
+    /// `PERSIST_WAL` keeps the *files* for readers; this empties the *contents*. Passive
+    /// checkpoints already run on every commit and slip through the gaps between a reader's
+    /// snapshots — but a snapshot held open pins the frames behind it, and nothing shrinks the
+    /// file afterward while any reader stays attached. Measured: an `iosgr` backfill (4,411
+    /// posts, 225 pages) left a 44MB residue under a pinned read. `.truncate` reclaims it —
+    /// unless a reader is mid-snapshot, which is `SQLITE_BUSY` and means *try again later*,
+    /// not an error: the next writer's checkpoint clears it either way.
+    public func truncateWAL() throws {
+        try dbPool.barrierWriteWithoutTransaction { db in
+            do {
+                try db.checkpoint(.truncate)
+            } catch let e as DatabaseError where e.resultCode.primaryResultCode == .SQLITE_BUSY {
+                // A reader holds a snapshot mid-WAL — the residue stays until it releases,
+                // which is the measured outcome, not a failure.
+            }
+        }
+    }
+
     // MARK: - Writing
 
     public func upsert(channel: Channel) throws {
