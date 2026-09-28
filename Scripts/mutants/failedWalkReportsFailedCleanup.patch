@@ -1,17 +1,17 @@
-diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
-index e8e9c20..4825741 100644
---- a/Sources/TelegramKBSync/ChannelSync.swift
-+++ b/Sources/TelegramKBSync/ChannelSync.swift
-@@ -65,11 +65,7 @@ public struct ChannelSync: Sendable {
-         } catch let walkError {
-             // A failed walk still committed pages, so the reclaim is still attempted. The
-             // walk's own error is the one the caller must act on, so it leads either way.
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index cda6e67..17507be 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -173,11 +173,7 @@ public struct Store: Sendable {
+         do {
+             value = try await session()
+         } catch let sessionError {
 -            do {
--                try store.truncateWAL()
+-                try truncateWAL()
 -            } catch {
--                throw CleanupAlsoFailed(walk: walkError, cleanup: error)
+-                throw CleanupAlsoFailed(session: sessionError, cleanup: error)
 -            }
-+            try? store.truncateWAL()
-             throw walkError
++            try? truncateWAL()
+             throw sessionError
          }
          do {

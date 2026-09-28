@@ -1,16 +1,18 @@
 diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
-index e8e9c20..1fc37c7 100644
+index 144ae16..747af7f 100644
 --- a/Sources/TelegramKBSync/ChannelSync.swift
 +++ b/Sources/TelegramKBSync/ChannelSync.swift
-@@ -72,11 +72,6 @@ public struct ChannelSync: Sendable {
-             }
-             throw walkError
-         }
--        do {
--            try store.truncateWAL()
--        } catch {
--            outcome.walCleanupFailed = true
+@@ -48,12 +48,7 @@ public struct ChannelSync: Sendable {
+     public func sync(channel name: String, full: Bool = false) async throws -> Outcome {
+         // A failed walk still committed pages, so the reclaim runs either way; the walk's own
+         // error leads (`Store.endingWithWALReclaim`, TD-22).
+-        let session = try await store.endingWithWALReclaim {
+-            try await walk(channel: name, full: full)
 -        }
-         return outcome
+-        var outcome = session.value
+-        outcome.walCleanupFailed = session.walCleanupFailed
+-        return outcome
++        return try await walk(channel: name, full: full)
      }
  
+     /// Classify, crawl, write each page, record what the walk proved. `sync` wraps this in

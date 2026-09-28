@@ -1,0 +1,18 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index cda6e67..defd267 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -180,12 +180,7 @@ public struct Store: Sendable {
+             }
+             throw sessionError
+         }
+-        do {
+-            try truncateWAL()
+-            return (value, false)
+-        } catch {
+-            return (value, true)
+-        }
++        return (value, false)
+     }
+ 
+     // MARK: - Writing
