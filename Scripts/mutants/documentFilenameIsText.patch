@@ -1,19 +1,20 @@
 diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
-index fccc07d..93e071f 100644
+index b67f1f1..c743105 100644
 --- a/Sources/TelegramKBIngest/ChatExportParser.swift
 +++ b/Sources/TelegramKBIngest/ChatExportParser.swift
-@@ -118,13 +118,7 @@ public enum ChatExportParser {
+@@ -118,14 +118,8 @@ public enum ChatExportParser {
                let dateEl = try body.select("> div.date").first(),
                let date = dates.date(from: try dateEl.attr("title")) else { return nil }
          let textEl = try body.select("> div.text").first()
--        var text = try textEl.map(NodeText.text(of:)) ?? ""
--        if text.isEmpty {
+-        var formatted = try textEl.map { try EntityMarkup.formattedText(of: $0, entity: entity(for:)) }
++        let formatted = try textEl.map { try EntityMarkup.formattedText(of: $0, entity: entity(for:)) }
+             ?? FormattedText(text: "")
+-        if formatted.text.isEmpty {
 -            // An uncaptioned document or audio file still names itself: the media block's title
 -            // is the file's name — the only searchable text such a message has (PR #3, round 4).
--            text = try body.select(".media_file .title, .media_audio_file .title")
+-            formatted.text = try body.select(".media_file .title, .media_audio_file .title")
 -                .first().map(NodeText.text(of:)) ?? ""
 -        }
-+        let text = try textEl.map(NodeText.text(of:)) ?? ""
- 
-         return Post(
-             id: .init(channelUsername: channel, messageID: id),
+         // A preview is dated to the post itself — the only reliable timestamp the export carries.
+         // The page file's modification time looks like the export's moment, but a copied folder
+         // rewrites it, misdating every preview it held (PR #3, round 4); the snapshot Telegram

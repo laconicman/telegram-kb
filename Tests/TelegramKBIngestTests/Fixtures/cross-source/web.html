@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC. Two messages as t.me/s renders them; export.html is the same two messages as a chat
+  export renders them. The chat, people and words are invented.
+
+  The markup is t.me/s's as observed (swiftui_dev.html; live pages, 2026-09-28): a hashtag is a
+  ?q=%23 search link, a mention an https://t.me/<name> link, a URL an absolute href, a text URL
+  one with the confirm() the page adds to hidden links. A cashtag ($BTC on @whale_alert_io and
+  @cointelegraph) and an email address (t.me/iosgr/1837) are plain text. A phone number, a bot
+  command and a mention of a user without a username were not seen on any page; they are written
+  as plain text here too, which is an assumption, not an observation.
+-->
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+<section class="tgme_channel_history js-message_history">
+<div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="kbtest/10">
+<div class="tgme_widget_message_bubble">
+<div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/kbtest"><span dir="auto">KB Test</span></a></div>
+<div class="tgme_widget_message_text js-message_text" dir="auto">Release notes: <a href="https://example.com/notes/" target="_blank" rel="noopener">https://example.com/notes/</a> (<a href="https://example.org/docs" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">the docs</a>) by <a href="https://t.me/kb_author" target="_blank">@kb_author</a><br/><a href="?q=%23swift">#swift</a><br/>&#036;CASH — write to kb@example.com or call +15550100</div><a class="tgme_widget_message_link_preview" href="https://example.com/notes/">
+  <div class="link_preview_site_name accent_color" dir="auto">Example</div>
+  <div class="link_preview_title" dir="auto">Release notes</div>
+  <div class="link_preview_description" dir="auto">What changed in this release</div>
+</a>
+<div class="tgme_widget_message_footer compact js-message_footer">
+<div class="tgme_widget_message_info short js-message_info">
+<span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/kbtest/10"><time datetime="2023-04-03T09:34:07+00:00" class="time">09:34</time></a></span>
+</div>
+</div>
+</div>
+</div></div>
+<div class="tgme_widget_message_wrap js-widget_message_wrap"><div class="tgme_widget_message text_not_supported_wrap js-widget_message" data-post="kbtest/11">
+<div class="tgme_widget_message_bubble">
+<div class="tgme_widget_message_author accent_color"><a class="tgme_widget_message_owner_name" href="https://t.me/kbtest"><span dir="auto">KB Test</span></a></div>
+<div class="tgme_widget_message_text js-message_text" dir="auto">Worth a look <a href="?q=%23release">#release</a><br/>&#036;TKN, /help, thanks Kim Example</div><a class="tgme_widget_message_link_preview" href="https://example.net/talk">
+  <div class="link_preview_site_name accent_color" dir="auto">Example Video</div>
+  <div class="link_preview_title" dir="auto">The talk</div>
+</a>
+<div class="tgme_widget_message_footer compact js-message_footer">
+<div class="tgme_widget_message_info short js-message_info">
+<span class="tgme_widget_message_meta"><a class="tgme_widget_message_date" href="https://t.me/kbtest/11"><time datetime="2023-04-03T10:00:00+00:00" class="time">10:00</time></a></span>
+</div>
+</div>
+</div>
+</div></div>
+</section>
+</body>
+</html>
