@@ -16,13 +16,12 @@ public enum MessageEmbed {
     }
 
     /// The message as the embed renders it — the same widget the preview uses, so the preview's
-    /// parser reads it. `nil` when the page holds no message (deleted, or not a public chat), and
-    /// also when it holds no readable `<time datetime>`: the preview's parser then dates a post to
-    /// 1970 rather than failing, and a check against that date would blame the time zone.
+    /// parser reads it. `nil` when the page holds no readable message: deleted, not a public chat,
+    /// or with no readable `<time datetime>`. The last case needs no guard of its own here — the
+    /// preview's parser counts an undated block unreadable rather than dating it to 1970 (`TD-25`),
+    /// which is what kept a check against that date from blaming the time zone.
     public static func post(html: String) throws -> Post? {
-        guard let stamp = try SwiftSoup.parse(html).select("div.tgme_widget_message time[datetime]").first(),
-              (try? WebPreviewParser.iso.parse(try stamp.attr("datetime"))) != nil else { return nil }
-        return try WebPreviewParser.page(html: html).posts.first
+        try WebPreviewParser.page(html: html).posts.first
     }
 
     /// The chat's bare id, from `data-peer="c1234567890_-1111111111111111111"`: `c`, the id, then a

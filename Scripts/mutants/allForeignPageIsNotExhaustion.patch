@@ -1,9 +1,9 @@
 diff --git a/Sources/TelegramKBIngest/WebPreviewSource.swift b/Sources/TelegramKBIngest/WebPreviewSource.swift
-index 2cd43ff..7b55da6 100644
+index 9fde06c..824f0f7 100644
 --- a/Sources/TelegramKBIngest/WebPreviewSource.swift
 +++ b/Sources/TelegramKBIngest/WebPreviewSource.swift
-@@ -125,7 +125,7 @@ public struct WebPreviewSource: Sendable {
-             guard !parsed.isEmpty else { reachedEnd = true; break }
+@@ -138,7 +138,7 @@ public struct WebPreviewSource: Sendable {
+             guard !parsed.isEmpty else { reachedEnd = page.skippedBlocks == 0; break }
              let posts = parsed.filter { $0.id.channelUsername == channel.lowercased() }
              foreignBlocks += parsed.count - posts.count
 -            guard !posts.isEmpty else { break }
