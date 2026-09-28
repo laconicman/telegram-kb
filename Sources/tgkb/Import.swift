@@ -65,6 +65,10 @@ struct Import: AsyncParsableCommand {
         } else {
             print("  not verified (--no-verify): dates read in \(zone.identifier), chat id unknown")
         }
+        if outcome.walCleanupFailed {
+            let warning = "warning: WAL cleanup failed — the space is reclaimed by the next write instead\n"
+            FileHandle.standardError.write(Data(warning.utf8))
+        }
         if outcome.unreadable > 0 {
             // Loud and non-zero, as for resolver rows: these posts are missing from the index, and
             // automation reads the exit status, not the prose.

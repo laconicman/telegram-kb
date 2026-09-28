@@ -1,8 +1,9 @@
 import Foundation
+import GRDB
 import Testing
 import TelegramKBIngest
 import TelegramKBModel
-import TelegramKBStore
+@testable import TelegramKBStore
 @testable import TelegramKBSync
 
 /// End-to-end sync: a real store, a stub fetcher, and the whole loop between them.
@@ -207,6 +208,93 @@ extension SyncTests {
         let outcome = try await ChannelSync(store: store, fetcher: stub).sync(channel: "swiftui_dev")
         #expect(outcome.unreadableBlocks == 1)
         #expect(outcome.postCount == 20)
+    }
+}
+
+extension SyncTests {
+    /// TD-22: the session-end reclaim lives in `ChannelSync` precisely so a test can see it —
+    /// `tgkb`'s `run` cannot be imported. If the call is removed this goes green nowhere.
+    @Test("a finished sync hands the WAL's space back")
+    func syncLeavesWALTruncated() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-sync-\(UUID().uuidString).sqlite").path
+        let store = try Store.openForWriting(at: path)
+        let outcome = try await ChannelSync(store: store, fetcher: try Self.twoPages())
+            .sync(channel: "swiftui_dev")
+
+        #expect(!outcome.walCleanupFailed)
+        let wal = (try? FileManager.default
+            .attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal == 0, "the file stays (PERSIST_WAL); its contents are given back")
+    }
+
+    /// TD-22's error path: a walk that fails after committing a page still reclaims, and if THAT
+    /// fails with a real error the walk's error still leads — the cleanup's rides along instead
+    /// of vanishing into `try?`. The first page commits; the fetcher then closes the pool and
+    /// rate-limits the second, so the walk fails mid-session with nothing left to reclaim on.
+    @Test("a failed walk whose cleanup also fails reports both, the walk's error first")
+    func failedWalkReportsFailedCleanup() async throws {
+        let store = try Self.store()
+        let fetcher = ClosingFetcher(store: store,
+                                     first: Self.ok(try Self.fixture("swiftui_dev"), "https://t.me/s/swiftui_dev"))
+
+        let error = await #expect(throws: Store.CleanupAlsoFailed.self) {
+            try await ChannelSync(store: store, fetcher: fetcher).sync(channel: "swiftui_dev")
+        }
+        #expect(error?.session is WebPreviewSource.CrawlError, "the walk's own error is the one to act on")
+        #expect(error?.cleanup is DatabaseError, "and the reclaim's failure is named, not dropped")
+    }
+
+    /// A skipped channel is not a write session — classification only reads t.me — so it runs no
+    /// reclaim, and has no cleanup failure for `tgkb sync` to lose behind its skip report (PR #6,
+    /// review round 4). The pool is closed first: a reclaim, had it run, would have failed.
+    @Test("a skipped channel runs no reclaim, so no cleanup failure can hide behind the skip")
+    func skippedChannelRunsNoReclaim() async throws {
+        let store = try Self.store()
+        let plain = #"<div class="tgme_page_extra">1 757 subscribers</div>"#
+        let stub = StubFetcher([
+            "https://t.me/s/iosmmcresources": Self.ok(plain, "https://t.me/iosmmcresources"),
+            "https://t.me/iosmmcresources": Self.ok(plain, "https://t.me/iosmmcresources"),
+        ])
+        try store.dbPool.close()
+
+        let outcome = try await ChannelSync(store: store, fetcher: stub).sync(channel: "iosmmcresources")
+        #expect(outcome.skipped == .previewDisabled)
+        #expect(!outcome.walCleanupFailed, "no session ran, so there was nothing to reclaim")
+    }
+}
+
+extension SyncTests {
+    /// TD-22 for the third writer: `--import-resolutions` is a write session too, and its reclaim
+    /// was the one wiring no test could reach while it lived in the executable (PR #6, round 4).
+    @Test("a resolutions import hands the WAL's space back")
+    func resolutionImportLeavesWALTruncated() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-res-\(UUID().uuidString).sqlite").path
+        let store = try Store.openForWriting(at: path)
+        let jsonl = (1...40).map { i in
+            #"{"url_canonical":"https://example.com/\#(i)","final_url":"https://example.org/\#(i)","http_status":200,"hops":1,"resolved_at":"2026-09-06T01:00:00.000000+00:00"}"#
+        }.joined(separator: "\n")
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("res-\(UUID().uuidString).jsonl").path
+        try jsonl.write(toFile: file, atomically: true, encoding: .utf8)
+
+        let outcome = try await ResolutionImport.run(store: store, jsonl: file)
+        #expect(outcome.imported == 40 && outcome.skipped == 0 && !outcome.walCleanupFailed)
+        let wal = (try? FileManager.default.attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal == 0, "the file stays (PERSIST_WAL); its contents are given back")
+    }
+}
+
+/// Serves the first page, then closes the store's pool and rate-limits every later request: a
+/// walk that fails after committing a page, with no pool left for the reclaim after it.
+struct ClosingFetcher: PageFetcher {
+    let store: Store
+    let first: FetchResult
+    func fetch(_ url: URL) async throws -> FetchResult {
+        if url.absoluteString == "https://t.me/s/swiftui_dev" { return first }
+        try store.dbPool.close()
+        return FetchResult(body: "<html>rate limited</html>", statusCode: 429, finalURL: url)
     }
 }
 

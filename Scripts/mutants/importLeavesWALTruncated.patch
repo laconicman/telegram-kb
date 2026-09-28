@@ -1,0 +1,18 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index bcc0c31..c62d3db 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -114,12 +114,7 @@ public struct ChatImport: Sendable {
+         // An import writes thousands of posts in batches — a write session like a sync, so it
+         // ends the same way: the WAL's space is given back, and a failed import's error leads
+         // (`Store.endingWithWALReclaim`, TD-22).
+-        let session = try await store.endingWithWALReclaim {
+-            try await importing(export: directory, channel: name, timeZone: timeZone, policy: policy)
+-        }
+-        var outcome = session.value
+-        outcome.walCleanupFailed = session.walCleanupFailed
+-        return outcome
++        return try await importing(export: directory, channel: name, timeZone: timeZone, policy: policy)
+     }
+ 
+     private func importing(export directory: URL, channel name: String, timeZone: TimeZone,

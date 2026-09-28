@@ -60,6 +60,9 @@ public struct ChatImport: Sendable {
         public var rawChannelID: Int64?
         /// The message whose embed confirmed the chat and the zone; `nil` offline.
         public var verifiedMessageID: Int?
+        /// The end-of-session WAL reclaim failed with a real error (`TD-22`). The import itself
+        /// is complete; the residue is reclaimed by a later write instead.
+        public var walCleanupFailed = false
     }
 
     public enum ImportError: Error, CustomStringConvertible, Equatable {
@@ -108,6 +111,19 @@ public struct ChatImport: Sendable {
 
     public func run(export directory: URL, channel name: String, timeZone: TimeZone,
                     policy: Store.WritePolicy = .keepExisting) async throws -> Outcome {
+        // An import writes thousands of posts in batches — a write session like a sync, so it
+        // ends the same way: the WAL's space is given back, and a failed import's error leads
+        // (`Store.endingWithWALReclaim`, TD-22).
+        let session = try await store.endingWithWALReclaim {
+            try await importing(export: directory, channel: name, timeZone: timeZone, policy: policy)
+        }
+        var outcome = session.value
+        outcome.walCleanupFailed = session.walCleanupFailed
+        return outcome
+    }
+
+    private func importing(export directory: URL, channel name: String, timeZone: TimeZone,
+                           policy: Store.WritePolicy) async throws -> Outcome {
         let channel = name.lowercased()
         // Before it reaches `MessageEmbed.url`: a delimiter would fetch a different page than
         // the name under which the posts are stored (PR #3, review round 2).

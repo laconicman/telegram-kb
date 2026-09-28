@@ -55,7 +55,12 @@ struct Sync: AsyncParsableCommand {
         let db = try Store.openForWriting(at: store.databasePath)
 
         if let path = importResolutions {
-            let report = try db.importResolutions(fromJSONLAt: path)
+            // Its own write session, run by `ResolutionImport` where tests can see it (`TD-22`).
+            let report = try await ResolutionImport.run(store: db, jsonl: path)
+            if report.walCleanupFailed {
+                let msg = "warning: WAL cleanup failed — the space is reclaimed by the next write instead\n"
+                FileHandle.standardError.write(Data(msg.utf8))
+            }
             print("imported \(report.imported) resolutions")
             if report.skipped > 0 {
                 // Loud on purpose: a skipped row is a resolution we will never have.
@@ -95,6 +100,11 @@ struct Sync: AsyncParsableCommand {
             if outcome.foreignBlocks > 0 {
                 let warning = "\(outcome.channel): \(outcome.foreignBlocks) block(s) belonged to "
                             + "another channel and were skipped — the page layout may have changed\n"
+                FileHandle.standardError.write(Data(warning.utf8))
+            }
+            if outcome.walCleanupFailed {
+                let warning = "\(outcome.channel): WAL cleanup failed — the space is reclaimed "
+                            + "by the next write instead\n"
                 FileHandle.standardError.write(Data(warning.utf8))
             }
             print("\(outcome.channel): \(outcome.postCount) posts, \(outcome.pagesFetched) pages"

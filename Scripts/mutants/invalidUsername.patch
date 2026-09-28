@@ -13,12 +13,12 @@ index 77391aa..b9cc2e2 100644
          let result = try await Self.successful(fetcher.fetch(preview), preview)
          // A 200 whose body actually holds messages. Following the redirect would look like a
 diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 64619a7..9814b8e 100644
+index bcc0c31..3cf61b5 100644
 --- a/Sources/TelegramKBSync/ChatImport.swift
 +++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -109,9 +109,6 @@ public struct ChatImport: Sendable {
-     public func run(export directory: URL, channel name: String, timeZone: TimeZone,
-                     policy: Store.WritePolicy = .keepExisting) async throws -> Outcome {
+@@ -125,9 +125,6 @@ public struct ChatImport: Sendable {
+     private func importing(export directory: URL, channel name: String, timeZone: TimeZone,
+                            policy: Store.WritePolicy) async throws -> Outcome {
          let channel = name.lowercased()
 -        // Before it reaches `MessageEmbed.url`: a delimiter would fetch a different page than
 -        // the name under which the posts are stored (PR #3, review round 2).
