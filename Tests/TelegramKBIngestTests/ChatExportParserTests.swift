@@ -171,8 +171,9 @@ struct ChatExportParserTests {
         #expect(try MessageEmbed.rawChannelID(html: html) == 1_234_567_890)
     }
 
-    /// The preview's parser dates a message with no `<time>` to 1970 instead of failing. A check
-    /// comparing against that date would report a wrong time zone, not a broken page.
+    /// An embed with no `<time>` must read as no message: a check comparing against a guessed date
+    /// would report a wrong time zone, not a broken page. The preview's parser guarantees it since
+    /// `TD-25` (its mutant is `undatedBlockIsUnreadable`); this pins it at the embed's surface.
     @Test("an embed with no readable date is no message at all")
     func embedWithoutDate() throws {
         let html = try Self.embed().replacingOccurrences(of: "datetime=\"2023-04-03T09:34:07+00:00\"", with: "")
