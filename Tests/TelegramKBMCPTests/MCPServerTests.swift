@@ -503,5 +503,8 @@ struct MCPServerTests {
         #expect(TGKBServer.parsePostRef("iosgr") == nil)
         #expect(TGKBServer.parsePostRef("iosgr/-3") == nil)
         #expect(TGKBServer.parsePostRef("@/123") == nil)
+        #expect(TGKBServer.parsePostRef("@bad name/1") == nil,
+                "not a username — a malformed reference, so invalidParams rather than a missing post")
+        #expect(TGKBServer.parsePostRef("t.me/iosgr?x/1") == nil)
     }
 }

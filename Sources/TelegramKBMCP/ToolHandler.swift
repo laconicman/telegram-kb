@@ -201,7 +201,9 @@ public enum TGKBServer {
         }
         if s.hasPrefix("@") { s.removeFirst() }
         let parts = s.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count == 2, let id = Int(parts[1]), id > 0, !parts[0].isEmpty
+        // `Channel.isUsername`, not merely non-empty: `@bad name/1` is a malformed reference and
+        // belongs on the protocol channel (`invalidParams`), not reported as a missing post.
+        guard parts.count == 2, let id = Int(parts[1]), id > 0, Channel.isUsername(String(parts[0]))
         else { return nil }
         return Post.ID(channelUsername: parts[0].lowercased(), messageID: id)
     }
