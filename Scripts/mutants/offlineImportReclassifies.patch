@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 6d1258f..9449063 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -632,7 +632,7 @@ extension Store {
+             }
+             try db.execute(sql: """
+                 INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
+-                ON CONFLICT(username) DO UPDATE SET reachability = excluded.reachability
++                ON CONFLICT(username) DO NOTHING
+                 """, arguments: [username, reachability.rawValue])
+             if let rawChannelID {
+                 try db.execute(sql: """

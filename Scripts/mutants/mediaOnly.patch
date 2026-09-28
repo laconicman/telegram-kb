@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 64619a7..8ade606 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -184,7 +184,6 @@ public struct ChatImport: Sendable {
+                 fetcher: PageFetcher) async throws -> (messageID: Int, rawChannelID: Int64) {
+         let newest = posts.reversed()
+         let candidates = newest.filter { !$0.text.isEmpty }.prefix(Self.candidates)
+-                       + newest.filter { $0.text.isEmpty }.prefix(Self.candidates)
+         var verified: (post: Post, rawID: Int64)?
+         for post in candidates {
+             if let rawID = try await probe(post, channel: channel, fetcher: fetcher) {

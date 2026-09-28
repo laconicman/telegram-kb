@@ -1,0 +1,25 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 64619a7..6abe40e 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -196,20 +196,6 @@ public struct ChatImport: Sendable {
+             throw ImportError.notFound(channel: channel, tried: candidates.map(\.id.messageID))
+         }
+ 
+-        var probed: Set<Int> = [verified.post.id.messageID]
+-        var probes: [Post] = []
+-        var seenOffsets: Set<Int> = [timeZone.secondsFromGMT(for: verified.post.date)]
+-        for post in posts where seenOffsets.insert(timeZone.secondsFromGMT(for: post.date)).inserted {
+-            probes.append(post); probed.insert(post.id.messageID)
+-        }
+-        for post in [posts[0], posts[posts.count / 2]] where probed.insert(post.id.messageID).inserted {
+-            probes.append(post)
+-        }
+-        for post in probes {
+-            // A probe deleted from t.me cannot date-check its regime — skipped, like any
+-            // deletion; a live one that disagrees fails the import like any verified post.
+-            _ = try await probe(post, channel: channel, fetcher: fetcher)
+-        }
+         return (verified.post.id.messageID, verified.rawID)
+     }
+ 

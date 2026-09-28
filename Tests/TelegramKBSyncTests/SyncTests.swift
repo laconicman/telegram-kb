@@ -82,9 +82,12 @@ struct SyncTests {
     @Test("a capped incremental walk is left resumable, not marked up to date")
     func cappedIncrementalConverts() async throws {
         let store = try Self.store()
+        // A finished writer: holds the lease for its writes, then releases it for the sync.
+        try store.acquireChannelLease(for: "swiftui_dev")
         try store.ensureChannel(username: "swiftui_dev", reachability: .webPreview)
         try store.recordCrawlState(channel: "swiftui_dev", lowest: 1, highest: 100,
                                    backfillComplete: true)
+        try store.releaseChannelLease(for: "swiftui_dev")
 
         let outcome = try await ChannelSync(store: store, fetcher: try Self.twoPages(), maxPages: 1)
             .sync(channel: "swiftui_dev", full: false)
@@ -204,5 +207,66 @@ extension SyncTests {
         let outcome = try await ChannelSync(store: store, fetcher: stub).sync(channel: "swiftui_dev")
         #expect(outcome.unreadableBlocks == 1)
         #expect(outcome.postCount == 20)
+    }
+}
+
+extension SyncTests {
+    @Test("a sync refuses a channel whose lease another writer holds")
+    func concurrentSyncRefused() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-sync-\(UUID().uuidString).sqlite").path
+        let holder = try Store.openForWriting(at: path)
+        try holder.acquireChannelLease(for: "swiftui_dev")
+        defer { try? holder.releaseChannelLease(for: "swiftui_dev") }
+
+        let store = try Store.openForWriting(at: path)
+        await #expect(throws: Store.StoreError.channelLeaseHeld(
+                        channel: "swiftui_dev", pid: ProcessInfo.processInfo.processIdentifier)) {
+            try await ChannelSync(store: store, fetcher: try Self.twoPages())
+                .sync(channel: "swiftui_dev")
+        }
+        #expect(try store.identity(forChannel: "swiftui_dev") == nil)
+    }
+
+    /// 🔴 Round-4 review: the raw-channel check ran at the END of a sync, so a username
+    /// Telegram reassigned to another chat wrote the new owner's posts into the old channel's
+    /// row first. The page's `data-view` carries the id, so the check now runs inside the page
+    /// transaction — before a single post lands.
+    @Test("a username reassigned to another chat refuses to mix its posts into the old row")
+    func reassignedUsernameRefused() async throws {
+        let store = try Self.store()
+        // swiftui_dev was crawled once as channel 101 — a row the kind check lets through.
+        try store.upsert(channel: Channel(username: "swiftui_dev", rawChannelID: 101,
+                                        reachability: .webPreview))
+        // Telegram then gave the name to channel 1_492_664_793 — the fixture's `data-view`.
+        await #expect(throws: Store.StoreError.channelIDConflict(
+                        "@swiftui_dev is stored as chat 101; the page carries chat 1492664793"
+                      + " — the username was reassigned")) {
+            try await ChannelSync(store: store, fetcher: try Self.twoPages())
+                .sync(channel: "swiftui_dev")
+        }
+        #expect(try store.highestMessageID(forChannel: "swiftui_dev") == nil,
+                "the foreign channel's posts must not land under the old channel's name")
+        #expect(try store.identity(forChannel: "swiftui_dev")?.rawChannelID == 101)
+    }
+
+    /// 🔴 The id check above sees nothing when the group was imported with `--no-verify`: its
+    /// stored id is 0, which matches any page. The row's kind is the evidence that remains — a
+    /// group never becomes a broadcast channel — so `ensureChannel` refuses on it, under the
+    /// lease, before the first page.
+    @Test("a group imported unverified refuses a web crawl under its reassigned name")
+    func unverifiedGroupRefused() async throws {
+        let store = try Self.store()
+        try store.upsert(channel: Channel(username: "swiftui_dev", rawChannelID: 0,
+                                        reachability: .group))
+        await #expect(throws: Store.StoreError.channelImported("swiftui_dev")) {
+            try await ChannelSync(store: store, fetcher: try Self.twoPages())
+                .sync(channel: "swiftui_dev")
+        }
+        #expect(try store.highestMessageID(forChannel: "swiftui_dev") == nil,
+                "the foreign channel's posts must not land under the group's name")
+        let identity = try store.identity(forChannel: "swiftui_dev")
+        #expect(identity?.rawChannelID == 0 && identity?.reachability == .group,
+                "the row keeps saying what the import said")
     }
 }

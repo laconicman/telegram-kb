@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 4c6a774..7f4403a 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -200,7 +200,8 @@ public struct ChatImport: Sendable {
+         }
+         let wa = words(a), wb = words(b)
+         if wa == wb { return true }
+-        let common = wa.count - wb.difference(from: wa).removals.count
+-        return Double(common) / Double(max(wa.count, wb.count)) >= 0.9
++        let sa = Set(wa), sb = Set(wb)
++        guard !sa.isEmpty, !sb.isEmpty else { return false }
++        return Double(sa.intersection(sb).count) / Double(max(sa.count, sb.count)) >= 0.9
+     }
+ }

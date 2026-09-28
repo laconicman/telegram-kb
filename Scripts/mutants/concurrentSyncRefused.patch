@@ -1,0 +1,17 @@
+diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
+index 711bb2c..665da25 100644
+--- a/Sources/TelegramKBSync/ChannelSync.swift
++++ b/Sources/TelegramKBSync/ChannelSync.swift
+@@ -51,12 +51,6 @@ public struct ChannelSync: Sendable {
+             return Outcome(channel: channel, skipped: reachability)
+         }
+ 
+-        // One writer per channel, enforced across processes (TD-21): a second sync — or an
+-        // import — of this channel fails fast instead of interleaving crawl-state reads and
+-        // writes. Held until the walk's last commit; a dead holder's lease is stolen.
+-        try store.acquireChannelLease(for: channel)
+-        defer { try? store.releaseChannelLease(for: channel) }
+-
+         // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign key and
+         // pages are written as they arrive. Insert-if-absent, never an upsert, so a previously
+         // learned `rawChannelID` is not overwritten by the placeholder.

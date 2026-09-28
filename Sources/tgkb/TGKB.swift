@@ -15,7 +15,7 @@ struct TGKB: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "tgkb",
         abstract: "Build and query a searchable knowledge base from Telegram channels.",
-        subcommands: [Sync.self, Query.self, Doctor.self])
+        subcommands: [Sync.self, Import.self, Query.self, Doctor.self])
 }
 
 /// Options every subcommand shares.
