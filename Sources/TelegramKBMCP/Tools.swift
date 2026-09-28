@@ -56,9 +56,9 @@ enum TGKBTools {
                 // No `format: date-time` — a validating client would refuse the YYYY-MM-DD
                 // spelling the decoder accepts.
                 "from": .object(["type": "string",
-                                 "description": "Oldest post date, inclusive; ISO-8601 or YYYY-MM-DD."]),
+                                 "description": "Oldest post date, inclusive; ISO-8601, or YYYY-MM-DD for a whole UTC day."]),
                 "to": .object(["type": "string",
-                               "description": "Newest post date, inclusive; ISO-8601 or YYYY-MM-DD."]),
+                               "description": "Newest post date, inclusive; ISO-8601, or YYYY-MM-DD for a whole UTC day."]),
                 "mode": .object(["type": "string", "enum": ["words", "substring", "both"],
                                  "default": "both"]),
                 "limit": .object(["type": "integer", "default": .int(defaultLimit),
