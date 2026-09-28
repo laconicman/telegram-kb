@@ -55,15 +55,16 @@ struct Sync: AsyncParsableCommand {
         let db = try Store.openForWriting(at: store.databasePath)
 
         if let path = importResolutions {
-            // The channel loop's reclaim lives in `ChannelSync`; this path bypasses it, so
-            // it owns its own — best-effort, but a real failure says so rather than vanishing.
-            defer {
-                do { try db.truncateWAL() } catch {
-                    let msg = "warning: WAL cleanup failed — the space is reclaimed by the next write instead\n"
-                    FileHandle.standardError.write(Data(msg.utf8))
-                }
+            // The channel loop's reclaim lives in `ChannelSync`; this path is its own write
+            // session and ends the same way, through the same tested rule (`TD-22`).
+            let session = try await db.endingWithWALReclaim {
+                try db.importResolutions(fromJSONLAt: path)
             }
-            let report = try db.importResolutions(fromJSONLAt: path)
+            if session.walCleanupFailed {
+                let msg = "warning: WAL cleanup failed — the space is reclaimed by the next write instead\n"
+                FileHandle.standardError.write(Data(msg.utf8))
+            }
+            let report = session.value
             print("imported \(report.imported) resolutions")
             if report.skipped > 0 {
                 // Loud on purpose: a skipped row is a resolution we will never have.
