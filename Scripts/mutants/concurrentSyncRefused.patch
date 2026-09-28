@@ -1,11 +1,11 @@
 diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
-index a7c3175..74782f8 100644
+index 6dbe112..48437de 100644
 --- a/Sources/TelegramKBSync/ChannelSync.swift
 +++ b/Sources/TelegramKBSync/ChannelSync.swift
-@@ -51,12 +51,6 @@ public struct ChannelSync: Sendable {
-             return Outcome(channel: channel, skipped: reachability)
-         }
- 
+@@ -72,12 +72,6 @@ public struct ChannelSync: Sendable {
+     /// session. `sync` classifies first and wraps this in the session-end WAL reclaim, which is
+     /// why the flag lives on `Outcome`.
+     private func walk(channel: String, full: Bool) async throws -> Outcome {
 -        // One writer per channel, enforced across processes (TD-21): a second sync — or an
 -        // import — of this channel fails fast instead of interleaving crawl-state reads and
 -        // writes. Held until the walk's last commit; a dead holder's lease is stolen.

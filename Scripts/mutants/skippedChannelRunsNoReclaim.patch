@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
+index 6dbe112..820047d 100644
+--- a/Sources/TelegramKBSync/ChannelSync.swift
++++ b/Sources/TelegramKBSync/ChannelSync.swift
+@@ -55,7 +55,10 @@ public struct ChannelSync: Sendable {
+         // behind its skip report (PR #6, review round 4).
+         let reachability = try await classifier.classify(channel)
+         guard reachability == .webPreview else {
+-            return Outcome(channel: channel, skipped: reachability)
++            let skip = try await store.endingWithWALReclaim { Outcome(channel: channel, skipped: reachability) }
++            var outcome = skip.value
++            outcome.walCleanupFailed = skip.walCleanupFailed
++            return outcome
+         }
+ 
+         // A failed walk still committed pages, so the reclaim runs either way; the walk's own

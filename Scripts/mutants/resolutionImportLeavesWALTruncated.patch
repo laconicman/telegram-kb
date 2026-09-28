@@ -1,0 +1,17 @@
+diff --git a/Sources/TelegramKBSync/ResolutionImport.swift b/Sources/TelegramKBSync/ResolutionImport.swift
+index 6465e47..b731fde 100644
+--- a/Sources/TelegramKBSync/ResolutionImport.swift
++++ b/Sources/TelegramKBSync/ResolutionImport.swift
+@@ -18,10 +18,7 @@ public enum ResolutionImport {
+     }
+ 
+     public static func run(store: Store, jsonl path: String) async throws -> Outcome {
+-        let session = try await store.endingWithWALReclaim {
+-            try store.importResolutions(fromJSONLAt: path)
+-        }
+-        return Outcome(imported: session.value.imported, skipped: session.value.skipped,
+-                       walCleanupFailed: session.walCleanupFailed)
++        let report = try store.importResolutions(fromJSONLAt: path)
++        return Outcome(imported: report.imported, skipped: report.skipped, walCleanupFailed: false)
+     }
+ }
