@@ -46,28 +46,32 @@ public struct ChannelSync: Sendable {
 
     /// - Parameter full: re-walk from the newest page, overwriting stored copies. Never removes.
     public func sync(channel name: String, full: Bool = false) async throws -> Outcome {
+        // Telegram usernames are case-insensitive ASCII; SQLite keys are not. A mismatch with the
+        // parsed `data-post` fails the post → channel foreign key.
+        let channel = name.lowercased()
+
+        // Classification only reads t.me. A channel it skips writes nothing, so it is not a write
+        // session: there is no WAL to reclaim, and no cleanup failure for the caller to lose
+        // behind its skip report (PR #6, review round 4).
+        let reachability = try await classifier.classify(channel)
+        guard reachability == .webPreview else {
+            return Outcome(channel: channel, skipped: reachability)
+        }
+
         // A failed walk still committed pages, so the reclaim runs either way; the walk's own
         // error leads (`Store.endingWithWALReclaim`, TD-22).
         let session = try await store.endingWithWALReclaim {
-            try await walk(channel: name, full: full)
+            try await walk(channel: channel, full: full)
         }
         var outcome = session.value
         outcome.walCleanupFailed = session.walCleanupFailed
         return outcome
     }
 
-    /// Classify, crawl, write each page, record what the walk proved. `sync` wraps this in
-    /// the session-end WAL reclaim, which is why the flag lives on `Outcome`.
-    private func walk(channel name: String, full: Bool) async throws -> Outcome {
-        // Telegram usernames are case-insensitive ASCII; SQLite keys are not. A mismatch with the
-        // parsed `data-post` fails the post → channel foreign key.
-        let channel = name.lowercased()
-
-        let reachability = try await classifier.classify(channel)
-        guard reachability == .webPreview else {
-            return Outcome(channel: channel, skipped: reachability)
-        }
-
+    /// Crawl a previewable channel, write each page, record what the walk proved — the write
+    /// session. `sync` classifies first and wraps this in the session-end WAL reclaim, which is
+    /// why the flag lives on `Outcome`.
+    private func walk(channel: String, full: Bool) async throws -> Outcome {
         // One writer per channel, enforced across processes (TD-21): a second sync — or an
         // import — of this channel fails fast instead of interleaving crawl-state reads and
         // writes. Held until the walk's last commit; a dead holder's lease is stolen.
