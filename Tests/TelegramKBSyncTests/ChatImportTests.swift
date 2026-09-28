@@ -120,6 +120,21 @@ struct ChatImportTests {
         #expect(try store.search("снимка", mode: .both, limit: 10).hits.map(\.id.messageID) == [12])
     }
 
+    /// TD-22: an import is a write session — thousands of posts in batches — and ends like a sync,
+    /// by giving the WAL's space back.
+    @Test("a finished import hands the WAL's space back")
+    func importLeavesWALTruncated() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-import-\(UUID().uuidString).sqlite").path
+        let store = try Store.openForWriting(at: path)
+        let outcome = try await ChatImport(store: store, fetcher: nil)
+            .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+
+        #expect(outcome.written == 3 && !outcome.walCleanupFailed)
+        let wal = (try? FileManager.default.attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal == 0, "the file stays (PERSIST_WAL); its contents are given back")
+    }
+
     @Test("an import never claims a complete backfill, and widens the id bounds of the one before")
     func crawlState() async throws {
         let store = try Self.store()
