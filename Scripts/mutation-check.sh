@@ -19,6 +19,12 @@
 #   skipped         -> the test is gated on something this Mac lacks (the Russian lemma model,
 #                      TD-4), so it neither passed nor failed; counted as unproven, not as green
 #
+# A mutant that only some platforms can observe carries `Scripts/mutants/<name>.requires`: a
+# script that exits 0 when the mutant CAN be killed here, and otherwise prints why not. Where it
+# exits non-zero the mutant is reported unproven — never run, and never read as STILL GREEN. The
+# first one: a fallback that newer Foundation makes redundant, while the package still supports
+# the older one that needs it.
+#
 # The baseline matters: on the run that introduced it, five checks were red before any mutation and
 # would have been reported as proofs.
 #
@@ -78,6 +84,13 @@ for name in "${names[@]}"; do
   if [ ! -s "$patch" ]; then
     printf '%-42s %s\n' "$name" "ERROR — the patch is empty; it mutates nothing"
     fail=$((fail + 1)); continue
+  fi
+
+  requires="$MUTANTS_DIR/$name.requires"
+  if [ -f "$requires" ] && ! why=$(bash "$requires" 2>&1); then
+    printf '%-42s %s\n' "$name" "UNPROVEN — this platform cannot observe it, so this run says nothing about it"
+    printf '    %s\n' "$why"
+    unproven=$((unproven + 1)); continue
   fi
 
   verify="$MUTANTS_DIR/$name.verify"
