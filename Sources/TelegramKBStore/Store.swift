@@ -114,6 +114,80 @@ public struct Store: Sendable {
         }
     }
 
+    /// Gives the WAL's space back after a write session (`TD-22`, measured in
+    /// `research/td-22-wal-measurement.md`).
+    ///
+    /// `PERSIST_WAL` keeps the *files* for readers; this empties the *contents*. Passive
+    /// checkpoints already run on every commit and slip through the gaps between a reader's
+    /// snapshots — but a snapshot held open pins the frames behind it, and nothing shrinks the
+    /// file afterward while any reader stays attached. Measured: an `iosgr` backfill (4,411
+    /// posts, 225 pages) left a 44MB residue under a pinned read. `.truncate` reclaims it —
+    /// unless a reader is mid-snapshot, which is `SQLITE_BUSY` and means *try again later*,
+    /// not an error: the next writer's checkpoint clears it either way.
+    public func truncateWAL() throws {
+        try dbPool.barrierWriteWithoutTransaction { db in
+            // The 10s `busyMode` exists so page commits out-wait a rival writer. Here it would
+            // only mean waiting out a reader's snapshot — exactly what a best-effort cleanup
+            // must not do, so the attempt runs with an immediate busy policy instead. The C
+            // call cannot throw, which is why it and not `PRAGMA busy_timeout` restores.
+            let timeout = try Int.fetchOne(db, sql: "PRAGMA busy_timeout") ?? 10_000
+            sqlite3_busy_timeout(db.sqliteConnection, 0)
+            defer { sqlite3_busy_timeout(db.sqliteConnection, CInt(timeout)) }
+            do {
+                try db.checkpoint(.truncate)
+            } catch let e as DatabaseError where e.resultCode.primaryResultCode == .SQLITE_BUSY {
+                // A reader holds a snapshot mid-WAL — the residue stays until it releases,
+                // which is the measured outcome, not a failure.
+            }
+        }
+    }
+
+    /// A write session failed, and the WAL reclaim after it failed too — with a real error, not
+    /// BUSY. The session's error is the one to act on and leads; the cleanup's rides along so it
+    /// is reported rather than lost.
+    public struct CleanupAlsoFailed: Error, CustomStringConvertible {
+        public let session: any Error
+        public let cleanup: any Error
+        public var description: String {
+            "\(session) — and the WAL cleanup after it failed too (\(cleanup)); "
+                + "the space is reclaimed by the next write instead"
+        }
+    }
+
+    /// Runs one write session and gives the WAL's space back at its end, whichever way it ends
+    /// (`TD-22`). Every writer goes through here — a sync, an import, the resolver's JSONL — so
+    /// "a write session ends by reclaiming" is one rule in one place, not a habit each caller
+    /// has to keep.
+    ///
+    /// A failed session still committed what it committed, so the reclaim runs then too; the
+    /// session's error leads, and a failed reclaim rides along in ``CleanupAlsoFailed``. After a
+    /// successful session a failed reclaim is not an error — the work is done and the residue
+    /// clears at the next writer's checkpoint — so it is returned as `walCleanupFailed` for the
+    /// caller to report. BUSY never reaches either path: ``truncateWAL()`` absorbs it.
+    ///
+    /// For writers only: a store opened with `openForReading` cannot checkpoint.
+    public func endingWithWALReclaim<T>(
+        _ session: () async throws -> T
+    ) async throws -> (value: T, walCleanupFailed: Bool) {
+        let value: T
+        do {
+            value = try await session()
+        } catch let sessionError {
+            do {
+                try truncateWAL()
+            } catch {
+                throw CleanupAlsoFailed(session: sessionError, cleanup: error)
+            }
+            throw sessionError
+        }
+        do {
+            try truncateWAL()
+            return (value, false)
+        } catch {
+            return (value, true)
+        }
+    }
+
     // MARK: - Writing
 
     public func upsert(channel: Channel) throws {
