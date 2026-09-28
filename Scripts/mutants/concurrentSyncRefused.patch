@@ -1,5 +1,5 @@
 diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
-index 711bb2c..665da25 100644
+index a7c3175..74782f8 100644
 --- a/Sources/TelegramKBSync/ChannelSync.swift
 +++ b/Sources/TelegramKBSync/ChannelSync.swift
 @@ -51,12 +51,6 @@ public struct ChannelSync: Sendable {
@@ -14,4 +14,4 @@ index 711bb2c..665da25 100644
 -
          // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign key and
          // pages are written as they arrive. Insert-if-absent, never an upsert, so a previously
-         // learned `rawChannelID` is not overwritten by the placeholder.
+         // learned `rawChannelID` is not overwritten by the placeholder. A row imported as a group

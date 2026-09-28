@@ -16,6 +16,8 @@
 #   red at baseline -> the check was already failing, so its red under the mutant proves nothing
 #   still green     -> the test does not guard the fix
 #   won't build     -> the mutant is invalid and proves nothing (this is not a pass)
+#   skipped         -> the test is gated on something this Mac lacks (the Russian lemma model,
+#                      TD-4), so it neither passed nor failed; counted as unproven, not as green
 #
 # The baseline matters: on the run that introduced it, five checks were red before any mutation and
 # would have been reported as proofs.
@@ -54,6 +56,12 @@ if ! swift test >"$LOGS/baseline.log" 2>&1; then
   exit 2
 fi
 echo "baseline: $(grep -o 'Test run with [0-9]* tests' "$LOGS/baseline.log" | tail -1) pass"
+# A skip is a test that neither passed nor failed. Say which, and why, before the per-mutant
+# lines, so a reader does not go looking for a bug the mutant report cannot contain.
+if grep -q 'no Russian lemma model' "$LOGS/baseline.log"; then
+  echo "baseline: $(grep -c 'no Russian lemma model' "$LOGS/baseline.log") test(s) skipped — NLTagger has no Russian lemma model on this Mac (TD-4)."
+  echo "          Mutants whose test is one of them are reported UNPROVEN below; a Mac with the model confirms them."
+fi
 echo
 
 names=("$@")
@@ -61,7 +69,7 @@ if [ ${#names[@]} -eq 0 ]; then
   for p in "$MUTANTS_DIR"/*.patch; do names+=("$(basename "$p" .patch)"); done
 fi
 
-pass=0; fail=0
+pass=0; fail=0; unproven=0
 for name in "${names[@]}"; do
   patch="$MUTANTS_DIR/$name.patch"
   if [ ! -f "$patch" ]; then echo "no such mutant: $name" >&2; fail=$((fail + 1)); continue; fi
@@ -98,6 +106,12 @@ for name in "${names[@]}"; do
   if [ $status -ne 0 ]; then
     printf '%-42s %s\n' "$name" "RED — the check fails without the fix, as it must"
     pass=$((pass + 1))
+  # A skipped test exits 0 like a passing one; without this it would read as STILL GREEN and
+  # blame a test that never ran.
+  elif [ ! -f "$verify" ] && grep -q '^➜ Test .* skipped' "$LOGS/verify.log"; then
+    printf '%-42s %s\n' "$name" "UNPROVEN — its test was skipped on this Mac, so this run says nothing about it"
+    grep -m1 'skipped:' "$LOGS/verify.log" | sed 's/^.*skipped: /    /'
+    unproven=$((unproven + 1))
   else
     printf '%-42s %s\n' "$name" "STILL GREEN — the check does not guard the fix"
     fail=$((fail + 1))
@@ -107,5 +121,5 @@ done
 # Leave the tree as it was found, and say so out loud.
 git diff --quiet || { echo "PANIC: the working tree was not restored — inspect it before committing." >&2; exit 3; }
 echo
-echo "$pass mutant(s) red, $fail problem(s); working tree restored."
+echo "$pass mutant(s) red, $unproven unproven on this Mac, $fail problem(s); working tree restored."
 [ "$fail" -eq 0 ]
