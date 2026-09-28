@@ -307,6 +307,20 @@ struct MCPServerTests {
         }
     }
 
+    /// 🟡 Both tools clamp a `limit` above the page size, but the schema declared `maximum: 100`,
+    /// so a validating client refused `limit: 101` before the clamp could run (PR #5, round 5).
+    @Test("the limit schema admits the values the handler clamps")
+    func limitSchemaAdmitsClampedValues() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        let (tools, _) = try await client.listTools()
+        for name in ["search_posts", "find_links"] {
+            let tool = try #require(tools.first { $0.name == name })
+            let limit = try #require(tool.inputSchema.objectValue?["properties"]?.objectValue?["limit"]?.objectValue)
+            #expect(limit["maximum"] == nil, "\(name): a maximum would reject what the handler clamps")
+            #expect(limit["description"]?.stringValue?.contains("clamped") == true)
+        }
+    }
+
     /// 🟡 Records rendered dates with `.iso8601`, which drops the fraction — so a post at
     /// `.500` came back as `…59Z`, and passing that back as an inclusive `to` excluded the very
     /// post it was read from.

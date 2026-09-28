@@ -61,9 +61,10 @@ enum TGKBTools {
                                "description": "Newest post date, inclusive; ISO-8601, or YYYY-MM-DD for a whole UTC day."]),
                 "mode": .object(["type": "string", "enum": ["words", "substring", "both"],
                                  "default": "both"]),
-                "limit": .object(["type": "integer", "default": .int(defaultLimit),
-                                  "minimum": 0, "maximum": .int(maxLimit),
-                                  "description": "Page size; values above the maximum are clamped."]),
+                // No `maximum`: the handler clamps a larger value, and a validating client would
+                // refuse it before the clamp could run.
+                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,
+                                  "description": "Page size, at most \(maxLimit); larger values are clamped."]),
                 "cursor": .object(["type": "string",
                                    "description": "The previous page's next_cursor, verbatim."]),
             ]),
@@ -97,9 +98,10 @@ enum TGKBTools {
             "properties": .object([
                 "url": .object(["type": "string",
                                 "description": "Any spelling — raw, canonical, or shortener."]),
-                "limit": .object(["type": "integer", "default": .int(defaultLimit),
-                                  "minimum": 0, "maximum": .int(maxLimit),
-                                  "description": "Page size; values above the maximum are clamped."]),
+                // No `maximum`: the handler clamps a larger value, and a validating client would
+                // refuse it before the clamp could run.
+                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,
+                                  "description": "Page size, at most \(maxLimit); larger values are clamped."]),
                 "cursor": .object(["type": "string",
                                    "description": "The previous page's next_cursor, verbatim."]),
             ]),
