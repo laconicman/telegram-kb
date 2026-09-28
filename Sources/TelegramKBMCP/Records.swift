@@ -133,7 +133,7 @@ struct PostDetail: Codable, Sendable, Equatable {
     var author: String?
     var kind: String
     var media_count: Int
-    /// `web` | `tdlib` | `absent` — what the source could express, so "not a document" is
+    /// `web` | `tdlib` | `export` | `absent` — what the source could express, so "not a document" is
     /// distinguishable from "this source cannot say".
     var format_source: String
     var text: String
