@@ -31,7 +31,9 @@ there rather than re-arguing the decision.
   chats under one name. An id of `0` (an unverified import) passes that check, so also flag a
   web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it.
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
-  `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`).
+  `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`). `swift-log`
+  and `swift-system` are the SDK's own dependencies, named only because its `StdioTransport` and
+  `Logger` signatures require their types; they add nothing to the closure.
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
   `Spec/url-canonical/fixtures.json` cases in any diff that changes
   `Sources/TelegramKBModel/URLCanonicaliser.swift` rules.
@@ -46,6 +48,11 @@ there rather than re-arguing the decision.
   must break — for any fix whose failure mode is **silent**: lost posts, a false completion, a
   check that cannot fail, a skipped row, a stale identity. `Scripts/mutation-check.sh` replays
   them. Fixes to wording, formatting or argument validation do not need one: they fail loudly.
+- Flag a `Scripts/mutants/<name>.requires` gate that tests anything but the behaviour its mutant
+  depends on — a version string or `uname` is wrong; probe the capability, as the ISO-8601 gate
+  does. Require it to print its reason when it exits non-zero, and add one only for a platform
+  difference actually observed (a mutant red on one toolchain, green on another): an UNPROVEN
+  without a cause is a STILL GREEN hidden.
 - Flag a test asserting only that a walk stopped, without asserting the `Store.CrawlState` it left.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
@@ -70,6 +77,13 @@ there rather than re-arguing the decision.
   `Sources/TelegramKBStore/Store.swift`; a phrase would straddle the join and match a post that
   contains it in neither form.
 - Flag `NLTagger` use without an explicit `setLanguage` in `Sources/TelegramKBStore/`.
+- Flag a `total` or count field derived from the returned page's contents in
+  `Sources/TelegramKBStore/` or `Sources/TelegramKBMCP/`; it must be a COUNT over the same
+  predicate, or a `limit`-truncated list reports itself complete.
+- Flag the error-channel split in `Sources/TelegramKBMCP/` crossing the wrong way: a malformed
+  argument (missing key, wrong type, unknown key, foreign cursor, `Store.SearchError`) must be
+  `MCPError.invalidParams`, not an `isError` result; a call that ran and failed (unknown tool
+  name, a `get_post` miss) must be `isError: true`, not a thrown protocol error.
 
 ## Anti-patterns to Flag
 

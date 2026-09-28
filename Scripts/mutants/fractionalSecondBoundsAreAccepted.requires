@@ -1,0 +1,10 @@
+#!/bin/bash
+# Observable only where Foundation's plain Date.ISO8601FormatStyle REJECTS fractional seconds.
+# swift-foundation made them optional when parsing as of Swift 6.2 ("When parsing, fractional
+# seconds are always optional"), so there the fallback in Args.date cannot change a result and
+# removing it cannot be seen. The package still supports Swift 6.1 and macOS 13, where the
+# fallback is what accepts `2023-11-14T23:59:59.500Z` (red on Swift 6.1.2, PR #5's Linux run).
+strict=$(printf 'import Foundation\nprint((try? Date.ISO8601FormatStyle().parse("2023-11-14T23:59:59.500Z")) == nil)\n' | swift - 2>/dev/null)
+[ "$strict" = "true" ] && exit 0
+echo "this Foundation parses fractional seconds without the fallback (swift-foundation, Swift 6.2+)"
+exit 1

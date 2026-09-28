@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index 2f90a62..4355954 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -235,8 +235,8 @@ public enum TGKBServer {
+     /// The cursor itself is in the text — a client that shows only `content` has no other way to
+     /// get it.
+     static func footer(_ shown: Int, of total: Int, noun: String, nextCursor: String?) -> String {
+-        if let nextCursor {
+-            return "\(shown) of \(total) \(noun)(s) — for the rest, call again with cursor: \(nextCursor)"
++        if shown < total {
++            return "\(shown) of \(total) \(noun)(s) — for the rest, call again with cursor: \(nextCursor ?? "")"
+         }
+         return shown < total ? "\(shown) of \(total) \(noun)(s)" : "\(shown) \(noun)(s)"
+     }

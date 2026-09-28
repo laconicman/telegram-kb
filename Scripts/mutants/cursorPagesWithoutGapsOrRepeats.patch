@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
-index 96f4cc1..14fa391 100644
+index 8e93257..7170d27 100644
 --- a/Sources/TelegramKBStore/Search.swift
 +++ b/Sources/TelegramKBStore/Search.swift
-@@ -152,7 +152,7 @@ extension Store {
-                     if merged.count == end { break }
-                 }
+@@ -177,7 +177,7 @@ extension Store {
+                 if merged.count == end { break }
              }
--            let page = Array(merged.dropFirst(offset).prefix(cap))
-+            let page = Array(merged.prefix(cap))
-             // Counted in the SAME read as the page, so the two cannot describe different corpora.
-             let total = try Self.matchCount(query, mode: mode, filter: filter, in: db)
-             let generation = try Cursor.generation(in: db)
+         }
+-        let page = Array(merged.dropFirst(offset).prefix(cap))
++        let page = Array(merged.prefix(cap))
+         // Counted in the SAME read as the page, so the two cannot describe different corpora.
+         let total = try matchCount(query, mode: mode, filter: filter, in: db)
+         let generation = try Cursor.generation(in: db)

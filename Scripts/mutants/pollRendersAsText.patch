@@ -1,0 +1,20 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index 2f90a62..befd23f 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -246,14 +246,7 @@ public enum TGKBServer {
+     static func render(_ p: Post) -> String {
+         var lines = ["\(p.permalink)  \(p.date.tgkbISO8601)"]
+         if let author = p.authorName { lines.append("by \(author)") }
+-        if !p.text.isEmpty { lines.append(p.text) }
+-        if let poll = p.poll {
+-            lines.append("Poll: \(poll.question)")
+-            lines.append(contentsOf: poll.options.map { "  • \($0)" })
+-            if let votes = poll.totalVotes { lines.append("  \(votes) vote(s)") }
+-        } else if p.text.isEmpty {
+-            lines.append("[\(p.kind.rawValue), no text]")
+-        }
++        lines.append(p.text.isEmpty ? "[\(p.kind.rawValue), no text]" : p.text)
+         return lines.joined(separator: "\n")
+     }
+ }

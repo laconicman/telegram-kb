@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index f715f0c..b78cf10 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -229,10 +229,6 @@ struct Args {
+     /// `additionalProperties: false`, enforced ourselves: a misspelled key must be a call
+     /// error, not a silently dropped filter.
+     func expecting(_ keys: [String]) throws {
+-        let extra = values.keys.filter { !keys.contains($0) }
+-        guard extra.isEmpty else {
+-            throw MCPError.invalidParams("unknown argument(s): \(extra.sorted().joined(separator: ", "))")
+-        }
+     }
+ 
+     func require(_ key: String) throws -> String {

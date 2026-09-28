@@ -1,0 +1,17 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index f3676bf..7cd39c6 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -331,11 +331,7 @@ extension Store {
+             WHERE \(predicate)
+             ORDER BY l.channelUsername, l.messageID, l.id LIMIT ? OFFSET ?
+             """, arguments: [argument, cap, offset])
+-        let total = try Int.fetchOne(db, sql: """
+-            SELECT COUNT(*) FROM link l
+-            LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
+-            WHERE \(predicate)
+-            """, arguments: [argument]) ?? 0
++        let total = hits.count
+         let generation = try Cursor.generation(in: db)
+         let consumed = offset + hits.count
+         return LinkResults(

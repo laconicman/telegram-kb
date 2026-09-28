@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index f715f0c..6f647ea 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -163,9 +163,7 @@ public enum TGKBServer {
+         guard let post = try store.post(id) else {
+             // A successful call with no such post is still a failed lookup — isError, so the
+             // model does not mistake an empty result for a post that exists.
+-            return CallTool.Result(
+-                content: [.text(text: "No post \(ref) in the archive.", annotations: nil, _meta: nil)],
+-                isError: true)
++            throw MCPError.invalidParams("no post \(ref)")
+         }
+         return try CallTool.Result(
+             content: [.text(text: render(post), annotations: nil, _meta: nil)],

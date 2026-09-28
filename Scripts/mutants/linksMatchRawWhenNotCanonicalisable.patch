@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Search.swift b/Sources/TelegramKBStore/Search.swift
+index 580713a..0627897 100644
+--- a/Sources/TelegramKBStore/Search.swift
++++ b/Sources/TelegramKBStore/Search.swift
+@@ -312,7 +312,7 @@ extension Store {
+                 arguments: [canonical]) ?? canonical
+             predicate = "COALESCE(r.resolvedCanonical, l.urlCanonical) = ?"
+         } else {
+-            predicate = "l.urlRaw = ?"
++            predicate = "l.urlCanonical = ?"
+             argument = url
+             key = url
+         }

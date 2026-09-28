@@ -1,0 +1,12 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index ac490b5..3d2ccac 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -253,7 +253,6 @@ public struct Store: Sendable {
+                       canonicalSpecVersion=excluded.canonicalSpecVersion
+                     """, arguments: [r.urlCanonical, r.resolvedCanonical, r.httpStatus,
+                                      r.hops, r.resolvedAt, r.canonicalSpecVersion])
+-                try Self.bumpIndexGeneration(in: db)
+             }
+         }
+     }

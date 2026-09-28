@@ -1,0 +1,22 @@
+diff --git a/Sources/TelegramKBMCP/Tools.swift b/Sources/TelegramKBMCP/Tools.swift
+index 8b996bd..c0c0332 100644
+--- a/Sources/TelegramKBMCP/Tools.swift
++++ b/Sources/TelegramKBMCP/Tools.swift
+@@ -63,7 +63,7 @@ enum TGKBTools {
+                                  "default": "both"]),
+                 // No `maximum`: the handler clamps a larger value, and a validating client would
+                 // refuse it before the clamp could run.
+-                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,
++                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0, "maximum": .int(maxLimit),
+                                   "description": "Page size, at most \(maxLimit); larger values are clamped."]),
+                 "cursor": .object(["type": "string",
+                                    "description": "The previous page's next_cursor, verbatim."]),
+@@ -100,7 +100,7 @@ enum TGKBTools {
+                                 "description": "Any spelling — raw, canonical, or shortener."]),
+                 // No `maximum`: the handler clamps a larger value, and a validating client would
+                 // refuse it before the clamp could run.
+-                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,
++                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0, "maximum": .int(maxLimit),
+                                   "description": "Page size, at most \(maxLimit); larger values are clamped."]),
+                 "cursor": .object(["type": "string",
+                                    "description": "The previous page's next_cursor, verbatim."]),

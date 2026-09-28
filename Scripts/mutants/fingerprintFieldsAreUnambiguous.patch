@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
-index e09c83f..ab9b59c 100644
+index d3359e1..13b820c 100644
 --- a/Sources/TelegramKBStore/SearchFilter.swift
 +++ b/Sources/TelegramKBStore/SearchFilter.swift
-@@ -104,7 +104,7 @@ extension Store {
-                           filter.channel ?? "", filter.kind?.rawValue ?? "",
-                           filter.from.map { "\($0.timeIntervalSince1970)" } ?? "",
-                           filter.to.map { "\($0.timeIntervalSince1970)" } ?? ""]
--            return hash(fields.map { "\($0.utf8.count):\($0)" }.joined())
-+            return hash(fields.joined(separator: "\u{1}"))
+@@ -128,7 +128,7 @@ extension Store {
+         /// shift the boundaries so two different result sets produced one fingerprint and
+         /// accepted each other's cursors (PR #2, round 2).
+         static func fingerprint(fields: [String]) -> UInt64 {
+-            hash(fields.map { "\($0.utf8.count):\($0)" }.joined())
++            hash(fields.joined(separator: "\u{1}"))
          }
  
          static func hash(_ material: String) -> UInt64 {
