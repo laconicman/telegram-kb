@@ -48,6 +48,11 @@ there rather than re-arguing the decision.
   must break — for any fix whose failure mode is **silent**: lost posts, a false completion, a
   check that cannot fail, a skipped row, a stale identity. `Scripts/mutation-check.sh` replays
   them. Fixes to wording, formatting or argument validation do not need one: they fail loudly.
+- Flag a `Scripts/mutants/<name>.requires` gate that tests anything but the behaviour its mutant
+  depends on — a version string or `uname` is wrong; probe the capability, as the ISO-8601 gate
+  does. Require it to print its reason when it exits non-zero, and add one only for a platform
+  difference actually observed (a mutant red on one toolchain, green on another): an UNPROVEN
+  without a cause is a STILL GREEN hidden.
 - Flag a test asserting only that a walk stopped, without asserting the `Store.CrawlState` it left.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
