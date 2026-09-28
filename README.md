@@ -111,6 +111,11 @@ A regression test that passes with and without its fix is not a regression test.
 `Scripts/mutants/` are the proofs that ours are — one patch per silent-failure bug found here,
 named after the test it must break.
 
+Two tests need `NLTagger`'s Russian lemma model, which not every Mac has (a fresh macOS VM used
+for review did not, while English lemmatised fine). Where it is missing they skip with a message saying so,
+and the harness reports their mutants as *unproven on this Mac* instead of green. `TD-4` in
+`TechDebt` has the details.
+
 ## Licence
 
 Licensed under the [Apache License 2.0](LICENSE).
