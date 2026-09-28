@@ -237,6 +237,32 @@ extension StoreTests {
         #expect(walSize() == 0, "the file stays (PERSIST_WAL) but its contents are returned")
     }
 
+    /// TD-22, one rule for every writer: whatever the session wrote, its end gives the space back.
+    @Test("a write session run through endingWithWALReclaim ends with an empty WAL")
+    func sessionEndReclaimsTheWAL() async throws {
+        let (store, path) = try Self.seeded()
+        let session = try await store.endingWithWALReclaim {
+            try store.upsert(posts: (1...40).map { Self.post($0, "post \($0)") })
+            return 40
+        }
+        #expect(session.value == 40 && !session.walCleanupFailed)
+        let wal = (try? FileManager.default.attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal == 0, "the file stays (PERSIST_WAL); its contents are given back")
+    }
+
+    /// The session's work is done, so a failed reclaim after it is not thrown — but it is not
+    /// dropped either: the caller gets the flag and says so.
+    @Test("a successful session whose reclaim fails returns its value and the flag")
+    func successfulSessionReportsFailedCleanup() async throws {
+        let (store, _) = try Self.seeded()
+        let session = try await store.endingWithWALReclaim {
+            try store.dbPool.close()      // the reclaim now has no pool to run on
+            return "done"
+        }
+        #expect(session.value == "done")
+        #expect(session.walCleanupFailed, "a real reclaim error is reported, not swallowed")
+    }
+
     /// A TRUNCATE checkpoint waits on readers' snapshots. The writer's 10s busy timeout would
     /// make a best-effort cleanup stall behind a pinned reader; it gets an immediate policy
     /// instead, so the residue waits for the next writer rather than the exit waiting for it.

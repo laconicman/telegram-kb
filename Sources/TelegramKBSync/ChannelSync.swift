@@ -44,39 +44,15 @@ public struct ChannelSync: Sendable {
         public var walCleanupFailed = false
     }
 
-    /// The walk failed, and the session-end WAL reclaim after it failed too — with a real
-    /// error, not BUSY. The walk's is the error to act on and leads; the cleanup's rides along
-    /// so it is reported rather than lost. Mirrors `Outcome.walCleanupFailed` for the path
-    /// that has no `Outcome` to carry a flag.
-    public struct CleanupAlsoFailed: Error, CustomStringConvertible {
-        public let walk: any Error
-        public let cleanup: any Error
-        public var description: String {
-            "\(walk) — and the WAL cleanup after it failed too (\(cleanup)); "
-                + "the space is reclaimed by the next write instead"
-        }
-    }
-
     /// - Parameter full: re-walk from the newest page, overwriting stored copies. Never removes.
     public func sync(channel name: String, full: Bool = false) async throws -> Outcome {
-        var outcome: Outcome
-        do {
-            outcome = try await walk(channel: name, full: full)
-        } catch let walkError {
-            // A failed walk still committed pages, so the reclaim is still attempted. The
-            // walk's own error is the one the caller must act on, so it leads either way.
-            do {
-                try store.truncateWAL()
-            } catch {
-                throw CleanupAlsoFailed(walk: walkError, cleanup: error)
-            }
-            throw walkError
+        // A failed walk still committed pages, so the reclaim runs either way; the walk's own
+        // error leads (`Store.endingWithWALReclaim`, TD-22).
+        let session = try await store.endingWithWALReclaim {
+            try await walk(channel: name, full: full)
         }
-        do {
-            try store.truncateWAL()
-        } catch {
-            outcome.walCleanupFailed = true
-        }
+        var outcome = session.value
+        outcome.walCleanupFailed = session.walCleanupFailed
         return outcome
     }
 

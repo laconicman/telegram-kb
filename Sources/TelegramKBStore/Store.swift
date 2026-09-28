@@ -142,6 +142,52 @@ public struct Store: Sendable {
         }
     }
 
+    /// A write session failed, and the WAL reclaim after it failed too — with a real error, not
+    /// BUSY. The session's error is the one to act on and leads; the cleanup's rides along so it
+    /// is reported rather than lost.
+    public struct CleanupAlsoFailed: Error, CustomStringConvertible {
+        public let session: any Error
+        public let cleanup: any Error
+        public var description: String {
+            "\(session) — and the WAL cleanup after it failed too (\(cleanup)); "
+                + "the space is reclaimed by the next write instead"
+        }
+    }
+
+    /// Runs one write session and gives the WAL's space back at its end, whichever way it ends
+    /// (`TD-22`). Every writer goes through here — a sync, an import, the resolver's JSONL — so
+    /// "a write session ends by reclaiming" is one rule in one place, not a habit each caller
+    /// has to keep.
+    ///
+    /// A failed session still committed what it committed, so the reclaim runs then too; the
+    /// session's error leads, and a failed reclaim rides along in ``CleanupAlsoFailed``. After a
+    /// successful session a failed reclaim is not an error — the work is done and the residue
+    /// clears at the next writer's checkpoint — so it is returned as `walCleanupFailed` for the
+    /// caller to report. BUSY never reaches either path: ``truncateWAL()`` absorbs it.
+    ///
+    /// For writers only: a store opened with `openForReading` cannot checkpoint.
+    public func endingWithWALReclaim<T>(
+        _ session: () async throws -> T
+    ) async throws -> (value: T, walCleanupFailed: Bool) {
+        let value: T
+        do {
+            value = try await session()
+        } catch let sessionError {
+            do {
+                try truncateWAL()
+            } catch {
+                throw CleanupAlsoFailed(session: sessionError, cleanup: error)
+            }
+            throw sessionError
+        }
+        do {
+            try truncateWAL()
+            return (value, false)
+        } catch {
+            return (value, true)
+        }
+    }
+
     // MARK: - Writing
 
     public func upsert(channel: Channel) throws {

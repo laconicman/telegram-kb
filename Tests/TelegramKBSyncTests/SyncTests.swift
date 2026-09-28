@@ -241,10 +241,10 @@ extension SyncTests {
         ])
         try store.dbPool.close()
 
-        let error = await #expect(throws: ChannelSync.CleanupAlsoFailed.self) {
+        let error = await #expect(throws: Store.CleanupAlsoFailed.self) {
             try await ChannelSync(store: store, fetcher: stub).sync(channel: "swiftui_dev")
         }
-        #expect(error?.walk is WebPreviewSource.CrawlError, "the walk's own error is the one to act on")
+        #expect(error?.session is WebPreviewSource.CrawlError, "the walk's own error is the one to act on")
         #expect(error?.cleanup is DatabaseError, "and the reclaim's failure is named, not dropped")
     }
 
