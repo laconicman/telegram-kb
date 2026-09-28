@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
-index fccc07d..38b6ca7 100644
+index b67f1f1..6576383 100644
 --- a/Sources/TelegramKBIngest/ChatExportParser.swift
 +++ b/Sources/TelegramKBIngest/ChatExportParser.swift
-@@ -137,7 +137,7 @@ public enum ChatExportParser {
-             replyTo: try replyTarget(in: body),
-             forward: try forwardOrigin(in: body),
-             hashtags: try textEl.map(hashtags(in:)) ?? [],
--            links: try links(in: body, text: textEl, observedAt: date),
-+            links: try links(in: body, text: textEl, observedAt: Date()),
-             reactions: try reactions(in: body),
-             poll: try poll(in: body))
-     }
+@@ -130,7 +130,7 @@ public enum ChatExportParser {
+         // The page file's modification time looks like the export's moment, but a copied folder
+         // rewrites it, misdating every preview it held (PR #3, round 4); the snapshot Telegram
+         // rendered rode with the message, so the message's date is the honest claim.
+-        let fields = PostText(formatted, webPage: try webPage(in: body), observedAt: date)
++        let fields = PostText(formatted, webPage: try webPage(in: body), observedAt: Date())
+ 
+         return Post(
+             id: .init(channelUsername: channel, messageID: id),

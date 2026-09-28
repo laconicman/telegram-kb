@@ -68,7 +68,9 @@ public enum WebPreviewParser {
         // class prefix silently harvests the quote instead, which is exactly what happened
         // during Phase 0 and cost a 15% body-truncation rate before it was noticed.
         let bodyEl = try message.select("div.tgme_widget_message_text.js-message_text").first()
-        let text = try bodyEl.map(NodeText.text(of:)) ?? ""
+        let formatted = try bodyEl.map { try EntityMarkup.formattedText(of: $0, entity: entity(for:)) }
+            ?? FormattedText(text: "")
+        let text = formatted.text
 
         // No readable date means the block is unreadable, full stop — a guessed date is worse
         // than a dropped block, because `1970-01-01` sorts into searches and date filters as if
@@ -86,6 +88,8 @@ public enum WebPreviewParser {
         let mediaCount = try albumMediaCount(in: message)
         let poll = try self.poll(in: message)
         let kind = try self.kind(in: message, text: text, mediaCount: mediaCount, hasPoll: poll != nil)
+        // The page dates no preview, so a preview is dated to the crawl that saw it.
+        let fields = PostText(formatted, webPage: try webPage(in: message), observedAt: Date())
 
         return Post(
             id: .init(channelUsername: channel, messageID: messageID),
@@ -95,14 +99,14 @@ public enum WebPreviewParser {
             // consumers must be able to tell "not a document" from "this source cannot say".
             formatSource: .web,
             mediaCount: mediaCount,
-            text: text,
+            text: fields.text,
             authorName: author,
             isEdited: try message.select("span.tgme_widget_message_meta").first()
                 .map { try $0.text().contains("edited") } ?? false,
             replyTo: try replyTarget(in: message),
             forward: try forwardOrigin(in: message),
-            hashtags: try bodyEl.map(NodeText.hashtags(in:)) ?? [],
-            links: try links(in: message, body: bodyEl),
+            hashtags: fields.hashtags,
+            links: fields.links,
             reactions: try reactions(in: message),
             poll: poll,
             views: try views(in: message))
@@ -228,28 +232,35 @@ public enum WebPreviewParser {
         return ViewCount(value: Int(v * scale), isApproximate: isApprox)
     }
 
-    static func links(in message: Element, body: Element?) throws -> [LinkRef] {
-        var refs: [LinkRef] = []
-        var seen = Set<String>()
-        if let body {
-            for url in try NodeText.absoluteLinks(in: body) where seen.insert(url).inserted {
-                refs.append(LinkRef(urlRaw: url))
-            }
+    /// How `t.me/s` marks entities up: a hashtag is a relative search link, `?q=%23tag`, and
+    /// whatever links elsewhere has an absolute `href` (`EntityMarkup.link`).
+    ///
+    /// A cashtag has been recorded as `?q=%24…` (PR #3), and is read so if it appears. None did on
+    /// 2026-09-28: 18 live pages had no such link, and the 32 cashtags on three of them (`$BTC`,
+    /// `$USDT`, …) were plain text, as `t.me` writes an email address (`t.me/iosgr/1837`). Plain
+    /// text carries no entity here — nor, so far as any page has shown, does a bot command or a
+    /// phone number.
+    static func entity(for anchor: Element) throws -> TextEntity? {
+        let href = try anchor.attr("href")
+        // Case-insensitive, as the `a[href^=?q=%23]` selector this replaces matched.
+        let search = href.lowercased()
+        if search.hasPrefix("?q=%23") {
+            // The tag comes from the search link, as it always has here: decoded, every `#` removed.
+            guard let raw = href.split(separator: "=").last,
+                  let tag = String(raw).removingPercentEncoding?.replacingOccurrences(of: "#", with: "")
+            else { return nil }
+            return TextEntity(.hashtag, text: "#" + tag)
         }
-        if let prev = try message.select("a.tgme_widget_message_link_preview").first() {
-            let url = try prev.attr("href")
-            let preview = LinkPreview(
-                siteName: try prev.select("div.link_preview_site_name").first().map(NodeText.text(of:)),
-                title: try prev.select("div.link_preview_title").first().map(NodeText.text(of:)),
-                description: try prev.select("div.link_preview_description").first().map(NodeText.text(of:)),
-                resolvedURL: url,
-                observedAt: Date())
-            if let i = refs.firstIndex(where: { $0.urlRaw == url }) {
-                refs[i].preview = preview
-            } else {
-                var ref = LinkRef(urlRaw: url); ref.preview = preview; refs.append(ref)
-            }
-        }
-        return refs
+        if search.hasPrefix("?q=%24") { return TextEntity(.cashtag, text: try NodeText.text(of: anchor)) }
+        return try EntityMarkup.link(anchor, href: href)
+    }
+
+    static func webPage(in message: Element) throws -> WebPage? {
+        guard let card = try message.select("a.tgme_widget_message_link_preview").first() else { return nil }
+        return WebPage(
+            url: try card.attr("href"),
+            siteName: try card.select("div.link_preview_site_name").first().map(NodeText.text(of:)),
+            title: try card.select("div.link_preview_title").first().map(NodeText.text(of:)),
+            description: try card.select("div.link_preview_description").first().map(NodeText.text(of:)))
     }
 }

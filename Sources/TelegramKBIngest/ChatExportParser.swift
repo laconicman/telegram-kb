@@ -118,26 +118,32 @@ public enum ChatExportParser {
               let dateEl = try body.select("> div.date").first(),
               let date = dates.date(from: try dateEl.attr("title")) else { return nil }
         let textEl = try body.select("> div.text").first()
-        var text = try textEl.map(NodeText.text(of:)) ?? ""
-        if text.isEmpty {
+        var formatted = try textEl.map { try EntityMarkup.formattedText(of: $0, entity: entity(for:)) }
+            ?? FormattedText(text: "")
+        if formatted.text.isEmpty {
             // An uncaptioned document or audio file still names itself: the media block's title
             // is the file's name — the only searchable text such a message has (PR #3, round 4).
-            text = try body.select(".media_file .title, .media_audio_file .title")
+            formatted.text = try body.select(".media_file .title, .media_audio_file .title")
                 .first().map(NodeText.text(of:)) ?? ""
         }
+        // A preview is dated to the post itself — the only reliable timestamp the export carries.
+        // The page file's modification time looks like the export's moment, but a copied folder
+        // rewrites it, misdating every preview it held (PR #3, round 4); the snapshot Telegram
+        // rendered rode with the message, so the message's date is the honest claim.
+        let fields = PostText(formatted, webPage: try webPage(in: body), observedAt: date)
 
         return Post(
             id: .init(channelUsername: channel, messageID: id),
             date: date,
             kind: try kind(in: body),
             formatSource: .export,
-            text: text,
+            text: fields.text,
             authorName: sender,
             isEdited: try dateEl.text().lowercased().hasPrefix("edited"),
             replyTo: try replyTarget(in: body),
             forward: try forwardOrigin(in: body),
-            hashtags: try textEl.map(hashtags(in:)) ?? [],
-            links: try links(in: body, text: textEl, observedAt: date),
+            hashtags: fields.hashtags,
+            links: fields.links,
             reactions: try reactions(in: body),
             poll: try poll(in: body))
     }
@@ -178,48 +184,39 @@ public enum ChatExportParser {
         return name.isEmpty ? nil : ForwardOrigin(authorName: name)
     }
 
-    /// Read from the anchor's visible `#tag`, not from its `onclick`: the macOS export routes
-    /// cashtags through the same call (`ShowHashtag('$TKN')` — shell variables in pasted snippets),
-    /// where tdesktop has a separate `ShowCashtag`. The web preview links a cashtag to `?q=%24…`,
-    /// which `NodeText.hashtags` does not collect, so neither source calls `$TKN` a hashtag.
-    static func hashtags(in text: Element) throws -> [String] {
-        try text.select("a[onclick*=ShowHashtag]").compactMap { a in
-            let shown = try NodeText.text(of: a)
-            return shown.hasPrefix("#") && shown.count > 1 ? String(shown.dropFirst()) : nil
-        }
+    /// How an export marks entities up: tdesktop's `FormatText` (`export_output_html.cpp`), and the
+    /// macOS client as its real exports show it.
+    /// - A hashtag is a `ShowHashtag(…)` call. So is a cashtag in the macOS client
+    ///   (`ShowHashtag('$TKN')` — shell variables in pasted snippets), where tdesktop has
+    ///   `ShowCashtag`; both are read. The two are told apart by the visible `#` or `$`, never by
+    ///   the call's argument.
+    /// - A bot command is `ShowBotCommand(…)`; a mention of a user, `ShowMentionName()`.
+    /// - An email address links to `mailto:`, a phone number to `tel:`.
+    /// - A mention links to `https://t.me/<name>`, and a URL to its address (`EntityMarkup.link`).
+    static func entity(for anchor: Element) throws -> TextEntity? {
+        // Case-insensitive, as the `a[onclick*=ShowHashtag]` selector this replaces matched.
+        let call = try anchor.attr("onclick").lowercased()
+        let shown = try NodeText.text(of: anchor)
+        // A bare `#` or `$` is no tag.
+        let tagged = { (sign: String) in call.contains("showhashtag") && shown.hasPrefix(sign) && shown.count > 1 }
+        if tagged("#") { return TextEntity(.hashtag, text: shown) }
+        let href = try anchor.attr("href")
+        if let link = try EntityMarkup.link(anchor, href: href) { return link }
+        if tagged("$") || call.contains("showcashtag") { return TextEntity(.cashtag, text: shown) }
+        if call.contains("showbotcommand") { return TextEntity(.botCommand, text: shown) }
+        if call.contains("showmentionname") { return TextEntity(.mentionName, text: shown) }
+        if href.hasPrefix("mailto:") { return TextEntity(.emailAddress, text: shown) }
+        if href.hasPrefix("tel:") { return TextEntity(.phoneNumber, text: shown) }
+        return nil
     }
 
-    /// The same rule as the web preview (`WebPreviewParser.links`): every absolute `http(s)` href
-    /// in the text — mentions included, rendered as `https://t.me/<name>` — then the link preview,
-    /// attached to the matching link or added as its own.
-    ///
-    /// `observedAt` is the post's own date — the only reliable timestamp the export carries. The
-    /// page file's modification time looks like the export's moment but a copied folder rewrites
-    /// it, misdating every preview it held (PR #3, round 4); the snapshot Telegram rendered rode
-    /// with the message, so the message's date is the honest claim.
-    static func links(in body: Element, text: Element?, observedAt: Date) throws -> [LinkRef] {
-        var refs: [LinkRef] = []
-        var seen = Set<String>()
-        if let text {
-            for url in try NodeText.absoluteLinks(in: text) where seen.insert(url).inserted {
-                refs.append(LinkRef(urlRaw: url))
-            }
-        }
-        if let preview = try body.select("> div.media_wrap a.webpage_preview[href]").first() {
-            let url = try preview.attr("href")
-            let meta = LinkPreview(
-                siteName: try preview.select("div.webpage_site").first().map(NodeText.text(of:)),
-                title: try preview.select("div.webpage_title").first().map(NodeText.text(of:)),
-                description: try preview.select("div.webpage_description").first().map(NodeText.text(of:)),
-                resolvedURL: url,
-                observedAt: observedAt)
-            if let i = refs.firstIndex(where: { $0.urlRaw == url }) {
-                refs[i].preview = meta
-            } else if url.hasPrefix("http://") || url.hasPrefix("https://") {
-                var ref = LinkRef(urlRaw: url); ref.preview = meta; refs.append(ref)
-            }
-        }
-        return refs
+    static func webPage(in body: Element) throws -> WebPage? {
+        guard let card = try body.select("> div.media_wrap a.webpage_preview[href]").first() else { return nil }
+        return WebPage(
+            url: try card.attr("href"),
+            siteName: try card.select("div.webpage_site").first().map(NodeText.text(of:)),
+            title: try card.select("div.webpage_title").first().map(NodeText.text(of:)),
+            description: try card.select("div.webpage_description").first().map(NodeText.text(of:)))
     }
 
     /// `<span class="reaction"><span class="emoji">👍</span><span class="count">1</span></span>`
