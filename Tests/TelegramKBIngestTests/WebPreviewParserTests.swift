@@ -237,7 +237,9 @@ extension WebPreviewParserTests {
     @Test("an out-of-range message id is an unreadable block, not a post")
     func outOfRangeIDsAreUnreadable() throws {
         let block = { (post: String) in
-            #"<div class="tgme_widget_message" data-post="\#(post)"><div class="tgme_widget_message_text js-message_text">x</div></div>"#
+            // Dated, so the id bound is the only thing that can refuse it — an undated block is
+            // unreadable on its own since TD-25, and would pass this test with the bound removed.
+            #"<div class="tgme_widget_message" data-post="\#(post)"><time datetime="2026-01-01T00:00:00+00:00"></time><div class="tgme_widget_message_text js-message_text">x</div></div>"#
         }
         let hostile = block("chan/-5") + block("chan/0") + block("chan/9223372036854775807")
         let html = try Self.html("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(hostile)<div hidden")
