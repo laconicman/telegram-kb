@@ -264,6 +264,28 @@ extension SyncTests {
     }
 }
 
+extension SyncTests {
+    /// TD-22 for the third writer: `--import-resolutions` is a write session too, and its reclaim
+    /// was the one wiring no test could reach while it lived in the executable (PR #6, round 4).
+    @Test("a resolutions import hands the WAL's space back")
+    func resolutionImportLeavesWALTruncated() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tgkb-res-\(UUID().uuidString).sqlite").path
+        let store = try Store.openForWriting(at: path)
+        let jsonl = (1...40).map { i in
+            #"{"url_canonical":"https://example.com/\#(i)","final_url":"https://example.org/\#(i)","http_status":200,"hops":1,"resolved_at":"2026-09-06T01:00:00.000000+00:00"}"#
+        }.joined(separator: "\n")
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("res-\(UUID().uuidString).jsonl").path
+        try jsonl.write(toFile: file, atomically: true, encoding: .utf8)
+
+        let outcome = try await ResolutionImport.run(store: store, jsonl: file)
+        #expect(outcome.imported == 40 && outcome.skipped == 0 && !outcome.walCleanupFailed)
+        let wal = (try? FileManager.default.attributesOfItem(atPath: path + "-wal")[.size] as? Int) ?? 0
+        #expect(wal == 0, "the file stays (PERSIST_WAL); its contents are given back")
+    }
+}
+
 /// Serves the first page, then closes the store's pool and rate-limits every later request: a
 /// walk that fails after committing a page, with no pool left for the reclaim after it.
 struct ClosingFetcher: PageFetcher {
