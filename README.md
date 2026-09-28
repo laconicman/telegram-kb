@@ -24,14 +24,15 @@ swift package --disable-sandbox preview-documentation --target TelegramKB
 
 ## Status
 
-**Phase 1, slices S0–S5 done; S6 (`tgkb-mcp`) is next.**
+**Phase 1, slices S0–S5.5 done; S6 (`tgkb-mcp`) is next.**
 
 | Works today | Not yet |
 |---|---|
 | `tgkb sync`: public channels through the web preview, incremental and resumable | `tgkb-mcp`: the target exists as a placeholder (S6) |
-| `tgkb query`: word search with Russian lemmatisation, plus substring search | Channels with the preview disabled, and groups (Phase 2, TDLib) |
-| `tgkb doctor`: store health and a per-channel integrity report | Reactions and links as ranking signals (Phase 3) |
-| URL canonicalisation to a versioned spec, shared with a sibling project | Fetching the content behind links (done in the sibling project) |
+| `tgkb import`: a public group from a Telegram client's chat export, verified against `t.me` | Channels with the preview disabled, and groups kept current without a manual export (Phase 2, TDLib) |
+| `tgkb query`: word search with Russian lemmatisation, plus substring search | Reactions and links as ranking signals (Phase 3) |
+| `tgkb doctor`: store health and a per-channel integrity report | Fetching the content behind links (done in the sibling project) |
+| URL canonicalisation to a versioned spec, shared with a sibling project | |
 
 Measured on a 7,444-post corpus from four channels: `навигация` finds 108 posts, including
 other inflected forms; `imation` finds 66, where Telegram's own search finds none; a query with
@@ -49,6 +50,7 @@ swift build -c release
 .build/release/tgkb query '"адаптивная вёрстка"'   # quoted: that word order only
 .build/release/tgkb query --mode substring imation
 .build/release/tgkb doctor iosgr                  # coverage, gaps, reachability
+.build/release/tgkb import ~/Downloads/ChatExport_… --channel sdl_static --timezone Europe/Moscow   # a group, from its export
 ```
 
 The store defaults to `~/Library/Application Support/telegram-kb/kb.sqlite`; every subcommand

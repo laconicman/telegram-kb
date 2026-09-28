@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
+index fccc07d..38b6ca7 100644
+--- a/Sources/TelegramKBIngest/ChatExportParser.swift
++++ b/Sources/TelegramKBIngest/ChatExportParser.swift
+@@ -137,7 +137,7 @@ public enum ChatExportParser {
+             replyTo: try replyTarget(in: body),
+             forward: try forwardOrigin(in: body),
+             hashtags: try textEl.map(hashtags(in:)) ?? [],
+-            links: try links(in: body, text: textEl, observedAt: date),
++            links: try links(in: body, text: textEl, observedAt: Date()),
+             reactions: try reactions(in: body),
+             poll: try poll(in: body))
+     }
