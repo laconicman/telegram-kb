@@ -1,0 +1,21 @@
+diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
+index fccc07d..8da6da7 100644
+--- a/Sources/TelegramKBIngest/ChatExportParser.swift
++++ b/Sources/TelegramKBIngest/ChatExportParser.swift
+@@ -110,13 +110,13 @@ public enum ChatExportParser {
+         guard let body = try block.select("> div.body").first() else { return nil }
+         // The sender first, even from a block that turns out unreadable: the "joined" message
+         // after it still continues from this sender, not from the one before.
++        guard block.id().hasPrefix("message"), let id = Int(block.id().dropFirst("message".count)), id > 0,
++              let dateEl = try body.select("> div.date").first(),
++              let date = dates.date(from: try dateEl.attr("title")) else { return nil }
+         if let name = try body.select("> div.from_name").first() {
+             // `ownText`, not the whole element: a bot relay appends a `via @bot` span to the name.
+             sender = name.ownText().trimmingCharacters(in: .whitespacesAndNewlines)
+         }
+-        guard block.id().hasPrefix("message"), let id = Int(block.id().dropFirst("message".count)), id > 0,
+-              let dateEl = try body.select("> div.date").first(),
+-              let date = dates.date(from: try dateEl.attr("title")) else { return nil }
+         let textEl = try body.select("> div.text").first()
+         var text = try textEl.map(NodeText.text(of:)) ?? ""
+         if text.isEmpty {

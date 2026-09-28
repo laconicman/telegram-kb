@@ -1,0 +1,28 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 33047f6..fb9f7cd 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -490,23 +490,6 @@ extension Store {
+                            rawChannelID: Int64? = nil) throws {
+         try dbPool.write { db in
+             try assertChannelLease(in: db, channel: channel)
+-            if let rawChannelID {
+-                if let known = try Int64.fetchOne(db, sql: """
+-                    SELECT rawChannelID FROM channel WHERE username = ?
+-                    """, arguments: [channel]), known != 0, known != rawChannelID {
+-                    throw StoreError.channelIDConflict(
+-                        "@\(channel) is stored as chat \(known); the page carries chat "
+-                      + "\(rawChannelID) — the username was reassigned")
+-                }
+-                let others = try String.fetchAll(db, sql: """
+-                    SELECT username FROM channel WHERE rawChannelID = ? AND username != ?
+-                    """, arguments: [rawChannelID, channel])
+-                if !others.isEmpty {
+-                    throw StoreError.channelIDConflict(
+-                        "chat \(rawChannelID) is already stored as @\(others.joined(separator: ", @")) — renamed? "
+-                      + "Until S7 one chat can have only one row")
+-                }
+-            }
+             for post in posts { try Self.write(post, into: db, policy: policy) }
+             try db.execute(sql: """
+                 UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,

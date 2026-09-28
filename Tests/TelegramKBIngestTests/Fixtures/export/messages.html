@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC. Modelled on a real Telegram for macOS chat export (2026-09-21): the markup, class
+  names and date format are the export's; the chat, people and words are invented. A real group
+  export carries other people's messages and the exporting account's private contact names, so
+  none of it is committed here.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>Static Analysis Test Chat</title>
+<link href="css/style.css" rel="stylesheet">
+</head>
+<body onload="CheckLocation();">
+<div class="page_wrap">
+<div class="page_header chat_header">
+<div class="content bubble">
+<div class="body">
+<div class="name bold">Static Analysis Test Chat</div>
+<div class="subtitle details">42 members</div>
+</div>
+</div>
+</div>
+<div class="page_body chat_page">
+<div class="history">
+<div class="message service">
+<div class="body details">
+12 September 2020
+</div>
+</div>
+<div class="message service" id="message2">
+<div class="body details">
+Alice Example changed the group name to &quot;Static Analysis Test Chat&quot;
+</div>
+</div>
+<div class="message default clearfix" id="message10">
+<div class="pull_left userpic_wrap">
+<div class="userpic userpic1" style="width: 42px; height: 42px">
+<div class="initials" style="line-height: 42px">AE</div>
+</div>
+</div>
+<div class="body">
+<div class="pull_right date details" title="3 April 2023, 12:34:07">12:34</div>
+<div class="from_name">
+Alice Example
+</div>
+<div class="text">
+Первая строка про <a href="https://t.me/someone">@someone</a><br>Вторая строка <a onclick="return ShowHashtag('Svace')" href="#">#Svace</a> и <a onclick="return ShowHashtag('$TKN')" href="#">$TKN</a>
+</div>
+</div>
+</div>
+<div class="message default clearfix joined" id="message11">
+<div class="body">
+<div class="pull_right date details" title="3 April 2023, 12:40:00">edited 12:40</div>
+<div class="reply_to details">In reply to <a href="#go_to_message10" onclick="return GoToMessage(10)">this message</a></div>
+<div class="text">
+Лог сборки:<pre><code>make: *** [all] Error 1
+exit 2</code></pre>
+</div>
+<div class="reactions">
+<span class="reaction"><span class="emoji">👍</span><span class="count">3</span></span>
+<span class="reaction"><span class="emoji">🔥</span><span class="count">1</span></span>
+</div>
+</div>
+</div>
+<div class="message default clearfix" id="message12">
+<div class="pull_left userpic_wrap">
+<img class="userpic" style="width: 42px; height: 42px" src="photos/author_1001.jpg"/>
+</div>
+<div class="body">
+<div class="pull_right date details" title="3 April 2023, 13:00:00">13:00</div>
+<div class="from_name">
+Bob Example
+</div>
+<div class="forwarded_from details">Forwarded from Example News</div>
+<div class="media_wrap clearfix">
+<a class="webpage_preview clearfix" href="https://example.org/article" style="border-left-color: #9884e8">
+<img class="webpage_photo pull_right" src="webpage_thumbs/webpage_12_0.jpg"/>
+<div class="webpage_site" style="color: #9884e8">Example</div>
+<div class="webpage_title bold">An article</div>
+<div class="webpage_description">What the article says</div>
+</a>
+</div>
+<div class="text">
+Read <a href="https://example.org/article/">https://example.org/article/</a>
+</div>
+</div>
+</div>
+<div class="message default clearfix" id="message13">
+<div class="body">
+<div class="pull_right date details" title="3 April 2023, 13:05:00">13:05</div>
+<div class="from_name">
+Carol Example
+</div>
+<a class="photo_wrap clearfix pull_left" href="photos/photo_13_0.jpg"><img class="photo" src="photos/photo_13_0.jpg" style="width: 320px; height: 240px"></a>
+<div class="text">
+A screenshot of the warning
+</div>
+</div>
+</div>
+<div class="message default clearfix joined" id="message14">
+<div class="body">
+<div class="pull_right date details" title="3 April 2023, 13:06:00">13:06</div>
+<div class="media_wrap clearfix">
+<div class="media_poll">
+<div class="question bold">Which analyser do you use?</div>
+<div class="details">Poll</div>
+<div class="answer">- Svace</div>
+<div class="answer">- Something else</div>
+<div class="total details">7 votes</div>
+</div>
+</div>
+</div>
+</div>
+<div class="message default clearfix" id="message15">
+<div class="body">
+<div class="pull_right date details" title="yesterday">??</div>
+<div class="from_name">
+Dave Example
+</div>
+<div class="text">
+A message whose date cannot be read
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>
