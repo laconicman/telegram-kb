@@ -325,6 +325,7 @@ extension StoreTests {
     @Test("an interrupted incremental sync still walks down to the old mark")
     func interruptedIncrementalKeepsGapOpen() throws {
         let (store, _) = try Self.seeded()
+        try store.acquireChannelLease(for: "iosgr")
         try store.recordCrawlState(channel: "iosgr", lowest: 1, highest: 100, backfillComplete: true)
         let before = try store.crawlState(forChannel: "iosgr")
         #expect(before.since(full: false) == 100)
@@ -410,6 +411,7 @@ extension StoreTests {
     @Test("an interrupted resumed backfill keeps its top and resumes below the page it wrote")
     func interruptedResumedBackfill() throws {
         let (store, _) = try Self.seeded()
+        try store.acquireChannelLease(for: "iosgr")
         try store.recordCrawlState(channel: "iosgr", lowest: 500, highest: 1000, backfillComplete: false)
         let before = try store.crawlState(forChannel: "iosgr")
         #expect(before.resumeFrom(full: false) == 500)
@@ -423,6 +425,7 @@ extension StoreTests {
     @Test("an interrupted --full over a finished channel stays finished and loses nothing")
     func interruptedFullOverFinishedChannel() throws {
         let (store, _) = try Self.seeded()
+        try store.acquireChannelLease(for: "iosgr")
         try store.recordCrawlState(channel: "iosgr", lowest: 1, highest: 1000, backfillComplete: true)
         let before = try store.crawlState(forChannel: "iosgr")
         try Self.commit(store, before.afterPage(lowest: 981, highest: 1100, full: true), 981...1100)
@@ -436,6 +439,7 @@ extension StoreTests {
     @Test("an interrupted --full over an unfinished channel resumes below the page it wrote")
     func interruptedFullOverUnfinishedChannel() throws {
         let (store, _) = try Self.seeded()
+        try store.acquireChannelLease(for: "iosgr")
         try store.recordCrawlState(channel: "iosgr", lowest: 500, highest: 1000, backfillComplete: false)
         let before = try store.crawlState(forChannel: "iosgr")
         try Self.commit(store, before.afterPage(lowest: 981, highest: 1100, full: true), 981...1100)
@@ -451,6 +455,7 @@ extension StoreTests {
         let (store, _) = try Self.seeded()
         try store.upsert(channel: Channel(username: "iosgr", rawChannelID: 1, title: "iOS Good Reads",
                                           subscriberCount: 1234, reachability: .previewDisabled))
+        try store.acquireChannelLease(for: "iosgr")
         try store.updateIdentity(channel: "iosgr", rawChannelID: 1_076_035_790, reachability: .webPreview)
         let row = try #require(try store.dbPool.read { db in
             try Row.fetchOne(db, sql: "SELECT * FROM channel WHERE username = 'iosgr'") })
@@ -555,7 +560,9 @@ extension StoreTests {
             }
         }
         try await Task.sleep(for: .milliseconds(120))
-        try second.ensureChannel(username: "waited", reachability: .webPreview)   // must not throw
+        // `upsert` is the unleased primitive — the run-path writers all require the lease now.
+        try second.upsert(channel: Channel(username: "waited", rawChannelID: 0,
+                                           reachability: .webPreview))   // must not throw
         try await holding.value
         #expect(try second.channelUsernames() == ["held", "waited"])
     }
@@ -1000,7 +1007,33 @@ extension StoreTests {
                 "the rebuild recorded its writes in the generation")
     }
 
-    /// 🔴 `limit: Int.max` made the substring bound `end + words.count` overflow and trap.
+    /// � The v3 test crosses v6 too, but REVIEW.md asks for the *previous populated* schema:
+    /// a store that already has data at v5 must still open — and take a lease — once v6 runs
+    /// (PR #3, review round 2).
+    @Test("a populated store from before v6 upgrades to the lease schema")
+    func populatedV5StoreUpgrades() throws {
+        let path = Self.tempPath()
+        do {
+            let queue = try DatabaseQueue(path: path)
+            try Schema.migrator.migrate(queue, upTo: "v5-index-generation")
+            try queue.write { db in
+                // What v5-era code wrote: a channel and a post under it.
+                try db.execute(sql: "INSERT INTO channel (username, rawChannelID, reachability) VALUES ('iosgr', 1, 'webPreview')")
+                try db.execute(sql: """
+                    INSERT INTO post (channelUsername, messageID, date, kind, formatSource, text)
+                    VALUES ('iosgr', 7, ?, 'text', 'web', 'Навигация в SwiftUI')
+                    """, arguments: [Date()])
+            }
+        }
+        let store = try Store.openForWriting(at: path)   // runs v6 over real rows
+        #expect(try store.storedMessageIDs(forChannel: "iosgr") == [7],
+                "the v5 rows survive the upgrade")
+        try store.acquireChannelLease(for: "iosgr")
+        try store.releaseChannelLease(for: "iosgr")
+        // Acquiring proves `channelLease` exists and works on a migrated store.
+    }
+
+    /// �🔴 `limit: Int.max` made the substring bound `end + words.count` overflow and trap.
     @Test("an enormous page size is clamped, not a crash")
     func hugePageSizeIsClamped() throws {
         let store = try Self.filterStore()
@@ -1019,5 +1052,190 @@ extension StoreTests {
         let two = Store.Cursor.fingerprint(query: "a", mode: .both,
                                            filter: .init(channel: "b\(s)both\(s)c"))
         #expect(one != two)
+    }
+
+    // MARK: - Identity reads, for a writer that must not create a second channel
+
+    @Test("identity reads back the id and reachability, and nothing for an unknown channel")
+    func identityRoundTrips() throws {
+        let (store, _) = try Self.seeded()
+        try store.acquireChannelLease(for: "sdl_static")
+        try store.ensureChannel(username: "sdl_static", reachability: .group)
+        #expect(try store.identity(forChannel: "iosgr")
+                == .init(rawChannelID: 1_492_664_793, reachability: .webPreview))
+        #expect(try store.identity(forChannel: "sdl_static") == .init(rawChannelID: 0, reachability: .group))
+        #expect(try store.identity(forChannel: "nobody") == nil)
+    }
+
+    /// A newer `tgkb` may write a reachability this binary has never heard of. Guessing one would
+    /// steer `doctor` and `import` wrong; `nil` says "unknown" honestly.
+    @Test("a reachability this binary does not know reads as nil, not as a guess")
+    func unknownReachabilityIsNil() throws {
+        let (store, _) = try Self.seeded()
+        try store.dbPool.write { db in
+            try db.execute(sql: "UPDATE channel SET reachability = 'fromTheFuture' WHERE username = 'iosgr'")
+        }
+        #expect(try store.identity(forChannel: "iosgr")?.reachability == nil)
+        try store.upsert(posts: [Self.post(1, "one")])
+        #expect(try store.integrity(forChannel: "iosgr")?.reachability == nil)
+    }
+
+    @Test("channels(withRawChannelID:) finds every row sharing an id, which the schema allows")
+    func rowsSharingAnID() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(channel: Channel(username: "renamed", rawChannelID: 1_492_664_793))
+        #expect(try store.channels(withRawChannelID: 1_492_664_793) == ["iosgr", "renamed"])
+        #expect(try store.channels(withRawChannelID: 42).isEmpty)
+    }
+
+    @Test("storedMessageIDs lists what a keepExisting write will leave alone")
+    func storedIDs() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(3, "three"), Self.post(7, "seven")])
+        #expect(try store.storedMessageIDs(forChannel: "iosgr") == [3, 7])
+        #expect(try store.storedMessageIDs(forChannel: "nobody").isEmpty)
+    }
+
+    @Test("integrity reports the channel's reachability, so doctor can tell a group from a crawl")
+    func integrityCarriesReachability() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(1, "one")])
+        #expect(try store.integrity(forChannel: "iosgr")?.reachability == .webPreview)
+    }
+
+    // MARK: - The channel lease (TD-21)
+
+    @Test("a lease held by a live process refuses; released, dead, or silent ones are taken")
+    func channelLease() throws {
+        let (store, _) = try Self.seeded()
+        let pid = ProcessInfo.processInfo.processIdentifier
+
+        // Live holder, fresh heartbeat: a claimant is refused and names the holder.
+        try store.acquireChannelLease(for: "iosgr")
+        #expect(throws: Store.StoreError.channelLeaseHeld(channel: "iosgr", pid: pid)) {
+            try store.acquireChannelLease(for: "iosgr")
+        }
+
+        // Released: claimable again.
+        try store.releaseChannelLease(for: "iosgr")
+        try store.acquireChannelLease(for: "iosgr")
+        try store.releaseChannelLease(for: "iosgr")
+
+        // Dead holder: stolen at once, without waiting out the TTL.
+        let dead = Process()
+        dead.executableURL = URL(fileURLWithPath: "/usr/bin/true")
+        try dead.run()
+        dead.waitUntilExit()
+        try store.dbPool.write { db in
+            try db.execute(sql: """
+                INSERT INTO channelLease (channelUsername, pid, nonce, heartbeat) VALUES (?,?,?,?)
+                """, arguments: ["iosgr", dead.processIdentifier, "dead-holder", Date()])
+        }
+        try store.acquireChannelLease(for: "iosgr")
+        try store.releaseChannelLease(for: "iosgr")
+
+        // Live pid but a heartbeat past the TTL — a suspended or stuck holder is stolen from
+        // once the heartbeat lapses, which is what the TTL is for.
+        try store.dbPool.write { db in
+            try db.execute(sql: """
+                INSERT INTO channelLease (channelUsername, pid, nonce, heartbeat) VALUES (?,?,?,?)
+                """, arguments: ["iosgr", pid, "stale-holder",
+                                 Date().addingTimeInterval(-Store.channelLeaseTTL - 1)])
+        }
+        try store.acquireChannelLease(for: "iosgr")
+        try store.releaseChannelLease(for: "iosgr")
+    }
+
+    /// 🔴 Round-3 review: a holder suspended past the TTL could resume after its lease was
+    /// stolen and keep writing — the heartbeat `UPDATE` matched no row and said nothing. Every
+    /// channel-scoped write must instead refuse once the lease row names another pid.
+    @Test("a writer whose lease was stolen is refused, and its next page writes nothing")
+    func stolenLeaseAbortsWrites() throws {
+        let (store, _) = try Self.seeded()
+        try store.acquireChannelLease(for: "iosgr")
+
+        // Another process claims the channel: the row now names a pid that is not this one
+        // (pid 1 is launchd — always alive, never this test's process).
+        try store.dbPool.write { db in
+            try db.execute(sql: "UPDATE channelLease SET pid = 1 WHERE channelUsername = 'iosgr'")
+        }
+
+        #expect(throws: Store.StoreError.channelLeaseLost(channel: "iosgr")) {
+            try store.commitPage([Self.post(50, "lost")], channel: "iosgr",
+                                 lowest: 50, highest: 50, backfillComplete: false)
+        }
+        #expect(try store.storedMessageIDs(forChannel: "iosgr").isEmpty,
+                "the refused page must not have written its posts")
+        #expect(throws: Store.StoreError.channelLeaseLost(channel: "iosgr")) {
+            try store.recordCrawlState(channel: "iosgr", lowest: 1, highest: 100,
+                                       backfillComplete: true)
+        }
+        #expect(try store.crawlState(forChannel: "iosgr")
+                == Store.CrawlState(lowest: nil, highest: nil, backfillComplete: false),
+                "the refused write must not have moved the crawl state")
+
+        // The lease is the stealer's: this process's release must not delete it.
+        try store.releaseChannelLease(for: "iosgr")
+        #expect(throws: Store.StoreError.channelLeaseHeld(channel: "iosgr", pid: 1)) {
+            try store.acquireChannelLease(for: "iosgr")
+        }
+
+        // Once the stealer's row is gone, the displaced writer can re-acquire and write again.
+        try store.dbPool.write { db in
+            try db.execute(sql: "DELETE FROM channelLease WHERE channelUsername = 'iosgr'")
+        }
+        try store.acquireChannelLease(for: "iosgr")
+        try store.commitPage([Self.post(50, "lost")], channel: "iosgr",
+                             lowest: 50, highest: 50, backfillComplete: false)
+        #expect(try store.storedMessageIDs(forChannel: "iosgr") == [50])
+    }
+
+    /// 🔍 Round-4 review: the assertion bound `(channel, pid)`, and two `Store` values in one
+    /// process share a pid — a second store could write under the first's lease. The nonce is
+    /// per-`Store`, so only the value that acquired the lease passes its assertion.
+    @Test("a second Store in the same process cannot write under another's lease")
+    func leaseTokenBindsTheHolder() throws {
+        let (first, path) = try Self.seeded()
+        let second = try Store.openForWriting(at: path)
+        try first.acquireChannelLease(for: "iosgr")
+
+        #expect(throws: Store.StoreError.channelLeaseLost(channel: "iosgr")) {
+            try second.commitPage([Self.post(50, "x")], channel: "iosgr",
+                                  lowest: 50, highest: 50, backfillComplete: false)
+        }
+        #expect(try second.storedMessageIDs(forChannel: "iosgr").isEmpty,
+                "the refused page must not have written its posts")
+
+        // And release binds too: the holder's `DELETE` carries its nonce, so a same-process
+        // sibling cannot release the row, and releasing does not leave the releaser able to
+        // write — its token is gone with the row.
+        try second.releaseChannelLease(for: "iosgr")
+        try first.commitPage([Self.post(50, "x")], channel: "iosgr",
+                             lowest: 50, highest: 50, backfillComplete: false)
+        try first.releaseChannelLease(for: "iosgr")
+        #expect(throws: Store.StoreError.channelLeaseLost(channel: "iosgr")) {
+            try first.commitPage([Self.post(51, "y")], channel: "iosgr",
+                                 lowest: 51, highest: 51, backfillComplete: false)
+        }
+    }
+
+    /// 🟡 Round-5 review: a release's token cleanup ran unconditionally, so an acquire landing
+    /// between its row delete and its map cleanup had its fresh nonce erased — the new holder
+    /// then failed `channelLeaseLost` on a lease it owned. The remove must be conditional on
+    /// the nonce the releasing task captured.
+    @Test("a release erases only the nonce it captured, not a reacquisition's")
+    func releaseKeepsAReacquiredToken() throws {
+        let tokens = Store.LeaseTokens()
+        tokens.set("released-nonce", for: "iosgr")
+        // The reacquisition's nonce has overwritten the entry: the stale release removes nothing.
+        tokens.set("reacquired-nonce", for: "iosgr")
+        tokens.remove("iosgr", onlyIf: "released-nonce")
+        #expect(tokens.token(for: "iosgr") == "reacquired-nonce")
+        tokens.remove("iosgr", onlyIf: "reacquired-nonce")
+        #expect(tokens.token(for: "iosgr") == nil)
+        // Releasing a lease this store never held removes nothing another task claimed.
+        tokens.set("theirs", for: "iosgr")
+        tokens.remove("iosgr", onlyIf: nil)
+        #expect(tokens.token(for: "iosgr") == "theirs")
     }
 }

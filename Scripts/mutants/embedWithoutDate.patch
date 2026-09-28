@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/MessageEmbed.swift b/Sources/TelegramKBIngest/MessageEmbed.swift
+index 0d4230e..ed5bbf6 100644
+--- a/Sources/TelegramKBIngest/MessageEmbed.swift
++++ b/Sources/TelegramKBIngest/MessageEmbed.swift
+@@ -20,8 +20,6 @@ public enum MessageEmbed {
+     /// also when it holds no readable `<time datetime>`: the preview's parser then dates a post to
+     /// 1970 rather than failing, and a check against that date would blame the time zone.
+     public static func post(html: String) throws -> Post? {
+-        guard let stamp = try SwiftSoup.parse(html).select("div.tgme_widget_message time[datetime]").first(),
+-              (try? WebPreviewParser.iso.parse(try stamp.attr("datetime"))) != nil else { return nil }
+         return try WebPreviewParser.page(html: html).posts.first
+     }
+ 

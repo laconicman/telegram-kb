@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 6d1258f..c820017 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -33,7 +33,7 @@ public struct Store: Sendable {
+         /// release's row delete and this call holds a different nonce — erasing it would
+         /// orphan a lease its holder still owns (PR #3, review round 5).
+         func remove(_ channel: String, onlyIf expected: String?) {
+-            tokens.withLock { if $0[channel] == expected { $0[channel] = nil } }
++            tokens.withLock { $0[channel] = nil }
+         }
+     }
+ 

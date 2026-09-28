@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
+index 0ed9e4e..d5f0eb4 100644
+--- a/Sources/TelegramKBIngest/ChatExportParser.swift
++++ b/Sources/TelegramKBIngest/ChatExportParser.swift
+@@ -160,7 +160,7 @@ public enum ChatExportParser {
+     static func hashtags(in text: Element) throws -> [String] {
+         try text.select("a[onclick*=ShowHashtag]").compactMap { a in
+             let shown = try NodeText.text(of: a)
+-            return shown.hasPrefix("#") && shown.count > 1 ? String(shown.dropFirst()) : nil
++            return shown.count > 1 ? String(shown.dropFirst()) : nil
+         }
+     }
+ 

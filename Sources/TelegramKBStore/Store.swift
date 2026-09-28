@@ -1,5 +1,7 @@
+import Darwin           // kill/errno — lease holder liveness
 import Foundation
 import GRDB
+import os               // OSAllocatedUnfairLock — LeaseTokens' synchronous map
 import SQLite3          // sqlite3_file_control / SQLITE_FCNTL_PERSIST_WAL
 import TelegramKBModel
 
@@ -11,6 +13,29 @@ import TelegramKBModel
 /// built as if it could.
 public struct Store: Sendable {
     let dbPool: DatabasePool
+    /// The lease tokens this `Store` has claimed — what lets a write tell the holder from a
+    /// second `Store` in the same process, which a pid alone cannot do (PR #3, review round 4).
+    let leaseTokens = LeaseTokens()
+
+    /// A (channel → token) map for the leases one `Store` holds. A class, because the struct's
+    /// methods mutate it inside `dbPool.write` closures — synchronous, which is also why this
+    /// is a lock and not an actor: `assertChannelLease` runs inside a write transaction and
+    /// cannot suspend (PR #3, review round 5).
+    final class LeaseTokens: Sendable {
+        private let tokens = OSAllocatedUnfairLock(initialState: [String: String]())
+        func token(for channel: String) -> String? {
+            tokens.withLock { $0[channel] }
+        }
+        func set(_ token: String, for channel: String) {
+            tokens.withLock { $0[channel] = token }
+        }
+        /// Removes only the token `expected` names. A reacquisition that landed between a
+        /// release's row delete and this call holds a different nonce — erasing it would
+        /// orphan a lease its holder still owns (PR #3, review round 5).
+        func remove(_ channel: String, onlyIf expected: String?) {
+            tokens.withLock { if $0[channel] == expected { $0[channel] = nil } }
+        }
+    }
 
     // MARK: - Opening
 
@@ -56,13 +81,35 @@ public struct Store: Sendable {
         return Store(dbPool: pool)
     }
 
-    public enum StoreError: Error, CustomStringConvertible {
+    public enum StoreError: Error, CustomStringConvertible, Equatable {
         case schemaNotMigrated
+        /// The channel is crawled from its web preview; a second source would mix.
+        case channelCrawled(String)
+        /// The row came from a chat export; a web preview under its name is another chat.
+        case channelImported(String)
+        /// The claimed identity disagrees with what is stored; the message says how.
+        case channelIDConflict(String)
+        /// Another live process holds the channel's lease.
+        case channelLeaseHeld(channel: String, pid: Int32)
+        /// A write found this process no longer named in the channel's lease row — the lease
+        /// was stolen (or never taken) and the run must stop, not interleave with the new holder.
+        case channelLeaseLost(channel: String)
         public var description: String {
             switch self {
             case .schemaNotMigrated:
                 return "The database schema is older than this binary expects. Run `tgkb sync` "
                      + "(the writer) to migrate it; a read-only process cannot."
+            case .channelCrawled(let c):
+                return "@\(c) is crawled from its web preview"
+            case .channelImported(let c):
+                return "@\(c) was imported from a chat export as a group; a channel now answering to "
+                     + "that name is another chat — the username was reassigned"
+            case .channelIDConflict(let why):
+                return why
+            case .channelLeaseHeld(let c, let pid):
+                return "@\(c) is already being written by another tgkb process (pid \(pid))"
+            case .channelLeaseLost(let c):
+                return "@\(c)'s lease was claimed by another writer mid-run — this run's writes stopped"
             }
         }
     }
@@ -355,6 +402,7 @@ extension Store {
     public func recordCrawlState(channel username: String, lowest: Int?, highest: Int?,
                                  backfillComplete: Bool) throws {
         try dbPool.write { db in
+            try assertChannelLease(in: db, channel: username)
             try db.execute(sql: """
                 UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
                        backfillComplete = ?, lastSyncedAt = ?
@@ -371,8 +419,20 @@ extension Store {
     /// foreign-key prerequisite before a crawl would replace a known id with the `0` placeholder
     /// — and a crawl that then failed would leave the false identity stored, pointing TDLib
     /// reconciliation at a nonexistent chat. Insert-if-absent has no such failure mode.
+    ///
+    /// A row stored as a `.group` is refused to a web crawl: a group never becomes a broadcast
+    /// channel, so a preview answering to its name belongs to another chat. `commitPage`'s id
+    /// check cannot see this when the group was imported unverified — its `rawChannelID` is
+    /// `0`, which matches anything. The caller holds the lease, and every identity write asserts
+    /// it, so the row cannot change between this check and the pages that follow.
     public func ensureChannel(username: String, reachability: Channel.Reachability) throws {
         try dbPool.write { db in
+            try assertChannelLease(in: db, channel: username)
+            if reachability == .webPreview,
+               try String.fetchOne(db, sql: "SELECT reachability FROM channel WHERE username = ?",
+                                   arguments: [username]) == Channel.Reachability.group.rawValue {
+                throw StoreError.channelImported(username)
+            }
             try db.execute(sql: """
                 INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
                 ON CONFLICT(username) DO NOTHING
@@ -387,9 +447,50 @@ extension Store {
     public func updateIdentity(channel username: String, rawChannelID: Int64,
                                reachability: Channel.Reachability) throws {
         try dbPool.write { db in
+            try assertChannelLease(in: db, channel: username)
             try db.execute(sql: """
                 UPDATE channel SET rawChannelID = ?, reachability = ? WHERE username = ?
                 """, arguments: [rawChannelID, reachability.rawValue, username])
+        }
+    }
+
+    /// What the store knows about who a channel is.
+    public struct ChannelIdentity: Sendable, Equatable {
+        /// `0` until a source has learned it.
+        public var rawChannelID: Int64
+        /// `nil` for a value this binary does not know — written by a newer `tgkb` — rather than a
+        /// guess that would steer the caller wrong.
+        public var reachability: Channel.Reachability?
+    }
+
+    /// `nil` when the store has no row for the channel.
+    public func identity(forChannel username: String) throws -> ChannelIdentity? {
+        try dbPool.read { db in
+            guard let row = try Row.fetchOne(db, sql: """
+                SELECT rawChannelID, reachability FROM channel WHERE username = ?
+                """, arguments: [username]) else { return nil }
+            return ChannelIdentity(rawChannelID: row["rawChannelID"],
+                                   reachability: Channel.Reachability(rawValue: row["reachability"]))
+        }
+    }
+
+    /// Every channel row carrying `rawChannelID`.
+    ///
+    /// Until `S7` makes the id the key, nothing in the schema stops two rows sharing one — so a
+    /// writer that must not create a second has to ask here first.
+    public func channels(withRawChannelID id: Int64) throws -> [String] {
+        try dbPool.read { db in
+            try String.fetchAll(db, sql: "SELECT username FROM channel WHERE rawChannelID = ? ORDER BY username",
+                                arguments: [id])
+        }
+    }
+
+    /// The message ids already stored for a channel: what a write under `keepExisting` will leave
+    /// alone, so an import can say how much of it was new.
+    public func storedMessageIDs(forChannel username: String) throws -> Set<Int> {
+        try dbPool.read { db in
+            Set(try Int.fetchAll(db, sql: "SELECT messageID FROM post WHERE channelUsername = ?",
+                                 arguments: [username]))
         }
     }
 
@@ -398,14 +499,162 @@ extension Store {
     /// Separate writes let an interruption land between them, leaving the watermark describing
     /// posts that were never committed — extra recrawling at best, and a claim of "one
     /// transaction scope" that was not true.
+    ///
+    /// `rawChannelID`, when the caller's page can name it, is checked against the stored row in
+    /// this same transaction: a username reassigned to another chat must refuse rather than
+    /// merge two histories under one key (PR #3, review round 4).
     public func commitPage(_ posts: [Post], channel: String, lowest: Int?, highest: Int?,
-                           backfillComplete: Bool, policy: WritePolicy = .replace) throws {
+                           backfillComplete: Bool, policy: WritePolicy = .replace,
+                           rawChannelID: Int64? = nil) throws {
         try dbPool.write { db in
+            try assertChannelLease(in: db, channel: channel)
+            if let rawChannelID {
+                if let known = try Int64.fetchOne(db, sql: """
+                    SELECT rawChannelID FROM channel WHERE username = ?
+                    """, arguments: [channel]), known != 0, known != rawChannelID {
+                    throw StoreError.channelIDConflict(
+                        "@\(channel) is stored as chat \(known); the page carries chat "
+                      + "\(rawChannelID) — the username was reassigned")
+                }
+                let others = try String.fetchAll(db, sql: """
+                    SELECT username FROM channel WHERE rawChannelID = ? AND username != ?
+                    """, arguments: [rawChannelID, channel])
+                if !others.isEmpty {
+                    throw StoreError.channelIDConflict(
+                        "chat \(rawChannelID) is already stored as @\(others.joined(separator: ", @")) — renamed? "
+                      + "Until S7 one chat can have only one row")
+                }
+            }
             for post in posts { try Self.write(post, into: db, policy: policy) }
             try db.execute(sql: """
                 UPDATE channel SET lowestMessageID = ?, highestMessageID = ?,
                        backfillComplete = ?, lastSyncedAt = ? WHERE username = ?
                 """, arguments: [lowest, highest, backfillComplete, Date(), channel])
+        }
+    }
+}
+
+extension Store {
+    /// How long a lease heartbeat may go unanswered before another process may take the channel.
+    /// Comfortably larger than `busyMode`'s 10 s, as TD-21 requires, and larger than one fetch's
+    /// 30 s timeout — the longest gap between heartbeats a live holder can produce.
+    static let channelLeaseTTL: TimeInterval = 120
+
+    static var processID: Int32 { ProcessInfo.processInfo.processIdentifier }
+
+    /// Claims exclusive write access to a channel for this process — "one writer per channel"
+    /// enforced across processes, where the busy timeout could only bound the symptom (TD-21).
+    ///
+    /// A lease already held is stolen when its heartbeat is older than `channelLeaseTTL` or its
+    /// pid is dead — covering a crashed holder (stolen at once) and a pid reused by an unrelated
+    /// process (stolen once the heartbeat lapses). The staleness check and the claim share one
+    /// `dbPool.write`: GRDB begins write transactions as IMMEDIATE, so the write lock is held
+    /// before the row is read. A read that later escalates would be the one `SQLITE_BUSY` a
+    /// timeout cannot prevent.
+    public func acquireChannelLease(for username: String) throws {
+        try dbPool.write { db in
+            let cutoff = Date().addingTimeInterval(-Self.channelLeaseTTL)
+            if let lease = try Row.fetchOne(db, sql: """
+                SELECT pid, heartbeat FROM channelLease WHERE channelUsername = ?
+                """, arguments: [username]) {
+                let pid: Int32 = lease["pid"]
+                let fresh = (lease["heartbeat"] as Date) > cutoff
+                // ESRCH means dead; EPERM means alive but another user's — not ours to steal from.
+                let alive = kill(pid, 0) == 0 || errno == EPERM
+                if fresh && alive {
+                    throw StoreError.channelLeaseHeld(channel: username, pid: pid)
+                }
+                try db.execute(sql: "DELETE FROM channelLease WHERE channelUsername = ?",
+                               arguments: [username])
+            }
+            let nonce = UUID().uuidString
+            try db.execute(sql: """
+                INSERT INTO channelLease (channelUsername, pid, nonce, heartbeat) VALUES (?,?,?,?)
+                """, arguments: [username, Self.processID, nonce, Date()])
+            leaseTokens.set(nonce, for: username)
+        }
+    }
+
+    /// Renews the lease's heartbeat **inside a channel-scoped write transaction** — and refuses
+    /// the write when no row names this pid.
+    ///
+    /// A holder suspended past the TTL can resume to find its lease stolen; a renewal that ran
+    /// apart from the write would update zero rows and say nothing, letting the displaced writer
+    /// interleave its remaining writes with the stealer's (PR #3, review round 3). Asserting in
+    /// the same transaction as the posts, identity, or crawl-state write is what stops that.
+    /// `upsert` stays unleased — it is the seeding/fixture primitive, not the run path.
+    ///
+    /// The nonce does what the pid cannot: two `Store` values share a process, so only the
+    /// token a lease was taken with tells the holder from a same-process interloper. A `nil`
+    /// token — this `Store` never acquired — matches nothing and is refused like a stolen lease.
+    func assertChannelLease(in db: Database, channel username: String) throws {
+        try db.execute(sql: """
+            UPDATE channelLease SET heartbeat = ?
+            WHERE channelUsername = ? AND pid = ? AND nonce = ?
+            """, arguments: [Date(), username, Self.processID, leaseTokens.token(for: username)])
+        if try Int.fetchOne(db, sql: "SELECT changes()") == 0 {
+            throw StoreError.channelLeaseLost(channel: username)
+        }
+    }
+
+    /// Releases the lease **only if this `Store` still holds it** — a stolen lease is the
+    /// stealer's, and deleting it would re-open the channel mid-run.
+    public func releaseChannelLease(for username: String) throws {
+        // Capture the nonce BEFORE the row delete: a same-Store reacquisition between the two
+        // holds a different nonce, and removing its token would orphan its lease (round 5).
+        let nonce = leaseTokens.token(for: username)
+        try dbPool.write { db in
+            try db.execute(sql: """
+                DELETE FROM channelLease WHERE channelUsername = ? AND pid = ? AND nonce = ?
+                """, arguments: [username, Self.processID, nonce])
+        }
+        leaseTokens.remove(username, onlyIf: nonce)
+    }
+
+    /// Claims `username` for the chat `rawChannelID`, **atomically**: the checks and the write
+    /// share one transaction, so a concurrent claimant cannot pass the same checks against the
+    /// same old state (PR #3, review round 1). The caller holds the channel's lease.
+    ///
+    /// `nil` id means the caller could not learn the chat's id (an unverified import): the row
+    /// is ensured and its *reachability* corrected — imported posts make a `previewDisabled` or
+    /// `unresolvable` row a `group`, and leaving the stale class would misreport it (PR #3,
+    /// review round 5) — while its `rawChannelID`, known or not, is left alone.
+    public func claimChannelIdentity(username: String, rawChannelID: Int64?,
+                                     reachability: Channel.Reachability) throws {
+        try dbPool.write { db in
+            try assertChannelLease(in: db, channel: username)
+            if let row = try Row.fetchOne(db, sql: """
+                SELECT rawChannelID, reachability FROM channel WHERE username = ?
+                """, arguments: [username]) {
+                if row["reachability"] as String == Channel.Reachability.webPreview.rawValue {
+                    throw StoreError.channelCrawled(username)
+                }
+                let known: Int64 = row["rawChannelID"]
+                if let rawChannelID, known != 0, known != rawChannelID {
+                    throw StoreError.channelIDConflict(
+                        "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
+                }
+            }
+            if let rawChannelID {
+                let others = try String.fetchAll(db, sql: """
+                    SELECT username FROM channel WHERE rawChannelID = ? AND username != ?
+                    ORDER BY username
+                    """, arguments: [rawChannelID, username])
+                if !others.isEmpty {
+                    throw StoreError.channelIDConflict(
+                        "chat \(rawChannelID) is already stored as @\(others.joined(separator: ", @")) — renamed? "
+                      + "Until S7 one chat can have only one row")
+                }
+            }
+            try db.execute(sql: """
+                INSERT INTO channel (username, rawChannelID, reachability) VALUES (?, 0, ?)
+                ON CONFLICT(username) DO UPDATE SET reachability = excluded.reachability
+                """, arguments: [username, reachability.rawValue])
+            if let rawChannelID {
+                try db.execute(sql: """
+                    UPDATE channel SET rawChannelID = ? WHERE username = ?
+                    """, arguments: [rawChannelID, username])
+            }
         }
     }
 }
@@ -443,6 +692,9 @@ extension Store {
         public var longestGap: Int
         public var longestGapStart: Int?
         public var backfillComplete: Bool
+        /// How the channel is reached. A `.group` came from a chat export: it has no pages to
+        /// miss, and its service messages — joins, pins — occupy ids no post will ever fill.
+        public var reachability: Channel.Reachability?
     }
 
     public func integrity(forChannel username: String) throws -> Integrity? {
@@ -480,14 +732,16 @@ extension Store {
             // the last post is an album its span runs past that id, which would make
             // `unexplained` negative and coverage exceed 100%.
             let hi = highestCovered
-            let complete = try Bool.fetchOne(db,
-                sql: "SELECT backfillComplete FROM channel WHERE username = ?",
-                arguments: [username]) ?? false
+            let channel = try Row.fetchOne(db,
+                sql: "SELECT backfillComplete, reachability FROM channel WHERE username = ?",
+                arguments: [username])
+            let complete: Bool = channel?["backfillComplete"] ?? false
+            let reachability = (channel?["reachability"] as String?).flatMap(Channel.Reachability.init(rawValue:))
 
             return Integrity(lowest: lo, highest: hi, posts: spans.count,
                              covered: covered, unexplained: (hi - lo + 1) - covered,
                              longestGap: longest, longestGapStart: longestStart,
-                             backfillComplete: complete)
+                             backfillComplete: complete, reachability: reachability)
         }
     }
 }

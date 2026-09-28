@@ -127,6 +127,24 @@ Those checks stopped being hand-run in round 8 — `Scripts/mutation-check.sh` r
 from `Scripts/mutants/*.patch`, each patch putting one fixed bug back. The review lessons are encoded
 in `REVIEW.md`.
 
+### S5.5 — groups from a chat export, `tgkb import` ✅ *(done)*
+Inserted 2026-09-21. A knowledge base beyond iOS needed groups: the FSTEC/ISP RAS static- and
+dynamic-analysis community lives in public groups (`@sdl_static`, `@sdl_dynamic`), which no
+Phase-1 source reaches. Rationale is in <doc:Design> § *A chat export is the way in for a group*.
+
+- **Track A first, as its own commits:** `FormatSource.export`, and store reads for a channel's
+  identity, its stored ids, and reachability in `Integrity`.
+- **Then B:** `ChatExportParser` for the HTML a Telegram client writes, and `MessageEmbed` for
+  the one web page a group's message has.
+- **Then the sync library:** `ChatImport` verifies against one embed, allows one chat one row, and
+  writes in batches of `commitPage`.
+- **Then C:** `tgkb import`, plus `doctor` wording for groups.
+
+**Done:** a real export of a 12,471-message group imports in 38 s (release build), verified
+against `t.me`. Every count matches the markup: none unreadable, 1,324 service messages, and
+photos, files, polls, reactions, previews and replies as counted in the HTML. A Russian query
+returns its messages with permalinks.
+
 ### S6 — `tgkb-mcp`
 **Load the `mcp-builder` skill first** — it is from `anthropics/skills`, already installed, and
 covers exactly this. Designing the tool surface from the SDK research alone would skip it
@@ -207,7 +225,15 @@ end-to-end** against a channel already crawled from the web (`TD-8`). Then `tgkb
 `updateMessageInteractionInfo`, and `format` stored with its source (<doc:Design>).
 
 Unlocks the two channels the web preview cannot reach: `@iosmmcresources` (preview disabled) and
-`@AllByiOS` (a group).
+`@AllByiOS` (a group). A group can already come in from a chat export (`S5.5`); TDLib adds
+incremental updates and the chats nobody exported.
+
+**Fetch through Telegram's own export.** The clients' exporters use the takeout API. A
+`tgkb` fetch path through it would take a whole chat, including one never synced, and feed the
+same `ChatImport` that `tgkb import` uses. The manual export step goes, and the parse-and-write
+path stays one. It needs the logged-in session this phase brings. Telegram may delay a data
+export on a new device by hours ("you will be able to begin downloading your data in…"), so the
+first run needs a session that has already cleared that.
 
 ## Next — Phase 3: retrieval quality
 

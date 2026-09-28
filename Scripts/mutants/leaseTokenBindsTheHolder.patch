@@ -1,0 +1,15 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 33047f6..1ddd31f 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -572,8 +572,8 @@ extension Store {
+     func assertChannelLease(in db: Database, channel username: String) throws {
+         try db.execute(sql: """
+             UPDATE channelLease SET heartbeat = ?
+-            WHERE channelUsername = ? AND pid = ? AND nonce = ?
+-            """, arguments: [Date(), username, Self.processID, leaseTokens.token(for: username)])
++            WHERE channelUsername = ? AND pid = ?
++            """, arguments: [Date(), username, Self.processID])
+         if try Int.fetchOne(db, sql: "SELECT changes()") == 0 {
+             throw StoreError.channelLeaseLost(channel: username)
+         }

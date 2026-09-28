@@ -1,0 +1,26 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index fd5b62d..114e48c 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -533,9 +533,6 @@ extension Store {
+             if let row = try Row.fetchOne(db, sql: """
+                 SELECT rawChannelID, reachability FROM channel WHERE username = ?
+                 """, arguments: [username]) {
+-                if row["reachability"] as String == Channel.Reachability.webPreview.rawValue {
+-                    throw StoreError.channelCrawled(username)
+-                }
+                 let known: Int64 = row["rawChannelID"]
+                 if let rawChannelID, known != 0, known != rawChannelID {
+                     throw StoreError.channelIDConflict(
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 4c6a774..0377fd5 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -115,7 +115,6 @@ public struct ChatImport: Sendable {
+         guard !export.posts.isEmpty else { throw ImportError.nothingReadable(unreadable: export.unreadable) }
+ 
+         let known = try store.identity(forChannel: channel)
+-        if known?.reachability == .webPreview { throw ImportError.crawledChannel(channel) }
+ 
+         // Held from here to the last batch: a second tgkb writing this channel fails fast
+         // instead of interleaving its checks and rows with ours.

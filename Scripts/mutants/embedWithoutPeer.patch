@@ -1,0 +1,18 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 64619a7..1e93bf1 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -235,12 +235,7 @@ public struct ChatImport: Sendable {
+         guard offset == 0 else {
+             throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
+         }
+-        // A verified page that names no chat cannot feed the identity checks — returning nil
+-        // here once let a marked-verified import skip them and store identity 0 (PR #3).
+-        guard let rawID = try MessageEmbed.rawChannelID(html: page.body) else {
+-            throw ImportError.malformedEmbed(url)
+-        }
+-        return rawID
++        return try MessageEmbed.rawChannelID(html: page.body)
+     }
+ 
+     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and
