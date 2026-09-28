@@ -499,13 +499,13 @@ for minutes in our surface — every MCP call is a fresh short read. The unmanag
 **residue**: the file keeps its high-water size while any reader stays attached, and it outlives
 `SIGTERM`ed processes because no close-checkpoint runs.
 
-**Discharged by:** `Store.truncateWAL()` — a `.truncate` checkpoint at the end of each
-`ChannelSync.sync` write session (and the `--import-resolutions` path, which bypasses it), so
-every write session ends by giving the space back. The attempt runs with an immediate busy
+**Discharged by:** `Store.truncateWAL()` — a `.truncate` checkpoint at the end of every write
+session, run through one rule, `Store.endingWithWALReclaim`: a channel sync, a chat-export
+import, and `--import-resolutions` all end by giving the space back. The attempt runs with an immediate busy
 policy — the writer's 10s timeout would otherwise stall cleanup behind a pinned reader.
 `SQLITE_BUSY` (a reader mid-snapshot) is tolerated: the residue then clears on the next
-writer's checkpoint; any other error surfaces as `Outcome.walCleanupFailed` (or, when the walk
-itself failed, as `ChannelSync.CleanupAlsoFailed` carrying both errors). No mid-backfill
+writer's checkpoint; any other error surfaces as the outcome's `walCleanupFailed` (or, when the
+session itself failed, as `Store.CleanupAlsoFailed` carrying both errors). No mid-backfill
 cadence — the measurement showed checkpoints already slip through; and never
 `.full`/`.restart`/`.truncate` mid-walk, which would block on readers.
 
