@@ -99,6 +99,10 @@ there rather than re-arguing the decision.
   Use the `NodeText` walk.
 - Flag a body selector in `Sources/TelegramKBIngest/WebPreviewParser.swift` that can match
   `js-message_reply_text`.
+- Flag `try?` on a cleanup a write session owes — `Store.releaseChannelLease`, `Store.truncateWAL`
+  — anywhere in `Sources/`. Run the session through `Store.holdingChannelLease` or
+  `Store.endingWithWALReclaim`, which carry a failed cleanup with the run's error or report it on
+  the outcome.
 - Flag `@unchecked Sendable` or `nonisolated(unsafe)` added in `Sources/` to silence a Swift 6
   diagnostic; use an actor.
 - Flag posts retained in `WebPreviewSource.crawl` when `onPage` is given.

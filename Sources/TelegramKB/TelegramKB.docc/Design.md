@@ -356,6 +356,9 @@ release cannot delete a sibling's row (review round 4) nor erase a *reacquisitio
 the token map's remove is conditional on the nonce the releaser captured (round 5). A claimant steals the lease only from a
 dead pid or a heartbeat older than the 120 s TTL. The `upsert` primitives stay unleased — they
 are the seeding/fixture path, not a run. No lock file.
+Both writers take the lease through `Store.holdingChannelLease`, which releases it under the same
+end-of-session rule as the WAL reclaim: a release that fails rides along with a failed run's
+error, or is reported on a finished run's outcome — never a `try?` (2026-10-06).
 That was `TD-21`'s discharge; PR #3's review supplied the import-side instance that made it real.
 
 ## Channel identity is `rawChannelID`, not the username

@@ -464,7 +464,11 @@ hold: every channel-scoped write transaction renews the heartbeat and refuses wh
 longer names this holder, so a holder suspended past the TTL cannot resume and interleave with
 the stealer (`Store.assertChannelLease`). The row's `nonce` is per `Store` value — a pid alone
 cannot tell two stores in one process apart, so the assertion and the release both bind it
-(review round 4).
+(review round 4). A release that fails is reported, not dropped: both writers ran it as
+`defer { try? … }`, the shape PR #6 rejected for the WAL reclaim, so the row stayed and nothing
+said why the channel was busy. `Store.holdingChannelLease` now runs every leased session under
+the reclaim's rule — carried in `Store.CleanupAlsoFailed` after a failed run, returned as the
+outcome's `leaseReleaseFailed` after one whose commits landed (2026-10-06).
 
 `busyMode = .timeout(10)` makes a second writer wait rather than fail instantly, which is right
 for two writers on *different* channels sharing one file. Two on the *same* channel now see the
@@ -505,7 +509,8 @@ import, and `--import-resolutions` all end by giving the space back. The attempt
 policy — the writer's 10s timeout would otherwise stall cleanup behind a pinned reader.
 `SQLITE_BUSY` (a reader mid-snapshot) is tolerated: the residue then clears on the next
 writer's checkpoint; any other error surfaces as the outcome's `walCleanupFailed` (or, when the
-session itself failed, as `Store.CleanupAlsoFailed` carrying both errors). No mid-backfill
+session itself failed, as `Store.CleanupAlsoFailed` carrying both errors — and the lease
+release's too, when that failed first). No mid-backfill
 cadence — the measurement showed checkpoints already slip through; and never
 `.full`/`.restart`/`.truncate` mid-walk, which would block on readers.
 
