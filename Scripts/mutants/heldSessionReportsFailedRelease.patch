@@ -1,5 +1,5 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index 2b9b42d..32804ed 100644
+index 4266a96..b4e44df 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
 @@ -749,9 +749,8 @@ extension Store {
@@ -13,4 +13,4 @@ index 2b9b42d..32804ed 100644
 +        return (try await session(), false)
      }
  
-     /// Claims `username` for the chat `rawChannelID`, **atomically**: the checks and the write
+     /// A stored post as an identity claim compares it: what a second export of the same chat
