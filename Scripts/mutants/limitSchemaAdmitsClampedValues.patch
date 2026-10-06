@@ -1,9 +1,9 @@
 diff --git a/Sources/TelegramKBMCP/Tools.swift b/Sources/TelegramKBMCP/Tools.swift
-index 8b996bd..c0c0332 100644
+index 636e228..62d849f 100644
 --- a/Sources/TelegramKBMCP/Tools.swift
 +++ b/Sources/TelegramKBMCP/Tools.swift
-@@ -63,7 +63,7 @@ enum TGKBTools {
-                                  "default": "both"]),
+@@ -69,7 +69,7 @@ enum TGKBTools {
+                                  "description": "`words`: whole words, folded and lemmatised. `substring`: inside words, 3+ characters — `imation` finds Animation. `both`: word hits, then substring-only ones."]),
                  // No `maximum`: the handler clamps a larger value, and a validating client would
                  // refuse it before the clamp could run.
 -                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,
@@ -11,8 +11,8 @@ index 8b996bd..c0c0332 100644
                                    "description": "Page size, at most \(maxLimit); larger values are clamped."]),
                  "cursor": .object(["type": "string",
                                     "description": "The previous page's next_cursor, verbatim."]),
-@@ -100,7 +100,7 @@ enum TGKBTools {
-                                 "description": "Any spelling — raw, canonical, or shortener."]),
+@@ -109,7 +109,7 @@ enum TGKBTools {
+                                 "description": "A whole link, e.g. `https://example.com/blog/post-1` — raw, canonical, or a shortener."]),
                  // No `maximum`: the handler clamps a larger value, and a validating client would
                  // refuse it before the clamp could run.
 -                "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,

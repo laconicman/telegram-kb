@@ -197,7 +197,8 @@ public enum TGKBServer {
         guard let post = try store.post(id) else {
             // A successful call with no such post is still a failed lookup — isError, so the
             // model does not mistake an empty result for a post that exists.
-            return failure("No post \(ref) in the archive.")
+            return failure("No post \(ref) in the archive. Take `post` from a tgkb_search_posts or "
+                           + "tgkb_find_links record.")
         }
         return try CallTool.Result(
             content: [.text(text: render(post), annotations: nil, _meta: nil)],
@@ -225,6 +226,12 @@ public enum TGKBServer {
     /// One hit per pair of lines: `date  permalink  [by author]  [♥n]`, then the snippet. The
     /// permalink names the channel; a signed post's author has nowhere else to appear in text.
     static func render(_ posts: [PostSummary], total: Int, nextCursor: String?) -> String {
+        // No match is the case where an invented answer does the most harm, so say it in words —
+        // and what else to try, since nothing here translates a query.
+        guard total > 0 else {
+            return "No posts match. Every word must appear in a post: try fewer or other words, "
+                 + "synonyms, or the language the posts are written in — nothing is translated."
+        }
         var lines = posts.map {
             "\($0.date.prefix(10))  \($0.link)\($0.author.map { "  by \($0)" } ?? "")"
                 + "\($0.reactions > 0 ? "  ♥\($0.reactions)" : "")\n    \($0.snippet)"
@@ -234,7 +241,10 @@ public enum TGKBServer {
     }
 
     static func render(_ links: [LinkHitRecord], total: Int, nextCursor: String?) -> String {
-        guard total > 0 else { return "No posts link to that URL." }
+        guard total > 0 else {
+            return "No posts link to that URL. It must be a whole link, not a site or a word; to search "
+                 + "by site or topic, use tgkb_search_posts, which indexes link-preview titles."
+        }
         let foot = footer(links.count, of: total, noun: "post", nextCursor: nextCursor)
         guard !links.isEmpty else { return foot }
         return links.map {
@@ -242,6 +252,8 @@ public enum TGKBServer {
             if let resolved = $0.resolved_url, resolved != $0.url_raw {
                 line += "  →  \(resolved)"
             }
+            // What the post said about the link — the same snippet the structured record carries.
+            if !$0.snippet.isEmpty { line += "\n    \($0.snippet)" }
             return line
         }
         .joined(separator: "\n") + "\n\n" + foot
@@ -271,6 +283,14 @@ public enum TGKBServer {
         } else if p.text.isEmpty {
             lines.append("[\(p.kind.rawValue), no text]")
         }
+        // What the post shared. A body often says "статья" over its URL, so without these a
+        // text-only client sees a post about a link it cannot name.
+        if !p.links.isEmpty {
+            lines.append("Links:")
+            lines.append(contentsOf: p.links.map { link in
+                "  • \(link.urlRaw)" + (link.preview?.title.map { " — \($0)" } ?? "")
+            })
+        }
         return lines.joined(separator: "\n")
     }
 }
@@ -292,7 +312,8 @@ struct Args {
     func expecting(_ keys: [String]) throws {
         let extra = values.keys.filter { !keys.contains($0) }
         guard extra.isEmpty else {
-            throw ToolInputError("unknown argument(s): \(extra.sorted().joined(separator: ", "))")
+            throw ToolInputError("unknown argument(s): \(extra.sorted().joined(separator: ", ")) — "
+                                 + "accepted: \(keys.joined(separator: ", "))")
         }
     }
 

@@ -31,36 +31,42 @@ enum TGKBTools {
         name: "tgkb_search_posts",
         title: "Search Telegram posts",
         description: """
-            Full-text search over the indexed Telegram archive. Returns compact records — \
-            channel, date, author, snippet, reaction count, and a t.me link — never full post \
-            bodies; follow up with tgkb_get_post for one post's full text. Pass next_cursor back as \
-            `cursor` to continue a result list; `total` reports every match before truncation. \
-            `mode`: "words" matches folded/lemmatised words, "substring" matches inside words \
-            (min 3 chars), "both" (default) is word hits then substring-only hits.
+            Search a local archive of Telegram channel and group posts. Matches post text, \
+            link-preview titles and descriptions, poll questions and options, hashtags and author \
+            names. Every word must appear — there are no AND/OR/NOT operators, so run one search \
+            per alternative — and quoted words must appear in that order. Words match across case, \
+            ё/е and, for Russian, inflection; nothing is translated, so search in the language the \
+            posts are written in. Returns compact records — post, channel, date, author, kind, \
+            snippet, reaction count and a citable t.me link — never full bodies: call \
+            tgkb_get_post for a post's full text and its links. `total` counts every match; pass \
+            next_cursor back as `cursor` for the next page. For the posts that shared one \
+            particular URL, use tgkb_find_links.
             """,
         inputSchema: .object([
             "type": "object",
             "properties": .object([
                 "query": .object([
                     "type": "string",
-                    "description": "Search terms; quote a run of words to require that order."
+                    "description": "Words that must all appear, e.g. `навигация SwiftUI`. Quote a run of words to require that order: `\"чистая архитектура\"`."
                 ]),
                 "channel": .object([
                     "type": "string",
-                    "description": "Restrict to one channel — the @username literal records emit."
+                    "description": "Restrict to one channel or group: the `channel` value of a record, e.g. `somechannel`; a leading @ is accepted."
                 ]),
                 "kind": .object([
                     "type": "string",
-                    "enum": .array(postKinds.map { .string($0) })
+                    "enum": .array(postKinds.map { .string($0) }),
+                    "description": "Restrict to one kind of post, e.g. `poll` or `video`."
                 ]),
                 // No `format: date-time` — a validating client would refuse the YYYY-MM-DD
                 // spelling the decoder accepts.
                 "from": .object(["type": "string",
-                                 "description": "Oldest post date, inclusive; ISO-8601, or YYYY-MM-DD for a whole UTC day."]),
+                                 "description": "Oldest post date, inclusive: ISO-8601 (`2024-03-01T09:30:00Z`), or YYYY-MM-DD for a whole UTC day."]),
                 "to": .object(["type": "string",
-                               "description": "Newest post date, inclusive; ISO-8601, or YYYY-MM-DD for a whole UTC day."]),
+                               "description": "Newest post date, inclusive: ISO-8601 (`2024-03-31T18:00:00Z`), or YYYY-MM-DD for a whole UTC day."]),
                 "mode": .object(["type": "string", "enum": ["words", "substring", "both"],
-                                 "default": "both"]),
+                                 "default": "both",
+                                 "description": "`words`: whole words, folded and lemmatised. `substring`: inside words, 3+ characters — `imation` finds Animation. `both`: word hits, then substring-only ones."]),
                 // No `maximum`: the handler clamps a larger value, and a validating client would
                 // refuse it before the clamp could run.
                 "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,
@@ -86,18 +92,21 @@ enum TGKBTools {
         name: "tgkb_find_links",
         title: "Find posts by linked URL",
         description: """
-            Which posts shared a URL. Matches on the link's effective URL — its canonical form, \
-            or what it resolved to — so a shortener (clck.ru, bit.ly) query finds the \
-            destination's posts and a destination query finds every spelling that resolved to \
-            it. Each record returns url_canonical (the join key) with the resolved target beside \
-            it, plus the post's t.me link. Pass next_cursor back as `cursor` to continue a \
-            result list; `total` reports every match before truncation.
+            The posts that shared one URL. Takes a whole link in any spelling and matches on \
+            where it leads — its canonical form, or what it resolved to — so a shortener \
+            (clck.ru, bit.ly) finds the destination's posts, and a destination finds every \
+            spelling that resolved to it. A site or a word is not a link: `example.com` does not \
+            find example.com's articles; to search by site or topic, use tgkb_search_posts, which \
+            indexes link-preview titles. Each record: the post, its date, the URL as written \
+            (url_raw), its canonical form (url_canonical, the join key), where it leads \
+            (resolved_url), a snippet and the post's t.me link. `total` counts every match; pass \
+            next_cursor back as `cursor` for the next page.
             """,
         inputSchema: .object([
             "type": "object",
             "properties": .object([
                 "url": .object(["type": "string",
-                                "description": "Any spelling — raw, canonical, or shortener."]),
+                                "description": "A whole link, e.g. `https://example.com/blog/post-1` — raw, canonical, or a shortener."]),
                 // No `maximum`: the handler clamps a larger value, and a validating client would
                 // refuse it before the clamp could run.
                 "limit": .object(["type": "integer", "default": .int(defaultLimit), "minimum": 0,
@@ -123,16 +132,17 @@ enum TGKBTools {
         name: "tgkb_get_post",
         title: "Fetch one post",
         description: """
-            The full record for one post: complete text, reactions, links with previews, poll, \
-            forward origin, views, hashtags. Accepts the `@channel/id` literal that tgkb_search_posts \
-            and tgkb_find_links emit, or its https://t.me/channel/id form.
+            The full record for one post: complete text, author, date, the links it carries with \
+            Telegram's previews of them, reactions, poll, forward origin, views and hashtags. \
+            Takes the `post` value of a tgkb_search_posts or tgkb_find_links record, or the \
+            post's t.me link.
             """,
         inputSchema: .object([
             "type": "object",
             "properties": .object([
                 "post": .object([
                     "type": "string",
-                    "description": "@channel/id or https://t.me/channel/id"]),
+                    "description": "`@somechannel/123`, or `https://t.me/somechannel/123`."]),
             ]),
             "required": ["post"],
             "additionalProperties": false,

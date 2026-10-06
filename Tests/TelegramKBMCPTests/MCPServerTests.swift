@@ -44,6 +44,14 @@ struct MCPServerTests {
         return (client, server)
     }
 
+    /// The text block — all a client that renders only `content` ever shows the model.
+    static func text(_ result: CallTool.Result) throws -> String {
+        guard case .text(let text, _, _) = result.content.first else {
+            throw MCPError.internalError("expected a text content block")
+        }
+        return text
+    }
+
     /// `structuredContent` decoded back to the declared output type.
     static func decode<Output: Decodable>(_ result: CallTool.Result, as: Output.Type) throws
         -> Output {
@@ -169,7 +177,7 @@ struct MCPServerTests {
             try await client.callTool(
                 name: "tgkb_search_posts", arguments: ["query": .int(3)]).value
         }
-        await Self.expectToolError("misspelled key", mentioning: "chanel") {
+        await Self.expectToolError("misspelled key", mentioning: "chanel — accepted: query, channel") {
             try await client.callTool(
                 name: "tgkb_search_posts", arguments: ["query": "x", "chanel": "iosgr"]).value
         }
@@ -486,6 +494,51 @@ struct MCPServerTests {
         #expect(!text.contains("no text"), "a poll is not an empty post")
     }
 
+    /// 🟡 No match rendered as a blank line and "0 result(s)": nothing a model could act on, in the
+    /// one case where an invented answer does the most harm (`G10`). The mcp-builder review.
+    @Test("a search with no match says so, and what to try instead")
+    func emptySearchSaysSo() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        let result = try await client.callTool(
+            name: "tgkb_search_posts", arguments: ["query": "гравитационные волны"]).value
+        #expect(result.isError != true, "no match is an answer, not a failure")
+        #expect(try Self.decode(result, as: SearchPostsOutput.self).total == 0)
+        let text = try Self.text(result)
+        #expect(text.hasPrefix("No posts match"))
+        #expect(text.contains("language"), "the archive is searched as written, never translated")
+    }
+
+    /// 🟡 `tgkb_get_post`'s text carried the body and a poll but none of the post's links, so a client
+    /// showing only `content` could not see what a post shared — and a post that says "статья"
+    /// over its URL names nothing else. The mcp-builder review.
+    @Test("tgkb_get_post's text lists the links a post carries, with Telegram's preview title")
+    func getPostTextCarriesLinks() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 7),
+                 date: Date(timeIntervalSince1970: 1_700_000_007),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "Хорошая статья про запуск",
+                 links: [LinkRef(urlRaw: "https://example.com/blog/launch-time",
+                                 preview: LinkPreview(siteName: "Example", title: "Cutting launch time",
+                                                      observedAt: Date(timeIntervalSince1970: 1_700_000_008)))]),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let text = try Self.text(try await client.callTool(
+            name: "tgkb_get_post", arguments: ["post": "@iosgr/7"]).value)
+        #expect(text.contains("https://example.com/blog/launch-time"))
+        #expect(text.contains("Cutting launch time"))
+    }
+
+    /// 🟡 `tgkb_find_links`' text gave a date, a permalink and the URL — not what the post said about
+    /// it, which `structuredContent` carried as `snippet`. The mcp-builder review.
+    @Test("tgkb_find_links' text carries each post's snippet, as tgkb_search_posts' does")
+    func findLinksTextCarriesSnippet() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        let text = try Self.text(try await client.callTool(
+            name: "tgkb_find_links", arguments: ["url": "https://clck.ru/33ABCD"]).value)
+        #expect(text.contains("Вёрстка в SwiftUI"))
+    }
+
     /// 🟡 The search text listed date, permalink, reactions and snippet — the author only lived in
     /// `structuredContent`, so a text-only client could not tell who signed a hit.
     @Test("tgkb_search_posts text names a signed post's author, beside the permalink that names its channel")
@@ -530,9 +583,9 @@ struct MCPServerTests {
             name: "tgkb_get_post", arguments: ["post": "https://t.me/iosgr/1"]).value
         #expect(try Self.decode(viaLink, as: PostDetail.self).message_id == 1)
 
-        let missing = try await client.callTool(
-            name: "tgkb_get_post", arguments: ["post": "@iosgr/404"]).value
-        #expect(missing.isError == true)
+        await Self.expectToolError("a missing post", mentioning: "tgkb_search_posts") {
+            try await client.callTool(name: "tgkb_get_post", arguments: ["post": "@iosgr/404"]).value
+        }
         await Self.expectToolError("unparseable post ref", mentioning: "not a ref") {
             try await client.callTool(name: "tgkb_get_post",
                                       arguments: ["post": "not a ref"]).value

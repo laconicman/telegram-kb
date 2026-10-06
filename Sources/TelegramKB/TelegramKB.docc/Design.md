@@ -539,6 +539,13 @@ details the spec-level decisions left open:
   invitation to fetch more — and prints the cursor itself, under the name of the argument
   that takes it (`cursor`, not the `next_cursor` field it came from), since a client that
   shows only `content` has no other way to obtain it.
+- **The text rendering stands on its own.** A client may show the model only `content`, so the
+  text carries what an answer needs: `tgkb_find_links` gives each post's snippet, `tgkb_get_post`
+  lists the post's links with Telegram's preview title — a body often says "статья" over its URL
+  — and a search with no match says so in words, with what to try, because that is where an
+  invented answer does most harm (`G10`). Tool descriptions say what is indexed, that every word
+  must appear, that nothing is translated, and that `tgkb_find_links` takes a whole link, not a
+  site. All from the `mcp-builder` review, 2026-10-06.
 - **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
   load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
   from a second read would pair them with bodies from whatever a concurrent sync had committed
