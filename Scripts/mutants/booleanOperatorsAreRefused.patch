@@ -1,0 +1,20 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index 30e4e9c..be73b9d 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -104,15 +104,6 @@ public enum TGKBServer {
+         // `startup OR launch` matched nothing, and `swiftui NOT uikit` only posts WITH uikit. A
+         // wrong answer that looks like an answer; refusing it is what lets the model recover.
+         // Here, not in `QueryParser`: `tgkb query` shares the grammar and is not a model.
+-        let operators = QueryParser.parse(query).tokens.filter(queryOperators.contains)
+-        guard operators.isEmpty else {
+-            throw ToolInputError("""
+-                query has no operators: "\(operators[0])" would be searched as a word, since every \
+-                word must appear in a post. Search each alternative in a separate call; to exclude \
+-                a word, leave it out and filter the results yourself. To search for the word \
+-                itself, put it in quotes.
+-                """)
+-        }
+         var filter = Store.SearchFilter()
+         if let channel = try args.string("channel") {
+             // The record emits `@username`; accept the bare form too — a model that drops the

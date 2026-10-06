@@ -179,6 +179,26 @@ struct MCPServerTests {
         }
     }
 
+    /// 🔴 There are no query operators — every word must appear — so `OR` was searched as a word.
+    /// On the owner's corpus `startup OR launch` returned 0 where `startup` alone matched 11 and
+    /// `launch` 58, and `swiftui NOT uikit` returned six posts, each containing "uikit": wrong
+    /// answers with nothing to say so. The mcp-builder review, 2026-10-06.
+    @Test("AND, OR and NOT outside quotes are refused with what to do instead, not searched as words")
+    func booleanOperatorsAreRefused() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        for (query, op) in [("вёрстка OR моки", "OR"), ("вёрстка AND clck", "AND"), ("про NOT моки", "NOT")] {
+            await Self.expectToolError(query, mentioning: "\"\(op)\"") {
+                try await client.callTool(name: "tgkb_search_posts", arguments: ["query": .string(query)]).value
+            }
+        }
+        // Quoted, it is the word itself; lowercase, an ordinary word. Neither is refused.
+        for query in ["\"про OR\"", "вёрстка or"] {
+            let result = try await client.callTool(
+                name: "tgkb_search_posts", arguments: ["query": .string(query)]).value
+            #expect(result.isError != true, "\(query) is a search for words, not an operator")
+        }
+    }
+
     @Test("tgkb_search_posts honours the @channel filter")
     func searchFiltersChannel() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())

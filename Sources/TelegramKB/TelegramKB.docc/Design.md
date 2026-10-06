@@ -514,6 +514,13 @@ details the spec-level decisions left open:
   self-correction" (changelog item 5, SEP-1303), and both revisions list unknown tools as protocol
   errors. The SDK's conformance server, cited for the old unknown-tool convention, returns
   `isError` for bad arguments too ("Invalid arguments: expected numbers a and b").
+- **There are no query operators, and the tool says so.** Every word must appear, so a model's
+  habitual `startup OR launch` searched for the word "or" and matched nothing (11 and 58 posts
+  alone, on the owner's corpus), and `swiftui NOT uikit` returned only posts containing "uikit".
+  `tgkb_search_posts` refuses an uppercase `AND`, `OR` or `NOT` outside quotes with what to do
+  instead; quoted or lowercase, it is a word. The check lives in the MCP handler, not in
+  `QueryParser`, which `tgkb query` shares. Real operators would be a grammar change in Track A
+  (<doc:Roadmap>).
 - **fd 1 is made untouchable.** `guardedStdioTransport` `dup`s real stdout to a spare
   descriptor for the transport, then `dup2`s stderr onto fd 1 — after which a stray `print()`
   lands on the spec-sanctioned diagnostics channel instead of corrupting JSON-RPC framing

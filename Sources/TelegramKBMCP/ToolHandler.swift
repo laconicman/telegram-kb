@@ -92,10 +92,27 @@ public enum TGKBServer {
 
     // MARK: - tgkb_search_posts
 
+    /// What a model writes when it expects boolean search. Uppercase only: a lowercase `or` is a
+    /// word somebody may be looking for.
+    static let queryOperators: Set<String> = ["AND", "OR", "NOT"]
+
     static func searchPosts(_ args: Args, store: Store) async throws -> CallTool.Result {
         try args.expecting(["query", "channel", "kind", "from", "to", "mode", "limit", "cursor"])
         try Task.checkCancellation()
         let query = try args.require("query")
+        // There are no operators — every word must appear — so `OR` would be searched as a word:
+        // `startup OR launch` matched nothing, and `swiftui NOT uikit` only posts WITH uikit. A
+        // wrong answer that looks like an answer; refusing it is what lets the model recover.
+        // Here, not in `QueryParser`: `tgkb query` shares the grammar and is not a model.
+        let operators = QueryParser.parse(query).tokens.filter(queryOperators.contains)
+        guard operators.isEmpty else {
+            throw ToolInputError("""
+                query has no operators: "\(operators[0])" would be searched as a word, since every \
+                word must appear in a post. Search each alternative in a separate call; to exclude \
+                a word, leave it out and filter the results yourself. To search for the word \
+                itself, put it in quotes.
+                """)
+        }
         var filter = Store.SearchFilter()
         if let channel = try args.string("channel") {
             // The record emits `@username`; accept the bare form too — a model that drops the
