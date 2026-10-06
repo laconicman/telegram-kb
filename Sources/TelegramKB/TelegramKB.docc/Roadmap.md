@@ -200,6 +200,11 @@ skill this slice was told to load turned out not to be installed in the implemen
 environment — the SDK research notes (`research/mcp-swift-sdk.md`, verified against 0.12.1
 source) and a prospective DeepWiki pass on the concrete shapes substituted for it.
 
+### Typed text entities — one derivation for both HTML sources ✅ *(done)*
+`TD-26`. Both parsers map markup to `FormattedText` and `WebPage` in `TelegramKBModel`, and
+`PostText` derives `text`, `hashtags` and `links` by one rule; output byte-identical. **Next, a
+decision of its own:** mentions as a field of their own rather than `t.me` links — a schema change.
+
 ---
 
 ### S7 — channel identity by `rawChannelID`

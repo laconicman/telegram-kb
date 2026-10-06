@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBIngest/WebPreviewParser.swift b/Sources/TelegramKBIngest/WebPreviewParser.swift
+index ce35c6a..7192299 100644
+--- a/Sources/TelegramKBIngest/WebPreviewParser.swift
++++ b/Sources/TelegramKBIngest/WebPreviewParser.swift
+@@ -248,7 +248,7 @@ public enum WebPreviewParser {
+             guard let raw = href.split(separator: "=").last,
+                   let tag = String(raw).removingPercentEncoding?.replacingOccurrences(of: "#", with: "")
+             else { return nil }
+-            return TextEntity(.hashtag, text: "#" + tag)
++            return TextEntity(.hashtag, text: tag)
+         }
+         if search.hasPrefix("?q=%24") { return TextEntity(.cashtag, text: try NodeText.text(of: anchor)) }
+         return try EntityMarkup.link(anchor, href: href)

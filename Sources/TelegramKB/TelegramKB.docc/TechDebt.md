@@ -591,6 +591,50 @@ which is when a silent default does the most damage.
 mutant that puts the fallback back. `MessageEmbed.post` already refuses such a page, for this
 reason.
 
+## TD-26 — Two HTML parsers derived a post's text fields by two copies of one rule
+
+**Status: Discharged** — 2026-09-29, `1c48e7b` (the model) and `5941021` (the parsers). Both
+parsers now map their markup to typed entities and derive `text`, `hashtags` and `links` through
+one function, `PostText`. Left open on purpose: mentions as a field of their own, and entity
+offsets (below).
+
+`WebPreviewParser` (`t.me/s`) and `ChatExportParser` (a client's HTML export) each derived
+`text`, `hashtags` and `links` by their own rules, and the two copies of `links()` had already
+drifted: only the export's refused a preview whose URL was not `http(s)`, so the web stored an
+empty or `tg:` preview `href` as a link.
+
+**Why one rule fits both.** The formats come from different code — `t.me/s` is rendered
+server-side, the export by the client (tdesktop's `export_output_html.cpp`, which the macOS client
+reimplements) — but both render one MTProto message: its text, typed entities, media and a link
+preview. TDLib's `formattedText` is the same model. So the seam is typed entities, not markup.
+
+**Cost, before.** Every rule change had to be made twice, and a missed copy fails silently: a link
+recorded for one source and not the other, which no single-source test compares.
+
+**Discharged by.** `FormattedText`, `TextEntity` and `WebPage` in `TelegramKBModel` — there, not in
+`TelegramKBIngest`, so a TDLib source can produce them without linking SwiftSoup — and `PostText`,
+the one derivation; the preview's scheme check lives there once. Each parser only maps markup to
+entities (`entity(for:)`). The output is byte-identical on every committed fixture, 15 live
+`t.me/s` pages, three live embeds and five real exports: 25,907 posts compared field by field
+before and after. The
+one deliberate change is the web's preview scheme check. Proven by `crossSourceFieldsAgree`, a
+synthetic message rendered both ways, and by the mutants `crossSourceFieldsAgree` and
+`nonWebPreviewIsNotALink`.
+
+**Left open, on purpose.**
+- **A mention is still a link** to `https://t.me/<name>`, as both parsers always recorded it —
+  now a stated rule in `PostText`, not an accident. Moving mentions to a field of their own changes
+  stored rows, so it is its own decision and change (<doc:Roadmap>).
+- **Entities carry their covered text, not offsets.** When offsets come, they count UTF-16 code
+  units, as TDLib's do.
+- **A bare URL written without a scheme reads as a text URL.** Both renderers link `example.com` to
+  an address with a scheme (tdesktop's `SafeMessageHref` prepends `https://`), so the markup cannot
+  tell it from a hidden link. The link recorded is the same either way; a TDLib source will need a
+  rule for a schemeless `url` entity, whose covered text has no scheme.
+- **The web's cashtag rule is unobserved.** It reads `?q=%24…`, as PR #3 recorded. On 2026-09-28
+  no live page had such a link: 32 cashtags across 18 pages were plain text, as `t.me` writes an
+  email address. Harmless: no field derives from a cashtag.
+
 ## See Also
 
 - <doc:Design>
