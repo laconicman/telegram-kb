@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8'?>
+<evaluation>
+   <!-- The mcp-builder evaluation set for tgkb-mcp, over the synthetic corpus in corpus.json. Every answer is derived through the real server by Tests/TelegramKBMCPTests/EvalCorpusTests.swift; Scripts/run_mcp_eval.py grades a Claude model on it. See README.md beside this file. -->
+   <qa_pair>
+      <question>An article about getting an iOS app's cold launch under a time budget was shared in more than one channel, in at least one case through a link shortener. How many distinct channels shared that article? Answer with a number.</question>
+      <answer>3</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>In spring 2023 the architecture channel ran a poll on how readers manage state in their declarative-UI apps. What was the third answer option? Give the option text exactly as written.</question>
+      <answer>Redux-подобный стор</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>WWDC 2023 began on 5 June 2023. Which channel was the first to post about Swift's new compile-time code-generation feature on or after that date? Give the channel's username without the @.</question>
+      <answer>iosarch_demo</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>The architecture channel reposted another channel's write-up about splitting an app into dozens of local Swift packages. What is the t.me link of the original post?</question>
+      <answer>https://t.me/swiftdigest_demo/30</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>Which author signed the most posts in the Swift digest channel during 2022? Give the name exactly as it appears.</question>
+      <answer>Анна Смирнова</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>Of the posts published in 2022 about Apple's reactive-streams framework, which one received the most reactions? Give its t.me link.</question>
+      <answer>https://t.me/iosarch_demo/8</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>Has any channel in the archive discussed gravitational waves? Answer Yes or No.</question>
+      <answer>No</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>One post describes moving an onboarding flow's navigation into a type of its own. What is that type's name? Give the identifier exactly.</question>
+      <answer>OnboardingFlowCoordinator</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>The Swift Evolution proposal that lets a function declare the exact error type it throws was shared in several channels. On what date was it first shared? Use YYYY-MM-DD, in UTC.</question>
+      <answer>2023-10-02</answer>
+   </qa_pair>
+   <qa_pair>
+      <question>What is the date of the earliest post in the Swift digest channel that mentions Apple's declarative UI framework? Use YYYY-MM-DD, in UTC.</question>
+      <answer>2019-06-04</answer>
+   </qa_pair>
+</evaluation>

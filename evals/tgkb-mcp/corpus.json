@@ -1,0 +1,901 @@
+{
+ "note": "Synthetic. Invented channels, people and posts; every link is on a reserved example domain. Built for evals/tgkb-mcp/eval.xml.",
+ "channels": [
+  "swiftdigest_demo",
+  "iosarch_demo",
+  "applenews_demo"
+ ],
+ "resolutions": [
+  {
+   "url": "https://sho.example/cl7x",
+   "resolved": "https://perf.example.com/blog/cold-launch-budget"
+  }
+ ],
+ "posts": [
+  {
+   "channel": "applenews_demo",
+   "date": "2021-06-07T17:00:00Z",
+   "text": "WWDC21 keynote recap: the highlights for app developers. #wwdc",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 40
+    }
+   ],
+   "hashtags": [
+    "wwdc"
+   ],
+   "id": 3
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2022-09-28T17:00:00Z",
+   "text": "Is Combine still worth learning in 2022? A short reading list.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 20
+    },
+    {
+     "emoji": "🤔",
+     "count": 11
+    }
+   ],
+   "id": 5
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2023-02-03T17:00:00Z",
+   "text": "Great deep dive into cold launch time on iOS.",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://perf.example.com/blog/cold-launch-budget?utm_source=telegram&utm_medium=post",
+     "title": "Cold launch on a budget",
+     "site": "Perf Notes"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 25
+    }
+   ],
+   "id": 8
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2023-06-07T17:00:00Z",
+   "text": "Swift macros are coming with Swift 5.9 — here is how they expand at compile time.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 36
+    }
+   ],
+   "id": 10
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2023-12-29T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 13
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-01-12T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 15
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-01-26T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 18
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-02-09T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 20
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-02-23T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 23
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-03-05T17:00:00Z",
+   "text": "Typed throws landed in Swift 6 — SE-0413 explained.",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://evolution.example.org/proposals/0413-typed-throws",
+     "title": "Typed throws",
+     "site": "Swift Evolution"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 41
+    }
+   ],
+   "id": 25
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-03-08T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 28
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-03-22T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 30
+  },
+  {
+   "channel": "applenews_demo",
+   "date": "2024-04-05T16:00:00Z",
+   "text": "Weekly roundup: Xcode betas, Swift forums threads and new sample code. #weekly",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 10
+    }
+   ],
+   "hashtags": [
+    "weekly"
+   ],
+   "id": 33
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2021-11-11T08:30:00Z",
+   "text": "Разбили приложение на 30 локальных Swift-пакетов: время сборки, границы модулей и что пошло не так.",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://blog.example.net/modular-app-spm",
+     "title": "Thirty packages later",
+     "site": "Example Engineering"
+    }
+   ],
+   "forward": {
+    "channel": "swiftdigest_demo",
+    "id": 30
+   },
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 12
+    }
+   ],
+   "id": 3
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2022-02-08T08:30:00Z",
+   "text": "",
+   "kind": "poll",
+   "poll": {
+    "question": "Как делаете навигацию в UIKit-приложении?",
+    "options": [
+     "Координаторы",
+     "Роутер",
+     "Прямо из контроллеров",
+     "Другое"
+    ],
+    "votes": 204
+   },
+   "id": 5
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2022-07-19T08:30:00Z",
+   "text": "Combine как шина событий между модулями: опыт и грабли.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 30
+    },
+    {
+     "emoji": "🔥",
+     "count": 17
+    }
+   ],
+   "id": 8
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2023-01-20T08:30:00Z",
+   "text": "Кто ещё не читал — разбор холодного старта, очень советую: https://sho.example/cl7x",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://sho.example/cl7x"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 6
+    }
+   ],
+   "id": 10
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2023-05-17T08:30:00Z",
+   "text": "",
+   "kind": "poll",
+   "poll": {
+    "question": "Чем управляете состоянием в SwiftUI-приложении?",
+    "options": [
+     "ObservableObject",
+     "TCA",
+     "Redux-подобный стор",
+     "Свой велосипед"
+    ],
+    "votes": 312
+   },
+   "id": 13
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2023-06-06T08:30:00Z",
+   "text": "Макросы в Swift 5.9 — главное для архитектуры с WWDC: меньше бойлерплейта в DI и моках.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 22
+    }
+   ],
+   "id": 15
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2023-08-22T08:30:00Z",
+   "text": "Вынесли навигацию онбординга в OnboardingFlowCoordinator, а AppCoordinator теперь только стартует дочерние флоу.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 15
+    }
+   ],
+   "id": 18
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2023-10-02T08:30:00Z",
+   "text": "Принят пропоузал о типизированных ошибках в throws — для слоя домена это меняет многое.",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://evolution.example.org/proposals/0413-typed-throws",
+     "title": "Typed throws",
+     "site": "Swift Evolution"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 19
+    }
+   ],
+   "id": 20
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2024-01-16T08:30:00Z",
+   "text": "Чистая архитектура в iOS: где на самом деле проходят границы слоёв.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 27
+    }
+   ],
+   "id": 23
+  },
+  {
+   "channel": "iosarch_demo",
+   "date": "2024-05-21T08:30:00Z",
+   "text": "DI-контейнеры в Swift: готовая библиотека или руками — сравнение подходов.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 18
+    }
+   ],
+   "id": 25
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2019-06-04T10:00:00Z",
+   "text": "Apple показала SwiftUI — декларативный фреймворк для интерфейсов. Первые впечатления после WWDC и ссылки на сессии.",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://developer.example.com/videos/wwdc19-swiftui-intro",
+     "title": "Introducing a declarative UI framework",
+     "site": "Developer Videos"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 120
+    },
+    {
+     "emoji": "👍",
+     "count": 64
+    }
+   ],
+   "views": 9800,
+   "id": 3
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2019-08-20T09:00:00Z",
+   "text": "SwiftUI и UIKit: как встраивать UIHostingController в существующий проект без боли.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 5
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2019-11-05T09:00:00Z",
+   "text": "Списки в SwiftUI тормозят на тысячах ячеек — замеры и обходные пути.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 8
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2020-02-11T09:00:00Z",
+   "text": "Анимации в SwiftUI: что уже можно сделать без единой строчки UIKit.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 10
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2020-04-14T12:00:00Z",
+   "text": "Swift Package Manager научился ресурсам: картинки и локализация прямо в пакете.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 21
+    }
+   ],
+   "id": 13
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2020-06-23T09:00:00Z",
+   "text": "SwiftUI 2: жизненный цикл App, LazyVStack и виджеты — краткий обзор.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 15
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2020-09-29T09:00:00Z",
+   "text": "Виджеты на SwiftUI: что можно, чего нельзя и как обновлять таймлайн.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 18
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2021-01-19T09:00:00Z",
+   "text": "Навигация в SwiftUI остаётся болью: NavigationLink и программные переходы.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 20
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2021-03-09T12:00:00Z",
+   "text": "Combine в продакшене: год спустя — где он выручил, а где только мешал.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 70
+    },
+    {
+     "emoji": "🔥",
+     "count": 29
+    }
+   ],
+   "id": 23
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2021-06-08T09:00:00Z",
+   "text": "SwiftUI 3: async/await в модификаторе .task и AsyncImage из коробки.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 25
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2021-10-12T09:00:00Z",
+   "text": "Доступность в SwiftUI: модификаторы, которые стоит знать каждому.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 28
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2021-11-10T12:00:00Z",
+   "text": "Разбили приложение на 30 локальных Swift-пакетов: время сборки, границы модулей и что пошло не так.",
+   "author": "Илья Петров",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://blog.example.net/modular-app-spm",
+     "title": "Thirty packages later",
+     "site": "Example Engineering"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 55
+    }
+   ],
+   "id": 30
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-03-15T09:00:00Z",
+   "text": "Тестирование вью на SwiftUI: снапшоты и инспекция иерархии.",
+   "author": "Анна Смирнова",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 33
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-04-05T12:00:00Z",
+   "text": "Xcode Cloud: первые впечатления от сборок в облаке Apple.",
+   "author": "Мария Козлова",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 14
+    }
+   ],
+   "id": 35
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-05-10T12:00:00Z",
+   "text": "Combine или async/await: что выбрать для сетевого слоя в 2022.",
+   "author": "Анна Смирнова",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 9
+    },
+    {
+     "emoji": "🤔",
+     "count": 3
+    }
+   ],
+   "id": 38
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-06-07T09:00:00Z",
+   "text": "NavigationStack — наконец-то нормальная навигация в SwiftUI.",
+   "author": "Илья Петров",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 40
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-08-30T09:00:00Z",
+   "text": "Протокол Layout в SwiftUI: пишем свой контейнер за вечер.",
+   "author": "Анна Смирнова",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 43
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-09-14T12:00:00Z",
+   "text": "Как ужать холодный старт приложения до 400 мс: разбор с цифрами.",
+   "author": "Илья Петров",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://perf.example.com/blog/cold-launch-budget",
+     "title": "Cold launch on a budget",
+     "site": "Perf Notes"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 40
+    }
+   ],
+   "id": 45
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-10-04T12:00:00Z",
+   "text": "Тёплый старт — отдельная история, тоже стоит почитать.",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://perf.example.com/blog/warm-launch",
+     "title": "Warm launch, explained",
+     "site": "Perf Notes"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 11
+    }
+   ],
+   "id": 48
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-11-22T09:00:00Z",
+   "text": "Графики на SwiftUI: первые диаграммы за полчаса.",
+   "author": "Анна Смирнова",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 50
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2022-12-20T12:00:00Z",
+   "text": "Итоги года в Swift: структурная конкурентность, регулярные выражения и новые дженерики.",
+   "author": "Илья Петров",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 33
+    }
+   ],
+   "id": 53
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2023-02-14T09:00:00Z",
+   "text": "SwiftUI и производительность: как найти лишние перерисовки.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 55
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2023-03-01T12:00:00Z",
+   "text": "В Swift Evolution обсуждают питч макросов — почитайте, пока не поздно высказаться.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 17
+    }
+   ],
+   "id": 58
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2023-06-08T12:00:00Z",
+   "text": "Макросы в Swift 5.9: как они устроены и где пригодятся в обычном приложении.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "🔥",
+     "count": 48
+    }
+   ],
+   "id": 60
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2023-06-13T09:00:00Z",
+   "text": "@Observable вместо ObservableObject: SwiftUI после WWDC23.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 63
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2023-09-19T09:00:00Z",
+   "text": "SwiftUI на macOS: окна, меню и сцены.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 65
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2023-11-15T12:00:00Z",
+   "text": "Типизированные ошибки в throws одобрены — пропоузал по ссылке.",
+   "kind": "text",
+   "links": [
+    {
+     "url": "https://evolution.example.org/proposals/0413-typed-throws",
+     "title": "Typed throws",
+     "site": "Swift Evolution"
+    }
+   ],
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 26
+    }
+   ],
+   "id": 68
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2023-12-05T09:00:00Z",
+   "text": "Превью в SwiftUI теперь пишутся одной строкой — что изменилось в Xcode 15.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 70
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2024-02-20T09:00:00Z",
+   "text": "SwiftData и SwiftUI: связываем модель и интерфейс.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 73
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2024-04-02T12:00:00Z",
+   "text": "Переносим тесты с XCTest на новый фреймворк: что упростилось, а что нет.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 19
+    }
+   ],
+   "id": 75
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2024-06-11T09:00:00Z",
+   "text": "SwiftUI 6: новые API для скролла и анимаций.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 78
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2024-09-17T09:00:00Z",
+   "text": "SwiftUI на visionOS: объёмные окна и пространство.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 80
+  },
+  {
+   "channel": "swiftdigest_demo",
+   "date": "2024-11-26T09:00:00Z",
+   "text": "Миграция с UIKit на SwiftUI: опыт большого приложения, по шагам.",
+   "kind": "text",
+   "reactions": [
+    {
+     "emoji": "👍",
+     "count": 8
+    }
+   ],
+   "views": 3100,
+   "id": 83
+  }
+ ]
+}
