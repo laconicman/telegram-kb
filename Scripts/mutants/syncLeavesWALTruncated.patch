@@ -1,18 +1,23 @@
 diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
-index 6dbe112..95a7ee2 100644
+index 5316b30..22d6e75 100644
 --- a/Sources/TelegramKBSync/ChannelSync.swift
 +++ b/Sources/TelegramKBSync/ChannelSync.swift
-@@ -60,12 +60,7 @@ public struct ChannelSync: Sendable {
- 
-         // A failed walk still committed pages, so the reclaim runs either way; the walk's own
-         // error leads (`Store.endingWithWALReclaim`, TD-22).
+@@ -69,14 +69,11 @@ public struct ChannelSync: Sendable {
+         // writes. Held until the walk's last commit; a dead holder's lease is stolen. The release
+         // is a cleanup under the same rule as the reclaim, so a failed one is reported, not
+         // dropped (`Store.holdingChannelLease`).
 -        let session = try await store.endingWithWALReclaim {
--            try await walk(channel: channel, full: full)
--        }
--        var outcome = session.value
+-            try await store.holdingChannelLease(for: channel) {
+-                try await walk(channel: channel, full: full)
+-            }
++        let held = try await store.holdingChannelLease(for: channel) {
++            try await walk(channel: channel, full: full)
+         }
+-        var outcome = session.value.value
+-        outcome.leaseReleaseFailed = session.value.leaseReleaseFailed
 -        outcome.walCleanupFailed = session.walCleanupFailed
--        return outcome
-+        return try await walk(channel: channel, full: full)
++        var outcome = held.value
++        outcome.leaseReleaseFailed = held.leaseReleaseFailed
+         return outcome
      }
  
-     /// Crawl a previewable channel, write each page, record what the walk proved — the write

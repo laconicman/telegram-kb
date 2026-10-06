@@ -1,5 +1,5 @@
 diff --git a/Sources/TelegramKBSync/ChannelSync.swift b/Sources/TelegramKBSync/ChannelSync.swift
-index 5316b30..de608b3 100644
+index 5316b30..b51c310 100644
 --- a/Sources/TelegramKBSync/ChannelSync.swift
 +++ b/Sources/TelegramKBSync/ChannelSync.swift
 @@ -70,12 +70,9 @@ public struct ChannelSync: Sendable {
@@ -17,3 +17,13 @@ index 5316b30..de608b3 100644
          outcome.walCleanupFailed = session.walCleanupFailed
          return outcome
      }
+@@ -84,6 +81,9 @@ public struct ChannelSync: Sendable {
+     /// session. `sync` classifies first, takes the channel's lease and wraps this in the
+     /// session-end cleanups, which is why their flags live on `Outcome`.
+     private func walk(channel: String, full: Bool) async throws -> Outcome {
++        try store.acquireChannelLease(for: channel)
++        defer { try? store.releaseChannelLease(for: channel) }
++
+         // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign key and
+         // pages are written as they arrive. Insert-if-absent, never an upsert, so a previously
+         // learned `rawChannelID` is not overwritten by the placeholder. A row imported as a group
