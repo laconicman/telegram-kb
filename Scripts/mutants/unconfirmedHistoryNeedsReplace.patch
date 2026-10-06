@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 7eead31..5a4eb14 100644
+index 0df7f61..afdb924 100644
 --- a/Sources/TelegramKBSync/ChatImport.swift
 +++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -329,9 +329,6 @@ public struct ChatImport: Sendable {
+@@ -332,9 +332,6 @@ public struct ChatImport: Sendable {
              }
              agreeing += 1
          }
 -        guard agreeing > 0 || claimUnconfirmed else {
--            throw ImportError.storedHistoryUnconfirmed(channel: channel)
+-            throw ImportError.storedHistoryUnconfirmed(channel: channel, shared: stored.count)
 -        }
      }
  
