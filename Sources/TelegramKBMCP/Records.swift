@@ -117,6 +117,8 @@ struct PostDetail: Codable, Sendable, Equatable {
         var channel: String?
         /// `@channel/id` when both halves are known.
         var post: String?
+        /// The original's `t.me` permalink, when both halves are known — citable like any record.
+        var link: String?
         var author: String?
     }
     struct ViewsRecord: Codable, Sendable, Equatable {
@@ -160,11 +162,11 @@ struct PostDetail: Codable, Sendable, Equatable {
         is_edited = p.isEdited
         reply_to = p.replyTo
         forward = p.forward.map { f in
-            ForwardRecord(
+            let origin = f.channelUsername.flatMap { ch in f.messageID.map { (ch, $0) } }
+            return ForwardRecord(
                 channel: f.channelUsername,
-                post: f.channelUsername.flatMap { ch in
-                    f.messageID.map { "@\(ch)/\($0)" }
-                },
+                post: origin.map { "@\($0)/\($1)" },
+                link: origin.map { "https://t.me/\($0)/\($1)" },
                 author: f.authorName)
         }
         hashtags = p.hashtags

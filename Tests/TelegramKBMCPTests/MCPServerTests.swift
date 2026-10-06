@@ -36,7 +36,7 @@ struct MCPServerTests {
     /// Server + client on the in-memory pair. The serve task is scoped to the test process —
     /// the transports die with the suite, which is all the teardown this needs.
     static func connected(_ store: Store) async throws -> (Client, Server) {
-        let server = await TGKBServer.makeServer(store: store)
+        let server = try await TGKBServer.makeServer(store: store)
         let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
         let client = Client(name: "test", version: "0")
         Task { try await server.start(transport: serverTransport) }
@@ -492,6 +492,37 @@ struct MCPServerTests {
         for option in ["MVVM", "TCA", "VIPER"] { #expect(text.contains(option)) }
         #expect(text.contains("42"))
         #expect(!text.contains("no text"), "a poll is not an empty post")
+    }
+
+    /// 🟡 The eval's most repeated ask, against `main` and this branch alike: what the archive covers.
+    /// Without it a model cannot map "the architecture channel" to a username, nor tell "nothing on
+    /// this topic" from "this archive never covered it". Sent once, at `initialize`.
+    @Test("initialize tells the model which channels the archive holds, and how many posts each")
+    func instructionsNameTheArchive() async throws {
+        let server = try await TGKBServer.makeServer(store: try Self.seededStore())
+        let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
+        Task { try await server.start(transport: serverTransport) }
+        let initialized = try await Client(name: "test", version: "0").connect(transport: clientTransport)
+        let instructions = try #require(initialized.instructions)
+        #expect(instructions.contains("@iosgr (2 posts)"))
+        #expect(instructions.contains("t.me"), "and that answers cite the posts' links")
+    }
+
+    /// 🟡 A forward origin came as `@channel/id` alone — the one place a record named a post without
+    /// its `t.me` link, so citing the original meant building the URL by hand (eval, question 4).
+    @Test("a forward origin carries its t.me link, in the record and in the text")
+    func forwardOriginCarriesItsLink() async throws {
+        let store = try Self.seededStore()
+        try store.upsert(posts: [
+            Post(id: .init(channelUsername: "iosgr", messageID: 8),
+                 date: Date(timeIntervalSince1970: 1_700_000_009),
+                 kind: .text, formatSource: .web, mediaCount: 1, text: "Репост про модули",
+                 forward: ForwardOrigin(channelUsername: "otherchannel", messageID: 42)),
+        ])
+        let (client, _) = try await Self.connected(store)
+        let result = try await client.callTool(name: "tgkb_get_post", arguments: ["post": "@iosgr/8"]).value
+        #expect(try Self.decode(result, as: PostDetail.self).forward?.link == "https://t.me/otherchannel/42")
+        #expect(try Self.text(result).contains("Forwarded from https://t.me/otherchannel/42"))
     }
 
     /// 🟡 No match rendered as a blank line and "0 result(s)": nothing a model could act on, in the

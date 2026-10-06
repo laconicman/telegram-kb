@@ -29,10 +29,11 @@ public enum TGKBServer {
     public static let version = "0.1.0"
 
     /// Builds the `Server` with `tools/list` and `tools/call` wired to this store.
-    public static func makeServer(store: Store) async -> Server {
+    public static func makeServer(store: Store) async throws -> Server {
         let server = Server(
             name: "tgkb-mcp",
             version: version,
+            instructions: try instructions(for: store),
             capabilities: .init(tools: .init(listChanged: false)))
         await server.withMethodHandler(ListTools.self) { _ in
             ListTools.Result(tools: TGKBTools.all, nextCursor: nil)
@@ -41,6 +42,23 @@ public enum TGKBServer {
             try await call(params.name, arguments: params.arguments, store: store)
         }
         return server
+    }
+
+    /// What a model is told at `initialize`, before any call: which channels the archive holds.
+    ///
+    /// No tool lists them, so without this a model cannot map "the architecture channel" to a
+    /// username, nor tell "nothing on this topic" from "this archive never covered it" — the
+    /// evaluation's most repeated ask (`research/s6-mcp-builder-review.md`). Counted once, at start.
+    static func instructions(for store: Store) throws -> String {
+        let channels = try store.channelUsernames().compactMap { username in
+            try store.integrity(forChannel: username).map { "@\(username) (\($0.posts) posts)" }
+        }
+        return """
+            A read-only, local archive of Telegram posts. Channels: \
+            \(channels.isEmpty ? "none yet" : channels.joined(separator: ", ")). Nothing is \
+            translated: search in the language the posts are written in. Cite each post an answer \
+            uses by its t.me link.
+            """
     }
 
     /// A `StdioTransport` that a stray `print()` cannot poison.
@@ -285,6 +303,9 @@ public enum TGKBServer {
         }
         // What the post shared. A body often says "статья" over its URL, so without these a
         // text-only client sees a post about a link it cannot name.
+        if let origin = p.forward?.channelUsername, let id = p.forward?.messageID {
+            lines.append("Forwarded from https://t.me/\(origin)/\(id)")
+        }
         if !p.links.isEmpty {
             lines.append("Links:")
             lines.append(contentsOf: p.links.map { link in

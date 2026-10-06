@@ -1,8 +1,8 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index 16708c6..0a090f7 100644
+index fce5fdf..1aed56a 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -275,14 +275,7 @@ public enum TGKBServer {
+@@ -293,16 +293,7 @@ public enum TGKBServer {
      static func render(_ p: Post) -> String {
          var lines = ["\(p.permalink)  \(p.date.tgkbISO8601)"]
          if let author = p.authorName { lines.append("by \(author)") }
@@ -14,7 +14,9 @@ index 16708c6..0a090f7 100644
 -        } else if p.text.isEmpty {
 -            lines.append("[\(p.kind.rawValue), no text]")
 -        }
+-        // What the post shared. A body often says "статья" over its URL, so without these a
+-        // text-only client sees a post about a link it cannot name.
 +        lines.append(p.text.isEmpty ? "[\(p.kind.rawValue), no text]" : p.text)
-         // What the post shared. A body often says "статья" over its URL, so without these a
-         // text-only client sees a post about a link it cannot name.
-         if !p.links.isEmpty {
+         if let origin = p.forward?.channelUsername, let id = p.forward?.messageID {
+             lines.append("Forwarded from https://t.me/\(origin)/\(id)")
+         }

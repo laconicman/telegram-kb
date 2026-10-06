@@ -37,8 +37,9 @@ enum TGKBTools {
             per alternative — and quoted words must appear in that order. Words match across case, \
             ё/е and, for Russian, inflection; nothing is translated, so search in the language the \
             posts are written in. Returns compact records — post, channel, date, author, kind, \
-            snippet, reaction count and a citable t.me link — never full bodies: call \
-            tgkb_get_post for a post's full text and its links. `total` counts every match; pass \
+            snippet, reaction count and a citable t.me link — never full bodies, and not the URLs a \
+            post shared: call tgkb_get_post for a post's full text and its links. `total` counts \
+            every match; pass \
             next_cursor back as `cursor` for the next page. For the posts that shared one \
             particular URL, use tgkb_find_links.
             """,

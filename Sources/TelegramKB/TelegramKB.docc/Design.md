@@ -546,6 +546,14 @@ details the spec-level decisions left open:
   invented answer does most harm (`G10`). Tool descriptions say what is indexed, that every word
   must appear, that nothing is translated, and that `tgkb_find_links` takes a whole link, not a
   site. All from the `mcp-builder` review, 2026-10-06.
+- **The archive introduces itself at `initialize`.** The server's `instructions` name its
+  channels with their post counts, say nothing is translated, and ask for `t.me` citations. No
+  tool lists channels, so without them a model cannot map "the architecture channel" to a
+  username, nor tell an empty answer from a topic the archive never covered — the evaluation's
+  most repeated ask, against `main` and the review branch alike. Counted once at start, from
+  `integrity(forChannel:)`: a sync during a session leaves the numbers behind, which is fine for a
+  scope and wrong for a statistic. A forward's origin carries its `t.me` link as well, the one
+  place a record named a post without one.
 - **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
   load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
   from a second read would pair them with bodies from whatever a concurrent sync had committed
