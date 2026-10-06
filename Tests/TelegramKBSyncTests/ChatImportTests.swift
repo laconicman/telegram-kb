@@ -504,13 +504,13 @@ struct ChatImportTests {
         let store = try Self.store()
         try await importOffline(Array(Self.messages.prefix(1)), into: store)
         let disjoint = [Self.messages[2]]
-        await #expect(throws: ChatImport.ImportError.storedHistoryUnconfirmed(channel: "testgroup")) {
+        await #expect(throws: ChatImport.ImportError.storedHistoryUnconfirmed(channel: "testgroup", shared: 0)) {
             try await importVerified(disjoint, newestUTC: "2023-04-03T09:34:07+00:00", into: store)
         }
         var onlyEdited = [Self.messages[0], Self.messages[2]]
         onlyEdited[0].text = "Первая строка, исправленная"
         onlyEdited[0].edited = true
-        await #expect(throws: ChatImport.ImportError.storedHistoryUnconfirmed(channel: "testgroup")) {
+        await #expect(throws: ChatImport.ImportError.storedHistoryUnconfirmed(channel: "testgroup", shared: 1)) {
             try await importVerified(onlyEdited, newestUTC: "2023-04-03T09:34:07+00:00", into: store)
         }
         #expect(try store.identity(forChannel: "testgroup")?.rawChannelID == 0)

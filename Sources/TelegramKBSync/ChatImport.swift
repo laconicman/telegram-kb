@@ -86,8 +86,9 @@ public struct ChatImport: Sendable {
         /// A message an unverified import stored under this name, edited on neither side, says
         /// something else.
         case storedTextDiffers(channel: String, messageID: Int)
-        /// An unverified import's posts are stored under this name, and none can be compared.
-        case storedHistoryUnconfirmed(channel: String)
+        /// An unverified import's posts are stored under this name, and none can be compared:
+        /// `shared` messages in common with this export, every one of them edited on a side.
+        case storedHistoryUnconfirmed(channel: String, shared: Int)
 
         public var description: String {
             switch self {
@@ -118,15 +119,17 @@ public struct ChatImport: Sendable {
                 return "@\(c) already holds message \(id) from an unverified import, sent "
                      + "\(String(format: "%+g", offset / 3600)) h from this export's — the name belonged to "
                      + "another chat when one of the two was exported, or the earlier import read its dates "
-                     + "in another zone; either way the two cannot be merged"
+                     + "in another zone; either way the two cannot be merged — remove @\(c)'s stored posts "
+                     + "before importing this export"
             case .storedTextDiffers(let c, let id):
                 return "@\(c) already holds message \(id) from an unverified import, and it says something "
                      + "else than this export's — the name belonged to another chat when one of the two "
                      + "was exported"
-            case .storedHistoryUnconfirmed(let c):
-                return "@\(c) holds posts from an unverified import, and none of them can be compared with "
-                     + "this export — no message in common, or only edited ones — so nothing shows they are "
-                     + "this chat's; pass --replace to claim them for it anyway"
+            case .storedHistoryUnconfirmed(let c, let shared):
+                let why = shared == 0 ? "it shares no message with this export"
+                                      : "the \(shared) message(s) it shares with this export are all edited"
+                return "@\(c) holds posts from an unverified import, and \(why) — nothing shows they are this "
+                     + "chat's; pass --replace to claim them for it anyway"
             }
         }
     }
@@ -330,7 +333,7 @@ public struct ChatImport: Sendable {
             agreeing += 1
         }
         guard agreeing > 0 || claimUnconfirmed else {
-            throw ImportError.storedHistoryUnconfirmed(channel: channel)
+            throw ImportError.storedHistoryUnconfirmed(channel: channel, shared: stored.count)
         }
     }
 
