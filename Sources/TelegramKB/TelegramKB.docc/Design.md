@@ -30,8 +30,9 @@ must run `tgkb sync` periodically.
 **Superseded — there is no advisory file lock.** This section once said the writer takes one for
 the duration of a sync. It never did, and the storage question it deferred has since been
 answered: SQLite and GRDB stay (§ *SQLite + GRDB stays*), the writer waits on a bounded busy
-timeout, and the store is one file (§ *One writer per store*). Two syncs of the same channel are
-still unguarded; that is `TD-21`, not a lock that exists.
+timeout, and the store is one file (§ *One writer per store*). Two writers of the same channel
+are refused by a lease row inside the database, not by a lock file — the same section records
+it, and it is what discharged `TD-21`.
 
 **Caveat that must be designed for, not discovered.** GRDB's own `DatabaseSharing.md` opens by
 discouraging database sharing, and its concrete hazard for us is that
