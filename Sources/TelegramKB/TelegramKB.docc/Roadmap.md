@@ -203,6 +203,29 @@ source) and a prospective DeepWiki pass on the concrete shapes substituted for i
 `tgkb_search_posts`, `tgkb_find_links`, `tgkb_get_post` on 2026-10-06 — <doc:Design> § MCP tool
 surface.)*
 
+*Reviewed against `mcp-builder`, 2026-10-06* (`research/s6-mcp-builder-review.md`) — the skill this
+slice was told to load first. Errors now split as the 2025-11-25 spec splits them; the tools carry
+a `tgkb_` prefix; `AND`, `OR` and `NOT` are refused instead of searched as words; descriptions and
+text renderings carry what a model needs to answer; the server names its channels at `initialize`.
+The evaluation set the skill describes is
+`evals/tgkb-mcp/`, over a synthetic corpus. Output schemas are deferred (`TD-27`). **The done test
+passes**, run on `main` as merged against a copy of the owner's corpus: Claude Code answered "what
+has anyone shared about app startup time?" with 16 `t.me` links, every one returned by a tool call
+(`research/s6-done-test.md`).
+
+*Asked for by the evaluation, and left for later* — each with the transcripts behind it in the review
+note:
+
+- **Browse a channel by date, without a query word.** Counting one author's posts in a year took
+  30+ calls of stopword guessing, on both builds. A store read ordered by date (Track A), then an
+  empty `query` when `channel` or a date bound is given.
+- **Order results by date** when asked: "the earliest post about X" means reading every page.
+- **The URLs a post shared, in its search record.** "What has anyone shared" is a question about
+  links, and the done test spent 21 `get_post` calls learning them. Bounded — a post can carry
+  71 links — so it is a record-shape decision, not a field to add in passing.
+- **A forwarded flag** on search records, so a repost is visible before its full record is read.
+- **Query language** — `TD-28`.
+
 ### Typed text entities — one derivation for both HTML sources ✅ *(done)*
 `TD-26`. Both parsers map markup to `FormattedText` and `WebPage` in `TelegramKBModel`, and
 `PostText` derives `text`, `hashtags` and `links` by one rule; output byte-identical. **Next, a
@@ -254,7 +277,9 @@ first run needs a session that has already cleared that.
 
 (Lemmatisation, once planned here, shipped in S2 — `TD-4`.) Links promoted to first-class entities with cross-channel
 dedupe. Reactions as a ranking signal. The `artanl` join on `url_canonical`, and its extracted
-text in a **separate FTS table** (`TD-12`). Dual search — local index and Telegram's live `?q=`
+text in a **separate FTS table** (`TD-12`). **Query operators** — `OR` and `NOT` in the grammar
+(`QueryParser`, Track A, shared with `tgkb query`), so that `tgkb_search_posts` can stop refusing
+them (<doc:Design> § MCP tool surface). Dual search — local index and Telegram's live `?q=`
 merged, since theirs caps at ~22 and ours is a crawl-time snapshot. Semantic search decided from
 eval evidence, not in advance (`TD-9`).
 
