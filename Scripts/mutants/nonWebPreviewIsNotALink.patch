@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBModel/PostText.swift b/Sources/TelegramKBModel/PostText.swift
+index 7c79018..bb9d50c 100644
+--- a/Sources/TelegramKBModel/PostText.swift
++++ b/Sources/TelegramKBModel/PostText.swift
+@@ -29,7 +29,7 @@ public struct PostText: Hashable, Sendable {
+             links.append(LinkRef(urlRaw: url))
+         }
+         // The one scheme check for a preview: a card for a `tg:` or relative address is no link.
+-        if let webPage, Self.isWebURL(webPage.url) {
++        if let webPage {
+             let preview = LinkPreview(siteName: webPage.siteName, title: webPage.title,
+                                       description: webPage.description, resolvedURL: webPage.url,
+                                       observedAt: observedAt)

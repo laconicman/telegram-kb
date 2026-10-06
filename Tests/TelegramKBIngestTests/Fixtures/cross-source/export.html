@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC. The two messages of web.html as a chat export renders them, dated in Europe/Moscow.
+  The chat, people and words are invented.
+
+  Message 10 is in the macOS client's dialect, as its real exports write it: ShowHashtag('tag')
+  for a hashtag and ShowHashtag('$TKN') for a cashtag, with href="#". Message 11 is in
+  tdesktop's, from its FormatText (export_output_html.cpp): href="" and a quoted argument, with
+  ShowCashtag for a cashtag. Both write mailto:, tel:, ShowBotCommand and ShowMentionName; the
+  preview card comes before the text, as in every real export message that has both.
+-->
+<html>
+<head><meta charset="utf-8"><title>KB Test</title></head>
+<body>
+<div class="page_wrap">
+<div class="page_header chat_header">
+<div class="content bubble"><div class="body"><div class="name bold">KB Test</div></div></div>
+</div>
+<div class="page_body chat_page">
+<div class="history">
+<div class="message default clearfix" id="message10">
+<div class="body">
+<div class="pull_right date details" title="3 April 2023, 12:34:07">12:34</div>
+<div class="from_name">
+KB Test
+</div>
+<div class="media_wrap clearfix">
+<a class="webpage_preview clearfix" href="https://example.com/notes/">
+<div class="webpage_site">Example</div>
+<div class="webpage_title bold">Release notes</div>
+<div class="webpage_description">What changed in this release</div>
+</a>
+</div>
+<div class="text">
+Release notes: <a href="https://example.com/notes/">https://example.com/notes/</a> (<a href="https://example.org/docs">the docs</a>) by <a href="https://t.me/kb_author">@kb_author</a><br><a onclick="return ShowHashtag('swift')" href="#">#swift</a><br><a onclick="return ShowHashtag('$CASH')" href="#">$CASH</a> — write to <a href="mailto:kb@example.com">kb@example.com</a> or call <a href="tel:+15550100">+15550100</a>
+</div>
+</div>
+</div>
+<div class="message default clearfix joined" id="message11">
+<div class="body">
+<div class="pull_right date details" title="3 April 2023, 13:00:00">13:00</div>
+<div class="media_wrap clearfix">
+<a class="webpage_preview clearfix" href="https://example.net/talk">
+<div class="webpage_site">Example Video</div>
+<div class="webpage_title bold">The talk</div>
+</a>
+</div>
+<div class="text">
+Worth a look <a href="" onclick="return ShowHashtag(&quot;release&quot;)">#release</a><br><a href="" onclick="return ShowCashtag(&quot;TKN&quot;)">$TKN</a>, <a href="" onclick="return ShowBotCommand(&quot;help&quot;)">/help</a>, thanks <a href="" onclick="return ShowMentionName()">Kim Example</a>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,5 +1,5 @@
 diff --git a/Sources/TelegramKBIngest/ChatExportParser.swift b/Sources/TelegramKBIngest/ChatExportParser.swift
-index fccc07d..8da6da7 100644
+index b67f1f1..e856cb2 100644
 --- a/Sources/TelegramKBIngest/ChatExportParser.swift
 +++ b/Sources/TelegramKBIngest/ChatExportParser.swift
 @@ -110,13 +110,13 @@ public enum ChatExportParser {
@@ -17,5 +17,5 @@ index fccc07d..8da6da7 100644
 -              let dateEl = try body.select("> div.date").first(),
 -              let date = dates.date(from: try dateEl.attr("title")) else { return nil }
          let textEl = try body.select("> div.text").first()
-         var text = try textEl.map(NodeText.text(of:)) ?? ""
-         if text.isEmpty {
+         var formatted = try textEl.map { try EntityMarkup.formattedText(of: $0, entity: entity(for:)) }
+             ?? FormattedText(text: "")

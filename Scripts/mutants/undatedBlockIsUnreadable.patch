@@ -1,10 +1,10 @@
 diff --git a/Sources/TelegramKBIngest/WebPreviewParser.swift b/Sources/TelegramKBIngest/WebPreviewParser.swift
-index a2d3cf2..e08b563 100644
+index ce35c6a..c532d08 100644
 --- a/Sources/TelegramKBIngest/WebPreviewParser.swift
 +++ b/Sources/TelegramKBIngest/WebPreviewParser.swift
-@@ -66,14 +66,9 @@ public enum WebPreviewParser {
-         let bodyEl = try message.select("div.tgme_widget_message_text.js-message_text").first()
-         let text = try bodyEl.map(NodeText.text(of:)) ?? ""
+@@ -72,14 +72,9 @@ public enum WebPreviewParser {
+             ?? FormattedText(text: "")
+         let text = formatted.text
  
 -        // No readable date means the block is unreadable, full stop — a guessed date is worse
 -        // than a dropped block, because `1970-01-01` sorts into searches and date filters as if
