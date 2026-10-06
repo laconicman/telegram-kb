@@ -539,8 +539,10 @@ details the spec-level decisions left open:
   invitation to fetch more — and prints the cursor itself, under the name of the argument
   that takes it (`cursor`, not the `next_cursor` field it came from), since a client that
   shows only `content` has no other way to obtain it.
-- **The text rendering stands on its own.** A client may show the model only `content`, so the
-  text carries what an answer needs: `tgkb_find_links` gives each post's snippet, `tgkb_get_post`
+- **The text rendering stands on its own — for the clients that read it.** Claude Code (2.1.291,
+  the S6 done test) hands the model the `structuredContent` JSON and drops the text block, so there
+  the JSON and the tool descriptions are all the model has. A client may instead show only
+  `content`, so the text carries what an answer needs: `tgkb_find_links` gives each post's snippet, `tgkb_get_post`
   lists the post's links with Telegram's preview title — a body often says "статья" over its URL
   — and a search with no match says so in words, with what to try, because that is where an
   invented answer does most harm (`G10`). Tool descriptions say what is indexed, that every word
@@ -575,6 +577,17 @@ details the spec-level decisions left open:
   protocol framing included — rather than a re-implementation. `tgkb-mcp` itself is ~50 lines:
   stderr logging bootstrap, a hand-rolled `--db` flag (ArgumentParser would widen the
   allowlisted closure for one option), `openForReading` — a reader never migrates.
+- **End of input ends the server; in-flight requests are not drained.** At EOF the SDK's stdio
+  read loop finishes its stream, `Server.waitUntilCompleted()` returns, and `main` exits — while
+  each request runs in an unstructured task that nothing awaits (`Server.swift`, 0.12.1). So a
+  client that writes its requests and then closes stdin gets no answer at all: reproduced five
+  times out of five on 2026-10-06, `initialize` included. Left as it is, on purpose. The spec
+  names closing the server's input as how a stdio client *initiates shutdown*, then waits for the
+  exit (2025-11-25 `basic/lifecycle`, § Shutdown), so answers after it go to a client that has
+  stopped listening; interactive clients hold the stream open until they are done. Draining would
+  take a `Transport` wrapper matching request ids to responses — new code in the one module whose
+  closure is allowlisted — for a shell pipe, which `tgkb query` already serves. Revisit if a real
+  client is seen closing early.
 
 ## Why `tgkb` has no `serve` subcommand
 
