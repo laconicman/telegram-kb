@@ -28,12 +28,12 @@ enum TGKBTools {
     static let all: [Tool] = [searchPosts, findLinks, getPost]
 
     static let searchPosts = Tool(
-        name: "search_posts",
+        name: "tgkb_search_posts",
         title: "Search Telegram posts",
         description: """
             Full-text search over the indexed Telegram archive. Returns compact records — \
             channel, date, author, snippet, reaction count, and a t.me link — never full post \
-            bodies; follow up with get_post for one post's full text. Pass next_cursor back as \
+            bodies; follow up with tgkb_get_post for one post's full text. Pass next_cursor back as \
             `cursor` to continue a result list; `total` reports every match before truncation. \
             `mode`: "words" matches folded/lemmatised words, "substring" matches inside words \
             (min 3 chars), "both" (default) is word hits then substring-only hits.
@@ -83,7 +83,7 @@ enum TGKBTools {
         ]))
 
     static let findLinks = Tool(
-        name: "find_links",
+        name: "tgkb_find_links",
         title: "Find posts by linked URL",
         description: """
             Which posts shared a URL. Matches on the link's effective URL — its canonical form, \
@@ -120,12 +120,12 @@ enum TGKBTools {
         ]))
 
     static let getPost = Tool(
-        name: "get_post",
+        name: "tgkb_get_post",
         title: "Fetch one post",
         description: """
             The full record for one post: complete text, reactions, links with previews, poll, \
-            forward origin, views, hashtags. Accepts the `@channel/id` literal that search_posts \
-            and find_links emit, or its https://t.me/channel/id form.
+            forward origin, views, hashtags. Accepts the `@channel/id` literal that tgkb_search_posts \
+            and tgkb_find_links emit, or its https://t.me/channel/id form.
             """,
         inputSchema: .object([
             "type": "object",

@@ -199,7 +199,9 @@ all four annotations explicit, `structuredContent` + `outputSchema` + a text ren
 `dup`/`dup2` stdout guard so a stray `print()` cannot corrupt the session. The `mcp-builder`
 skill this slice was told to load turned out not to be installed in the implementing
 environment — the SDK research notes (`research/mcp-swift-sdk.md`, verified against 0.12.1
-source) and a prospective DeepWiki pass on the concrete shapes substituted for it.
+source) and a prospective DeepWiki pass on the concrete shapes substituted for it. *(Renamed
+`tgkb_search_posts`, `tgkb_find_links`, `tgkb_get_post` on 2026-10-06 — <doc:Design> § MCP tool
+surface.)*
 
 ### Typed text entities — one derivation for both HTML sources ✅ *(done)*
 `TD-26`. Both parsers map markup to `FormattedText` and `WebPage` in `TelegramKBModel`, and

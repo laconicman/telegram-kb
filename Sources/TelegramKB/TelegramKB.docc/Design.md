@@ -476,7 +476,7 @@ account, and reaction sync must use `updateMessageInteractionInfo`.
 **Decision.** Few composable tools, compact records, opaque cursors, always a `t.me` link.
 
 Search results return `(channel, date, author, snippet, reactions, t.me link)` — never full
-bodies. Full text comes from a follow-up `get_post`. A result list that dumps whole posts
+bodies. Full text comes from a follow-up `tgkb_get_post`. A result list that dumps whole posts
 wastes the context window that the tool exists to protect.
 
 **Every returned record carries a `t.me` permalink.** Of seven Telegram MCP servers surveyed,
@@ -489,15 +489,21 @@ emits exactly the literal the next tool accepts (`@username`, or a synthetic for
 without one). One parameter instead of an id/hash/type triple, and no resolve call inside the
 model's loop.
 
-**As implemented (S6).** Three tools — `search_posts`, `find_links`, `get_post` — with the
+**As implemented (S6).** Three tools — `tgkb_search_posts`, `tgkb_find_links`, `tgkb_get_post` — with the
 details the spec-level decisions left open:
 
+- **Names carry the server's prefix.** The `mcp-builder` skill's rule — `{service}_{action}_{resource}`
+  — because a model picks a tool by its name, and a bare `search_posts` beside a forum server's
+  `search_posts` is ambiguous. Claude clients already namespace by server, so there the name reads
+  `mcp__tgkb__tgkb_search_posts`; the spec asks only for uniqueness within one server. Renamed
+  from `search_posts`, `find_links` and `get_post` on 2026-10-06, before any client depended on
+  them — the repo owner's call over keeping the shorter names.
 - **Errors split where the 2025-11-25 spec splits them.** An argument the tool cannot use — a
   missing or mistyped argument, an unknown key (`additionalProperties: false` is enforced by hand,
   because the SDK validates nothing against `inputSchema`), a bad `kind`/`mode`/date, a foreign or
   malformed cursor, a malformed post reference — is a **tool execution error**: a result with
   `isError: true` whose text says what to fix, because that is what a model reads and corrects
-  itself from. So is a `get_post` miss. An **unknown tool name** is a protocol error, -32602:
+  itself from. So is a `tgkb_get_post` miss. An **unknown tool name** is a protocol error, -32602:
   no tool ran, so there is no tool result to give. Handlers throw `ToolInputError`, and
   `TGKBServer.call` turns it — and `Store.SearchError` — into the result in one place.
 
@@ -512,12 +518,12 @@ details the spec-level decisions left open:
   descriptor for the transport, then `dup2`s stderr onto fd 1 — after which a stray `print()`
   lands on the spec-sanctioned diagnostics channel instead of corrupting JSON-RPC framing
   (`research/mcp-swift-sdk.md` § Logging 5; the SDK guards only its own logger).
-- **`find_links` matches on the effective URL both ways** — `COALESCE(resolvedCanonical,
+- **`tgkb_find_links` matches on the effective URL both ways** — `COALESCE(resolvedCanonical,
   urlCanonical)` on the link side against the same expression for the query — so a shortener
   finds the destination's posts and a destination finds every spelling that resolved to it.
   A query that cannot be canonicalised falls back to the raw spelling, which is what `url_raw`
   exists for. `total` counts the full match set in the same read, so a `limit`-truncated list
-  never presents as complete, and the list pages with the same opaque cursor as `search_posts`
+  never presents as complete, and the list pages with the same opaque cursor as `tgkb_search_posts`
   because a page cap with no continuation would make every match past it unreachable. The
   cursor is fingerprinted over the query's canonical URL, not the key it currently resolves to:
   a resolution written mid-walk then reads as `index_moved_since_cursor`, the drift signal the
@@ -698,7 +704,7 @@ server is an ingestion filter, not a query engine.
 ## URLs: store both forms, derive the canonical, rewrite nothing
 
 **Decision.** Every link is stored **twice** — `url_raw` exactly as it appeared in the post, and
-`url_canonical` derived from it. Both are searchable. `find_links` returns `url_canonical` as the
+`url_canonical` derived from it. Both are searchable. `tgkb_find_links` returns `url_canonical` as the
 identity.
 
 The governing principle is that **canonicalisation is derived, never destructive**. What was

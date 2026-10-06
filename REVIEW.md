@@ -82,7 +82,7 @@ there rather than re-arguing the decision.
   predicate, or a `limit`-truncated list reports itself complete.
 - Flag the error-channel split in `Sources/TelegramKBMCP/` crossing the wrong way (MCP
   2025-11-25, SEP-1303): an argument the tool cannot use (missing key, wrong type, unknown key,
-  foreign cursor, `Store.SearchError`, a malformed post reference) and a `get_post` miss must be an
+  foreign cursor, `Store.SearchError`, a malformed post reference) and a `tgkb_get_post` miss must be an
   `isError: true` result whose text says what to fix — thrown as `ToolInputError` and turned into
   a result in `TGKBServer.call` — not a thrown `MCPError`; an unknown tool name must be
   `MCPError.invalidParams`, not a result.

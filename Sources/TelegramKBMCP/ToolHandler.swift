@@ -90,7 +90,7 @@ public enum TGKBServer {
         CallTool.Result(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
     }
 
-    // MARK: - search_posts
+    // MARK: - tgkb_search_posts
 
     static func searchPosts(_ args: Args, store: Store) async throws -> CallTool.Result {
         try args.expecting(["query", "channel", "kind", "from", "to", "mode", "limit", "cursor"])
@@ -136,7 +136,7 @@ public enum TGKBServer {
             structuredContent: output)
     }
 
-    // MARK: - find_links
+    // MARK: - tgkb_find_links
 
     static func findLinks(_ args: Args, store: Store) throws -> CallTool.Result {
         try args.expecting(["url", "limit", "cursor"])
@@ -168,7 +168,7 @@ public enum TGKBServer {
                 index_moved_since_cursor: results.indexMovedSinceCursor))
     }
 
-    // MARK: - get_post
+    // MARK: - tgkb_get_post
 
     static func getPost(_ args: Args, store: Store) throws -> CallTool.Result {
         try args.expecting(["post"])

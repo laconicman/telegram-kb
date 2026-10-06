@@ -7,19 +7,19 @@ import TelegramKBStore
 /// Two rules from <doc:Design> § *MCP tool surface* shape everything here:
 ///
 /// - **Compact records.** Search results carry `(channel, date, author, snippet, reactions,
-///   link)` — never full bodies. Full text comes from a follow-up `get_post`; a result list
+///   link)` — never full bodies. Full text comes from a follow-up `tgkb_get_post`; a result list
 ///   that dumps whole posts wastes the context window the tool exists to protect.
 /// - **Every record carries a `t.me` permalink.** Citation is the whole point of retrieval
 ///   here. Of seven Telegram MCP servers surveyed, not one emitted a link its output could
 ///   be cited by.
 ///
 /// Peer addressing is one round-trippable string: the `post` field emits exactly the
-/// `@channel/id` literal that ``get_post`` accepts, so a model never has to compose an
+/// `@channel/id` literal that ``tgkb_get_post`` accepts, so a model never has to compose an
 /// id/hash/type triple.
 
 /// A post as a search hit — the compact form.
 struct PostSummary: Codable, Sendable, Equatable {
-    /// `@channel/id` — the literal ``get_post`` takes.
+    /// `@channel/id` — the literal ``tgkb_get_post`` takes.
     var post: String
     var channel: String
     /// ISO-8601 with fractional seconds, UTC-rendered — the post's own date, not the crawl's.
@@ -63,7 +63,7 @@ struct SearchPostsOutput: Codable, Sendable, Equatable {
     var index_moved_since_cursor: Bool
 }
 
-/// A post that carried a URL — `find_links`' record.
+/// A post that carried a URL — `tgkb_find_links`' record.
 struct LinkHitRecord: Codable, Sendable, Equatable {
     var post: String
     var channel: String
@@ -88,7 +88,7 @@ struct FindLinksOutput: Codable, Sendable, Equatable {
     var index_moved_since_cursor: Bool
 }
 
-/// The full post — `get_post`'s record. Everything the store knows, unabridged.
+/// The full post — `tgkb_get_post`'s record. Everything the store knows, unabridged.
 struct PostDetail: Codable, Sendable, Equatable {
     struct ReactionRecord: Codable, Sendable, Equatable {
         var emoji: String?

@@ -94,7 +94,7 @@ struct MCPServerTests {
     func listsTools() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let (tools, _) = try await client.listTools()
-        #expect(tools.map(\.name).sorted() == ["find_links", "get_post", "search_posts"])
+        #expect(tools.map(\.name).sorted() == ["tgkb_find_links", "tgkb_get_post", "tgkb_search_posts"])
         for tool in tools {
             #expect(tool.annotations.readOnlyHint == true)
             #expect(tool.annotations.destructiveHint == false)
@@ -104,17 +104,17 @@ struct MCPServerTests {
         }
     }
 
-    @Test("search_posts returns compact records with permalinks and an honest total")
+    @Test("tgkb_search_posts returns compact records with permalinks and an honest total")
     func searchPosts() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let result = try await client.callTool(
-            name: "search_posts", arguments: ["query": "вёрстка"]).value
+            name: "tgkb_search_posts", arguments: ["query": "вёрстка"]).value
         #expect(result.isError != true)
         let out = try Self.decode(result, as: SearchPostsOutput.self)
         #expect(out.total == 1)
         #expect(out.posts.count == 1)
         let hit = out.posts[0]
-        #expect(hit.post == "@iosgr/1", "the literal get_post accepts")
+        #expect(hit.post == "@iosgr/1", "the literal tgkb_get_post accepts")
         #expect(hit.link == "https://t.me/iosgr/1", "every record must be citable")
         #expect(hit.channel == "iosgr")
         #expect(hit.reactions == 5)
@@ -128,32 +128,32 @@ struct MCPServerTests {
         #expect(text.contains("https://t.me/iosgr/1"))
     }
 
-    @Test("search_posts pages through an opaque cursor")
+    @Test("tgkb_search_posts pages through an opaque cursor")
     func searchPostsPages() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let page1 = try await client.callTool(
-            name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
+            name: "tgkb_search_posts", arguments: ["query": "про", "limit": .int(1)]).value
         let out1 = try Self.decode(page1, as: SearchPostsOutput.self)
         #expect(out1.posts.count == 1 && out1.total > 1)
         let cursor = try #require(out1.next_cursor)
         let page2 = try await client.callTool(
-            name: "search_posts", arguments: ["query": "про", "limit": .int(1),
+            name: "tgkb_search_posts", arguments: ["query": "про", "limit": .int(1),
                                               "cursor": .string(cursor)]).value
         let out2 = try Self.decode(page2, as: SearchPostsOutput.self)
         #expect(out2.posts.count == 1)
         #expect(out2.posts[0].post != out1.posts[0].post, "the second page must not repeat")
     }
 
-    @Test("search_posts with a foreign cursor is a tool error, not a wrong page")
+    @Test("tgkb_search_posts with a foreign cursor is a tool error, not a wrong page")
     func foreignCursorRejected() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let page1 = try await client.callTool(
-            name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
+            name: "tgkb_search_posts", arguments: ["query": "про", "limit": .int(1)]).value
         let cursor = try #require(try Self.decode(page1, as: SearchPostsOutput.self).next_cursor)
         // A cursor minted by "и" must not page through "вёрстка".
         await Self.expectToolError("foreign cursor", mentioning: "different query") {
             try await client.callTool(
-                name: "search_posts", arguments: ["query": "вёрстка", "cursor": .string(cursor)]).value
+                name: "tgkb_search_posts", arguments: ["query": "вёрстка", "cursor": .string(cursor)]).value
         }
     }
 
@@ -163,33 +163,33 @@ struct MCPServerTests {
     func invalidArgsRejected() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         await Self.expectToolError("missing query", mentioning: "query is required") {
-            try await client.callTool(name: "search_posts", arguments: [:]).value
+            try await client.callTool(name: "tgkb_search_posts", arguments: [:]).value
         }
         await Self.expectToolError("query of wrong type", mentioning: "query must be a string") {
             try await client.callTool(
-                name: "search_posts", arguments: ["query": .int(3)]).value
+                name: "tgkb_search_posts", arguments: ["query": .int(3)]).value
         }
         await Self.expectToolError("misspelled key", mentioning: "chanel") {
             try await client.callTool(
-                name: "search_posts", arguments: ["query": "x", "chanel": "iosgr"]).value
+                name: "tgkb_search_posts", arguments: ["query": "x", "chanel": "iosgr"]).value
         }
         await Self.expectToolError("undeclared kind", mentioning: "kind must be one of") {
             try await client.callTool(
-                name: "search_posts", arguments: ["query": "x", "kind": "tesseract"]).value
+                name: "tgkb_search_posts", arguments: ["query": "x", "kind": "tesseract"]).value
         }
     }
 
-    @Test("search_posts honours the @channel filter")
+    @Test("tgkb_search_posts honours the @channel filter")
     func searchFiltersChannel() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let result = try await client.callTool(
-            name: "search_posts",
+            name: "tgkb_search_posts",
             arguments: ["query": "вёрстка", "channel": "@nobody"]).value
         let out = try Self.decode(result, as: SearchPostsOutput.self)
         #expect(out.posts.isEmpty && out.total == 0)
     }
 
-    @Test("find_links returns the canonical key with the resolved target beside it")
+    @Test("tgkb_find_links returns the canonical key with the resolved target beside it")
     func findLinks() async throws {
         let store = try Self.seededStore()
         let canonical = try #require(URLCanonicaliser.canonicalise("https://clck.ru/33ABCD"))
@@ -198,7 +198,7 @@ struct MCPServerTests {
             httpStatus: "200", hops: 1, resolvedAt: Date())])
         let (client, _) = try await Self.connected(store)
         let result = try await client.callTool(
-            name: "find_links", arguments: ["url": "https://habr.com/ru/post/1"]).value
+            name: "tgkb_find_links", arguments: ["url": "https://habr.com/ru/post/1"]).value
         #expect(result.isError != true)
         let out = try Self.decode(result, as: FindLinksOutput.self)
         #expect(out.total == 1)
@@ -209,9 +209,9 @@ struct MCPServerTests {
         #expect(link.resolved_url == "https://habr.com/ru/post/1")
     }
 
-    /// 🔴 `find_links` clamped `limit` to 100 and had no cursor, so the 101st match was unreachable
+    /// 🔴 `tgkb_find_links` clamped `limit` to 100 and had no cursor, so the 101st match was unreachable
     /// while `total` advertised it.
-    @Test("find_links pages through an opaque cursor")
+    @Test("tgkb_find_links pages through an opaque cursor")
     func findLinksPages() async throws {
         let store = try Self.seededStore()
         try store.upsert(posts: [
@@ -222,7 +222,7 @@ struct MCPServerTests {
         ])
         let (client, _) = try await Self.connected(store)
         let page1 = try await client.callTool(
-            name: "find_links", arguments: ["url": "https://clck.ru/33ABCD", "limit": .int(1)]).value
+            name: "tgkb_find_links", arguments: ["url": "https://clck.ru/33ABCD", "limit": .int(1)]).value
         let out1 = try Self.decode(page1, as: FindLinksOutput.self)
         #expect(out1.links.count == 1 && out1.total == 2)
         #expect(out1.index_moved_since_cursor == false)
@@ -233,7 +233,7 @@ struct MCPServerTests {
         #expect(text.contains("cursor"), "the text rendering tells a model how to continue")
 
         let page2 = try await client.callTool(
-            name: "find_links", arguments: ["url": "https://clck.ru/33ABCD", "limit": .int(1),
+            name: "tgkb_find_links", arguments: ["url": "https://clck.ru/33ABCD", "limit": .int(1),
                                             "cursor": .string(cursor)]).value
         let out2 = try Self.decode(page2, as: FindLinksOutput.self)
         #expect(out2.links.map(\.post) == ["@iosgr/3"], "the second page must not repeat")
@@ -241,14 +241,14 @@ struct MCPServerTests {
         #expect(page2.structuredContent?.objectValue?["next_cursor"] == nil,
                 "a final page omits next_cursor rather than sending null against a string schema")
 
-        // A link cursor is bound to its URL, and to find_links: neither misuse pages silently.
+        // A link cursor is bound to its URL, and to tgkb_find_links: neither misuse pages silently.
         await Self.expectToolError("cursor for another URL", mentioning: "different query") {
             try await client.callTool(
-                name: "find_links", arguments: ["url": "https://example.com", "cursor": .string(cursor)]).value
+                name: "tgkb_find_links", arguments: ["url": "https://example.com", "cursor": .string(cursor)]).value
         }
-        await Self.expectToolError("link cursor passed to search_posts", mentioning: "different query") {
+        await Self.expectToolError("link cursor passed to tgkb_search_posts", mentioning: "different query") {
             try await client.callTool(
-                name: "search_posts", arguments: ["query": "про", "cursor": .string(cursor)]).value
+                name: "tgkb_search_posts", arguments: ["query": "про", "cursor": .string(cursor)]).value
         }
     }
 
@@ -273,25 +273,25 @@ struct MCPServerTests {
         }
         let url: Value = "https://clck.ru/33ABCD"
         let first = try await client.callTool(
-            name: "find_links", arguments: ["url": url, "limit": .int(1)]).value
+            name: "tgkb_find_links", arguments: ["url": url, "limit": .int(1)]).value
         let cursor = try #require(try Self.decode(first, as: FindLinksOutput.self).next_cursor)
         #expect(try text(first).contains("1 of 2 post(s) — for the rest, call again with cursor"))
 
         let last = try await client.callTool(
-            name: "find_links", arguments: ["url": url, "limit": .int(1), "cursor": .string(cursor)]).value
+            name: "tgkb_find_links", arguments: ["url": url, "limit": .int(1), "cursor": .string(cursor)]).value
         #expect(try text(last).hasSuffix("1 of 2 post(s)"),
                 "a final page smaller than total is the end of the walk, not a page to continue")
 
         let count = try await client.callTool(
-            name: "find_links", arguments: ["url": url, "limit": .int(0)]).value
+            name: "tgkb_find_links", arguments: ["url": url, "limit": .int(0)]).value
         #expect(try Self.decode(count, as: FindLinksOutput.self).total == 2)
         #expect(try text(count) == "0 of 2 post(s)", "a count is not an empty result set")
 
         let search = try await client.callTool(
-            name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
+            name: "tgkb_search_posts", arguments: ["query": "про", "limit": .int(1)]).value
         let more = try #require(try Self.decode(search, as: SearchPostsOutput.self).next_cursor)
         let end = try await client.callTool(
-            name: "search_posts", arguments: ["query": "про", "limit": .int(1), "cursor": .string(more)]).value
+            name: "tgkb_search_posts", arguments: ["query": "про", "limit": .int(1), "cursor": .string(more)]).value
         #expect(try text(end).hasSuffix("1 of 2 result(s)"))
     }
 
@@ -303,7 +303,7 @@ struct MCPServerTests {
     func footerCarriesTheCursor() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let first = try await client.callTool(
-            name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
+            name: "tgkb_search_posts", arguments: ["query": "про", "limit": .int(1)]).value
         let cursor = try #require(try Self.decode(first, as: SearchPostsOutput.self).next_cursor)
         guard case .text(let s, _, _) = first.content.first else {
             Issue.record("expected a text content block"); return
@@ -319,7 +319,7 @@ struct MCPServerTests {
     func dateBoundsSchemaAdmitsDateOnly() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let (tools, _) = try await client.listTools()
-        let search = try #require(tools.first { $0.name == "search_posts" })
+        let search = try #require(tools.first { $0.name == "tgkb_search_posts" })
         let properties = try #require(search.inputSchema.objectValue?["properties"]?.objectValue)
         for key in ["from", "to"] {
             let bound = try #require(properties[key]?.objectValue)
@@ -334,7 +334,7 @@ struct MCPServerTests {
     func limitSchemaAdmitsClampedValues() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let (tools, _) = try await client.listTools()
-        for name in ["search_posts", "find_links"] {
+        for name in ["tgkb_search_posts", "tgkb_find_links"] {
             let tool = try #require(tools.first { $0.name == name })
             let limit = try #require(tool.inputSchema.objectValue?["properties"]?.objectValue?["limit"]?.objectValue)
             #expect(limit["maximum"] == nil, "\(name): a maximum would reject what the handler clamps")
@@ -358,18 +358,18 @@ struct MCPServerTests {
         ])
         let (client, _) = try await Self.connected(store)
         let all = try Self.decode(try await client.callTool(
-            name: "search_posts", arguments: ["query": "дедлайн"]).value, as: SearchPostsOutput.self)
+            name: "tgkb_search_posts", arguments: ["query": "дедлайн"]).value, as: SearchPostsOutput.self)
         let half = try #require(all.posts.first { $0.post == "@iosgr/3" })
         #expect(half.date == "2023-11-14T23:59:59.500Z", "the precision the store keeps")
 
         let upTo = try Self.decode(try await client.callTool(
-            name: "search_posts", arguments: ["query": "дедлайн", "to": .string(half.date)]).value,
+            name: "tgkb_search_posts", arguments: ["query": "дедлайн", "to": .string(half.date)]).value,
                                    as: SearchPostsOutput.self)
         #expect(upTo.posts.map(\.post) == ["@iosgr/3"], "its own date is inclusive of it, and of nothing later")
 
         let detail = try Self.decode(try await client.callTool(
-            name: "get_post", arguments: ["post": "@iosgr/3"]).value, as: PostDetail.self)
-        #expect(detail.date == half.date, "get_post and search_posts agree on the spelling")
+            name: "tgkb_get_post", arguments: ["post": "@iosgr/3"]).value, as: PostDetail.self)
+        #expect(detail.date == half.date, "tgkb_get_post and tgkb_search_posts agree on the spelling")
     }
 
     /// 🟡 `Date.ISO8601FormatStyle()` does not parse fractional seconds, so `to: "…23:59:59.500Z"`
@@ -387,7 +387,7 @@ struct MCPServerTests {
         ])
         let (client, _) = try await Self.connected(store)
         let result = try await client.callTool(
-            name: "search_posts",
+            name: "tgkb_search_posts",
             arguments: ["query": "дедлайн", "to": "2023-11-14T23:59:59.500Z"]).value
         #expect(try Self.decode(result, as: SearchPostsOutput.self).posts.map(\.post) == ["@iosgr/3"],
                 "inclusive at .500, so .750 is out")
@@ -399,15 +399,15 @@ struct MCPServerTests {
     func hugeLimitIsClampedNotFatal() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let out = try await client.callTool(
-            name: "search_posts", arguments: ["query": "про", "limit": .double(1e20)]).value
+            name: "tgkb_search_posts", arguments: ["query": "про", "limit": .double(1e20)]).value
         #expect(try Self.decode(out, as: SearchPostsOutput.self).posts.count == 2)
         await Self.expectToolError("a hugely negative limit is still a negative limit", mentioning: "limit") {
             try await client.callTool(
-                name: "search_posts", arguments: ["query": "про", "limit": .double(-1e20)]).value
+                name: "tgkb_search_posts", arguments: ["query": "про", "limit": .double(-1e20)]).value
         }
         await Self.expectToolError("a fractional limit is not an integer", mentioning: "limit") {
             try await client.callTool(
-                name: "search_posts", arguments: ["query": "про", "limit": .double(1.5)]).value
+                name: "tgkb_search_posts", arguments: ["query": "про", "limit": .double(1.5)]).value
         }
     }
 
@@ -432,19 +432,19 @@ struct MCPServerTests {
         ])
         let (client, _) = try await Self.connected(store)
         let result = try await client.callTool(
-            name: "search_posts", arguments: ["query": "дедлайн", "to": "2023-11-14"]).value
+            name: "tgkb_search_posts", arguments: ["query": "дедлайн", "to": "2023-11-14"]).value
         let out = try Self.decode(result, as: SearchPostsOutput.self)
         #expect(Set(out.posts.map(\.post)) == ["@iosgr/3", "@iosgr/5"] && out.total == 2,
                 "23:59:59.5 and 23:59:59.999 are still the 14th; 00:00:00 of the 15th is not")
 
         let from = try await client.callTool(
-            name: "search_posts", arguments: ["query": "дедлайн", "from": "2023-11-15"]).value
+            name: "tgkb_search_posts", arguments: ["query": "дедлайн", "from": "2023-11-15"]).value
         #expect(try Self.decode(from, as: SearchPostsOutput.self).posts.map(\.post) == ["@iosgr/4"])
     }
 
     /// 🔴 A poll post has no body, so its text rendering was `[poll, no text]` — a client that shows
     /// only `content` could not read the one thing the post says.
-    @Test("get_post renders a poll's question and options for text-only clients")
+    @Test("tgkb_get_post renders a poll's question and options for text-only clients")
     func pollRendersAsText() async throws {
         let store = try Self.seededStore()
         try store.upsert(posts: [
@@ -456,7 +456,7 @@ struct MCPServerTests {
         ])
         let (client, _) = try await Self.connected(store)
         let result = try await client.callTool(
-            name: "get_post", arguments: ["post": "@iosgr/5"]).value
+            name: "tgkb_get_post", arguments: ["post": "@iosgr/5"]).value
         guard case .text(let text, _, _) = result.content.first else {
             Issue.record("expected a text content block"); return
         }
@@ -468,7 +468,7 @@ struct MCPServerTests {
 
     /// 🟡 The search text listed date, permalink, reactions and snippet — the author only lived in
     /// `structuredContent`, so a text-only client could not tell who signed a hit.
-    @Test("search_posts text names a signed post's author, beside the permalink that names its channel")
+    @Test("tgkb_search_posts text names a signed post's author, beside the permalink that names its channel")
     func searchTextNamesTheAuthor() async throws {
         let store = try Self.seededStore()
         try store.upsert(posts: [
@@ -479,7 +479,7 @@ struct MCPServerTests {
         ])
         let (client, _) = try await Self.connected(store)
         let result = try await client.callTool(
-            name: "search_posts", arguments: ["query": "вёрстка"]).value
+            name: "tgkb_search_posts", arguments: ["query": "вёрстка"]).value
         let out = try Self.decode(result, as: SearchPostsOutput.self)
         #expect(out.posts.map(\.post).sorted() == ["@iosgr/1", "@iosgr/6"])
         guard case .text(let text, _, _) = result.content.first else {
@@ -494,11 +494,11 @@ struct MCPServerTests {
         #expect(unsigned.hasSuffix("♥5"))
     }
 
-    @Test("get_post returns the full record; a missing post is a tool error, not silence")
+    @Test("tgkb_get_post returns the full record; a missing post is a tool error, not silence")
     func getPost() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let result = try await client.callTool(
-            name: "get_post", arguments: ["post": "@iosgr/1"]).value
+            name: "tgkb_get_post", arguments: ["post": "@iosgr/1"]).value
         let detail = try Self.decode(result, as: PostDetail.self)
         #expect(detail.text.contains("Вёрстка"))
         #expect(detail.reactions == [.init(emoji: "👍", count: 5, is_paid: false)])
@@ -507,14 +507,14 @@ struct MCPServerTests {
 
         // The t.me form parses to the same post.
         let viaLink = try await client.callTool(
-            name: "get_post", arguments: ["post": "https://t.me/iosgr/1"]).value
+            name: "tgkb_get_post", arguments: ["post": "https://t.me/iosgr/1"]).value
         #expect(try Self.decode(viaLink, as: PostDetail.self).message_id == 1)
 
         let missing = try await client.callTool(
-            name: "get_post", arguments: ["post": "@iosgr/404"]).value
+            name: "tgkb_get_post", arguments: ["post": "@iosgr/404"]).value
         #expect(missing.isError == true)
         await Self.expectToolError("unparseable post ref", mentioning: "not a ref") {
-            try await client.callTool(name: "get_post",
+            try await client.callTool(name: "tgkb_get_post",
                                       arguments: ["post": "not a ref"]).value
         }
     }

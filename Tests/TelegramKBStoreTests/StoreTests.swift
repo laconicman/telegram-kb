@@ -156,7 +156,7 @@ struct StoreTests {
                 "a FAILED resolution still keys on canonical — a dead link stays joinable to itself")
     }
 
-    /// The seam contract behind `find_links`: match on the link's EFFECTIVE URL against the
+    /// The seam contract behind `tgkb_find_links`: match on the link's EFFECTIVE URL against the
     /// query's — a shortener query must find the destination's posts, and a destination query
     /// must find every spelling that resolved to it (S6).
     @Test("links(to:) joins a shortener and its destination both ways")
