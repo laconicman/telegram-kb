@@ -53,6 +53,11 @@ there rather than re-arguing the decision.
   does. Require it to print its reason when it exits non-zero, and add one only for a platform
   difference actually observed (a mutant red on one toolchain, green on another): an UNPROVEN
   without a cause is a STILL GREEN hidden.
+- Require every fix round, a Devin session's included, to leave
+  `Scripts/mutation-check.sh --check-applies` passing. A commit that edits a mutant's context
+  lines leaves its patch stale, and a stale mutant guards nothing until someone re-anchors it. The
+  check builds nothing and needs no lemma model, so any machine can run it; it does not replace
+  the full run, because a patch that applies can still be semantically stale.
 - Flag a test asserting only that a walk stopped, without asserting the `Store.CrawlState` it left.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
