@@ -28,7 +28,7 @@ import TelegramKBStore
 ///    `claimChannelIdentity`'s single transaction, so no claimant can pass them against state a
 ///    rival has already replaced (PR #3, review round 1). A row an unverified import left at id
 ///    0 matches any chat, so a verified import names it only once the posts already stored
-///    agree with the export's (``confirm(_:against:channel:claimUnconfirmed:)``, `TD-19`).
+///    agree with the export's (`ChatImport.confirm`, `TD-19`).
 /// 5. **Write in batches**, each one `commitPage`: the posts and the id bounds they extend commit
 ///    together. `backfillComplete` is never set — an export is a snapshot of a chat, not a walk
 ///    that proved it reached the start — and a group is never synced, so nothing reads it.
