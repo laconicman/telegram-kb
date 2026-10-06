@@ -382,6 +382,36 @@ struct ChatImportTests {
         #expect(outcome.written == 3)
     }
 
+    /// 🔴 The import released its lease with `defer { try? … }`: a release that failed left the
+    /// row behind and said nothing. An import whose batches landed now reports it…
+    @Test("an import whose lease release fails completes, and says so")
+    func importReportsFailedRelease() async throws {
+        let store = try Self.store()
+        try SyncTests.refuseLeaseRelease(in: store)
+        let outcome = try await ChatImport(store: store, fetcher: nil)
+            .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+        #expect(outcome.written == 3 && !outcome.walCleanupFailed)
+        #expect(outcome.leaseReleaseFailed, "the release error is reported, not swallowed")
+    }
+
+    /// …and one that was refused carries it alongside the refusal, which still leads.
+    @Test("a refused import whose lease release fails carries both, the refusal first")
+    func failedImportCarriesFailedRelease() async throws {
+        let store = try Self.store()
+        try SyncTests.refuseLeaseRelease(in: store)
+        let other = Stub(Dictionary(uniqueKeysWithValues: [
+            Self.route(12, Self.embed("testgroup", 12, text: "Совсем другое сообщение из другого чата",
+                                      utc: "2023-04-03T09:34:07+00:00")),
+        ]))
+        let error = await #expect(throws: Store.CleanupAlsoFailed.self) {
+            try await ChatImport(store: store, fetcher: other)
+                .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+        }
+        #expect(error?.session as? ChatImport.ImportError
+                == .notThisChat(channel: "testgroup", messageID: 12))
+        #expect(error?.failures.map { $0.cleanup } == [.leaseRelease(channel: "testgroup")])
+    }
+
     @Test("offline, nothing is verified and no id is learned")
     func offline() async throws {
         let store = try Self.store()

@@ -42,6 +42,9 @@ public struct ChannelSync: Sendable {
         /// mid-snapshot, is absorbed inside `Store.truncateWAL` and does not set this). The
         /// sync itself is complete; the residue is reclaimed by a later write instead.
         public var walCleanupFailed = false
+        /// The channel's lease could not be released after the walk committed (`TD-21`). The
+        /// sync is complete; the row lapses once this process exits, or after the lease TTL.
+        public var leaseReleaseFailed = false
     }
 
     /// - Parameter full: re-walk from the newest page, overwriting stored copies. Never removes.
@@ -60,24 +63,27 @@ public struct ChannelSync: Sendable {
 
         // A failed walk still committed pages, so the reclaim runs either way; the walk's own
         // error leads (`Store.endingWithWALReclaim`, TD-22).
+        //
+        // One writer per channel, enforced across processes (TD-21): a second sync — or an
+        // import — of this channel fails fast instead of interleaving crawl-state reads and
+        // writes. Held until the walk's last commit; a dead holder's lease is stolen. The release
+        // is a cleanup under the same rule as the reclaim, so a failed one is reported, not
+        // dropped (`Store.holdingChannelLease`).
         let session = try await store.endingWithWALReclaim {
-            try await walk(channel: channel, full: full)
+            try await store.holdingChannelLease(for: channel) {
+                try await walk(channel: channel, full: full)
+            }
         }
-        var outcome = session.value
+        var outcome = session.value.value
+        outcome.leaseReleaseFailed = session.value.leaseReleaseFailed
         outcome.walCleanupFailed = session.walCleanupFailed
         return outcome
     }
 
     /// Crawl a previewable channel, write each page, record what the walk proved — the write
-    /// session. `sync` classifies first and wraps this in the session-end WAL reclaim, which is
-    /// why the flag lives on `Outcome`.
+    /// session. `sync` classifies first, takes the channel's lease and wraps this in the
+    /// session-end cleanups, which is why their flags live on `Outcome`.
     private func walk(channel: String, full: Bool) async throws -> Outcome {
-        // One writer per channel, enforced across processes (TD-21): a second sync — or an
-        // import — of this channel fails fast instead of interleaving crawl-state reads and
-        // writes. Held until the walk's last commit; a dead holder's lease is stolen.
-        try store.acquireChannelLease(for: channel)
-        defer { try? store.releaseChannelLease(for: channel) }
-
         // The channel row must exist BEFORE any post: `post.channelUsername` is a foreign key and
         // pages are written as they arrive. Insert-if-absent, never an upsert, so a previously
         // learned `rawChannelID` is not overwritten by the placeholder. A row imported as a group

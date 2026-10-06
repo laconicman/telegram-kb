@@ -150,15 +150,72 @@ public struct Store: Sendable {
         }
     }
 
-    /// A write session failed, and the WAL reclaim after it failed too — with a real error, not
-    /// BUSY. The session's error is the one to act on and leads; the cleanup's rides along so it
-    /// is reported rather than lost.
+    /// A write session failed, and a cleanup it owed failed too — with a real error, not BUSY. The
+    /// session's error is the one to act on and leads; each cleanup's rides along so it is
+    /// reported rather than lost.
     public struct CleanupAlsoFailed: Error, CustomStringConvertible {
+        /// A cleanup a write session owes at its end, whichever way the session ends.
+        public enum Cleanup: Sendable, Equatable {
+            /// ``releaseChannelLease(for:)`` — the run's hold on its channel (`TD-21`).
+            case leaseRelease(channel: String)
+            /// ``truncateWAL()`` — the WAL's space given back (`TD-22`).
+            case walReclaim
+        }
+
         public let session: any Error
-        public let cleanup: any Error
+        /// Every cleanup that failed after the session, in the order they ran. A second one is
+        /// appended rather than wrapping the first, so `session` stays the run's own error.
+        public let failures: [(cleanup: Cleanup, error: any Error)]
+
+        init(after sessionError: any Error, _ cleanup: Cleanup, failed error: any Error) {
+            let earlier = sessionError as? CleanupAlsoFailed
+            session = earlier?.session ?? sessionError
+            failures = (earlier?.failures ?? []) + [(cleanup, error)]
+        }
+
         public var description: String {
-            "\(session) — and the WAL cleanup after it failed too (\(cleanup)); "
-                + "the space is reclaimed by the next write instead"
+            failures.reduce("\(session)") { text, failure in
+                switch failure.cleanup {
+                case .leaseRelease(let channel):
+                    text + " — and releasing @\(channel)'s lease failed too (\(failure.error)); "
+                        + "another writer takes it once this process exits, or "
+                        + "\(Int(Store.channelLeaseTTL)) s after its last write"
+                case .walReclaim:
+                    text + " — and the WAL cleanup after it failed too (\(failure.error)); "
+                        + "the space is reclaimed by the next write instead"
+                }
+            }
+        }
+    }
+
+    /// Runs `session`, then `cleanup`, whichever way the session ended — the one end-of-session
+    /// rule that every cleanup a write session owes shares, so neither the WAL reclaim nor the
+    /// lease release is a `try?` some caller wrote by hand.
+    ///
+    /// A failed session still committed what it committed, so the cleanup runs then too; the
+    /// session's error leads, and a failed cleanup rides along in ``CleanupAlsoFailed``. After a
+    /// successful session a failed cleanup is not an error — the work has landed — so it is
+    /// returned as `cleanupFailed` for the caller to report.
+    private func ending<T>(
+        with cleanup: CleanupAlsoFailed.Cleanup, _ run: () throws -> Void,
+        _ session: () async throws -> T
+    ) async throws -> (value: T, cleanupFailed: Bool) {
+        let value: T
+        do {
+            value = try await session()
+        } catch let sessionError {
+            do {
+                try run()
+            } catch {
+                throw CleanupAlsoFailed(after: sessionError, cleanup, failed: error)
+            }
+            throw sessionError
+        }
+        do {
+            try run()
+            return (value, false)
+        } catch {
+            return (value, true)
         }
     }
 
@@ -167,33 +224,16 @@ public struct Store: Sendable {
     /// "a write session ends by reclaiming" is one rule in one place, not a habit each caller
     /// has to keep.
     ///
-    /// A failed session still committed what it committed, so the reclaim runs then too; the
-    /// session's error leads, and a failed reclaim rides along in ``CleanupAlsoFailed``. After a
-    /// successful session a failed reclaim is not an error — the work is done and the residue
-    /// clears at the next writer's checkpoint — so it is returned as `walCleanupFailed` for the
-    /// caller to report. BUSY never reaches either path: ``truncateWAL()`` absorbs it.
+    /// A failed reclaim after a successful session is returned as `walCleanupFailed`: the residue
+    /// clears at the next writer's checkpoint. BUSY never reaches either path: ``truncateWAL()``
+    /// absorbs it.
     ///
     /// For writers only: a store opened with `openForReading` cannot checkpoint.
     public func endingWithWALReclaim<T>(
         _ session: () async throws -> T
     ) async throws -> (value: T, walCleanupFailed: Bool) {
-        let value: T
-        do {
-            value = try await session()
-        } catch let sessionError {
-            do {
-                try truncateWAL()
-            } catch {
-                throw CleanupAlsoFailed(session: sessionError, cleanup: error)
-            }
-            throw sessionError
-        }
-        do {
-            try truncateWAL()
-            return (value, false)
-        } catch {
-            return (value, true)
-        }
+        let ended = try await ending(with: .walReclaim, truncateWAL, session)
+        return (ended.value, ended.cleanupFailed)
     }
 
     // MARK: - Writing
@@ -693,6 +733,25 @@ extension Store {
                 """, arguments: [username, Self.processID, nonce])
         }
         leaseTokens.remove(username, onlyIf: nonce)
+    }
+
+    /// Runs `session` holding `username`'s lease: acquired first, released at the end whichever
+    /// way the session ends — the run path for every writer of a channel, so no caller hand-writes
+    /// the release.
+    ///
+    /// A release is a cleanup like the WAL reclaim and follows the same rule
+    /// (``endingWithWALReclaim(_:)``): after a failed session its error rides along in
+    /// ``CleanupAlsoFailed``; after a successful one the commits have landed, so it is returned as
+    /// `leaseReleaseFailed` for the caller to report. A `try?` here dropped it — the row stays,
+    /// and nothing said why the channel was busy. It lapses on its own: a claimant takes it once
+    /// this process has exited, or `channelLeaseTTL` after its last write, whichever comes first.
+    public func holdingChannelLease<T>(
+        for username: String, _ session: () async throws -> T
+    ) async throws -> (value: T, leaseReleaseFailed: Bool) {
+        try acquireChannelLease(for: username)
+        let ended = try await ending(with: .leaseRelease(channel: username),
+                                     { try releaseChannelLease(for: username) }, session)
+        return (ended.value, ended.cleanupFailed)
     }
 
     /// Claims `username` for the chat `rawChannelID`, **atomically**: the checks and the write

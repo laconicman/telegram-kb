@@ -69,6 +69,11 @@ struct Import: AsyncParsableCommand {
             let warning = "warning: WAL cleanup failed — the space is reclaimed by the next write instead\n"
             FileHandle.standardError.write(Data(warning.utf8))
         }
+        if outcome.leaseReleaseFailed {
+            let warning = "warning: @\(outcome.channel)'s lease could not be released — another writer "
+                        + "takes it once this process exits\n"
+            FileHandle.standardError.write(Data(warning.utf8))
+        }
         if outcome.unreadable > 0 {
             // Loud and non-zero, as for resolver rows: these posts are missing from the index, and
             // automation reads the exit status, not the prose.

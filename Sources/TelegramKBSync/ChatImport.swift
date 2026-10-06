@@ -63,6 +63,9 @@ public struct ChatImport: Sendable {
         /// The end-of-session WAL reclaim failed with a real error (`TD-22`). The import itself
         /// is complete; the residue is reclaimed by a later write instead.
         public var walCleanupFailed = false
+        /// The channel's lease could not be released after the last batch committed (`TD-21`).
+        /// The import is complete; the row lapses once this process exits, or after the lease TTL.
+        public var leaseReleaseFailed = false
     }
 
     public enum ImportError: Error, CustomStringConvertible, Equatable {
@@ -140,10 +143,19 @@ public struct ChatImport: Sendable {
         if known?.reachability == .webPreview { throw ImportError.crawledChannel(channel) }
 
         // Held from here to the last batch: a second tgkb writing this channel fails fast
-        // instead of interleaving its checks and rows with ours.
-        try store.acquireChannelLease(for: channel)
-        defer { try? store.releaseChannelLease(for: channel) }
+        // instead of interleaving its checks and rows with ours. Released whichever way the
+        // import ends, and a failed release is reported, not dropped (`Store.holdingChannelLease`).
+        let held = try await store.holdingChannelLease(for: channel) {
+            try await claimAndWrite(export, channel: channel, timeZone: timeZone, policy: policy)
+        }
+        var outcome = held.value
+        outcome.leaseReleaseFailed = held.leaseReleaseFailed
+        return outcome
+    }
 
+    /// Verifies, claims the identity, and writes the batches — everything the lease covers.
+    private func claimAndWrite(_ export: ChatExportParser.Export, channel: String,
+                               timeZone: TimeZone, policy: Store.WritePolicy) async throws -> Outcome {
         var outcome = Outcome(channel: channel, title: export.title, posts: export.posts.count,
                               serviceMessages: export.serviceMessages, unreadable: export.unreadable)
         if let fetcher {
