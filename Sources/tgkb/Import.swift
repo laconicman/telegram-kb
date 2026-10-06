@@ -31,7 +31,12 @@ struct Import: AsyncParsableCommand {
     @Option(help: "The time zone of the Mac that wrote the export, e.g. Europe/Moscow. Default: this Mac's.")
     var timezone: String?
 
-    @Flag(help: "Overwrite posts already stored — for an export taken after edits.")
+    @Flag(help: ArgumentHelp(
+        "Overwrite posts already stored — for an export taken after edits.",
+        discussion: """
+            Also lets a verified import claim the posts an earlier --no-verify import stored under \
+            this name when no message the two exports share confirms they are this chat's.
+            """))
     var replace = false
 
     @Flag(name: .customLong("no-verify"), help: "Import without the check against t.me: nothing verified, no id learned.")

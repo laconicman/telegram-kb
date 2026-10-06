@@ -22,6 +22,8 @@ struct ChatImportTests {
         var sender: String? = "Alice Example"
         /// A photo with no caption: media markup instead of a `text` div.
         var media = false
+        /// The export labels an edited message's time `edited HH:MM`; its title keeps the send time.
+        var edited = false
     }
 
     static let messages = [
@@ -36,7 +38,7 @@ struct ChatImportTests {
             """
             <div class="message default clearfix" id="message\(m.id)">
             <div class="body">
-            <div class="pull_right date details" title="\(m.title)">00:00</div>
+            <div class="pull_right date details" title="\(m.title)">\(m.edited ? "edited 00:00" : "00:00")</div>
             \(m.sender.map { "<div class=\"from_name\">\($0)</div>" } ?? "")
             \(m.media ? "<div class=\"media_wrap\"><a class=\"photo_wrap clearfix pull_left\"></a></div>"
                       : "<div class=\"text\">\(m.text)</div>")
@@ -410,6 +412,122 @@ struct ChatImportTests {
         #expect(error?.session as? ChatImport.ImportError
                 == .notThisChat(channel: "testgroup", messageID: 12))
         #expect(error?.failures.map { $0.cleanup } == [.leaseRelease(channel: "testgroup")])
+    }
+
+    // MARK: - A verified import over an unverified history (TD-19)
+
+    /// A verified import of `messages`, newest first, from a stub `t.me` that renders only the
+    /// newest — enough to verify; the oldest and midpoint probes read as deleted and are skipped.
+    func importVerified(_ messages: [Message], newestUTC: String, into store: Store,
+                        policy: Store.WritePolicy = .keepExisting) async throws -> ChatImport.Outcome {
+        let newest = try #require(messages.last)
+        let telegram = Stub(Dictionary(uniqueKeysWithValues: [
+            Self.route(newest.id, Self.embed("testgroup", newest.id, text: newest.text, utc: newestUTC)),
+        ]))
+        return try await ChatImport(store: store, fetcher: telegram)
+            .run(export: try Self.exportDirectory(messages), channel: "testgroup", timeZone: Self.moscow,
+                 policy: policy)
+    }
+
+    func importOffline(_ messages: [Message] = messages, into store: Store) async throws {
+        _ = try await ChatImport(store: store, fetcher: nil)
+            .run(export: try Self.exportDirectory(messages), channel: "testgroup", timeZone: Self.moscow)
+    }
+
+    /// Another chat's message at a stored id: what a username reassigned between two exports
+    /// looks like from here.
+    static let foreignNewest = Message(id: 13, title: "4 April 2023, 09:00:00", text: "Новое сообщение другого чата")
+    static let foreignNewestUTC = "2023-04-04T06:00:00+00:00"
+
+    /// 🔴 An `--no-verify` import leaves its row at id 0, which matched any claim: a verified
+    /// import of ANOTHER chat under the same name set its id on the row and merged both
+    /// histories. Message 11 here is edited, and still refused — an edit keeps the send time,
+    /// so a date that differs is another message.
+    @Test("an unverified history sent at other moments is refused, edited or not")
+    func foreignHistoryDatedOtherwiseRefused() async throws {
+        let store = try Self.store()
+        try await importOffline(into: store)
+        let other = [Message(id: 11, title: "3 April 2023, 13:10:00", text: Self.messages[1].text, edited: true),
+                     Self.foreignNewest]
+        await #expect(throws: ChatImport.ImportError.storedDateDiffers(
+                        channel: "testgroup", messageID: 11, offset: 3600)) {
+            try await importVerified(other, newestUTC: Self.foreignNewestUTC, into: store)
+        }
+        #expect(try store.identity(forChannel: "testgroup")?.rawChannelID == 0, "the row stays unverified")
+        #expect(try store.storedMessageIDs(forChannel: "testgroup") == [10, 11, 12], "and holds one chat")
+    }
+
+    @Test("an unverified history whose words differ at the same moment is refused")
+    func foreignHistoryWordedOtherwiseRefused() async throws {
+        let store = try Self.store()
+        try await importOffline(into: store)
+        let other = [Message(id: 11, title: Self.messages[1].title, text: "Совсем другие слова другого чата"),
+                     Self.foreignNewest]
+        await #expect(throws: ChatImport.ImportError.storedTextDiffers(channel: "testgroup", messageID: 11)) {
+            try await importVerified(other, newestUTC: Self.foreignNewestUTC, into: store)
+        }
+        #expect(try store.identity(forChannel: "testgroup")?.rawChannelID == 0)
+        #expect(try store.storedMessageIDs(forChannel: "testgroup") == [10, 11, 12])
+    }
+
+    /// The normal path the check must not block: an offline import, then a newer export of the
+    /// same chat, verified.
+    @Test("a newer export of the same chat claims the history an offline import left")
+    func sameChatClaimsItsUnverifiedHistory() async throws {
+        let store = try Self.store()
+        try await importOffline(Array(Self.messages.prefix(2)), into: store)
+        let outcome = try await importVerified(Array(Self.messages.suffix(2)),
+                                               newestUTC: "2023-04-03T09:34:07+00:00", into: store)
+        #expect(outcome.verifiedMessageID == 12 && outcome.kept == 1 && outcome.written == 1)
+        #expect(try store.identity(forChannel: "testgroup")?.rawChannelID == Self.chatID)
+        #expect(try store.storedMessageIDs(forChannel: "testgroup") == [10, 11, 12])
+    }
+
+    /// An edited message's words changed on purpose, so a pair with an edited side neither
+    /// confirms nor refutes — here the export's 12 was edited since, and 10 and 11 agree.
+    @Test("an edited message is neutral evidence: its new words refuse nothing")
+    func editedPostIsNeutralEvidence() async throws {
+        let store = try Self.store()
+        try await importOffline(into: store)
+        var newer = Self.messages
+        newer[2].text = "Два снимка проверены, вывод исправлен"
+        newer[2].edited = true
+        let outcome = try await importVerified(newer, newestUTC: "2023-04-03T09:34:07+00:00", into: store)
+        #expect(outcome.rawChannelID == Self.chatID)
+        #expect(try store.identity(forChannel: "testgroup")?.rawChannelID == Self.chatID)
+    }
+
+    /// Nothing in common, or only edited messages in common, shows nothing either way: refused,
+    /// unless `--replace` says to claim the stored posts anyway.
+    @Test("an unverified history nothing confirms is claimed only with --replace")
+    func unconfirmedHistoryNeedsReplace() async throws {
+        let store = try Self.store()
+        try await importOffline(Array(Self.messages.prefix(1)), into: store)
+        let disjoint = [Self.messages[2]]
+        await #expect(throws: ChatImport.ImportError.storedHistoryUnconfirmed(channel: "testgroup")) {
+            try await importVerified(disjoint, newestUTC: "2023-04-03T09:34:07+00:00", into: store)
+        }
+        var onlyEdited = [Self.messages[0], Self.messages[2]]
+        onlyEdited[0].text = "Первая строка, исправленная"
+        onlyEdited[0].edited = true
+        await #expect(throws: ChatImport.ImportError.storedHistoryUnconfirmed(channel: "testgroup")) {
+            try await importVerified(onlyEdited, newestUTC: "2023-04-03T09:34:07+00:00", into: store)
+        }
+        #expect(try store.identity(forChannel: "testgroup")?.rawChannelID == 0)
+
+        let outcome = try await importVerified(disjoint, newestUTC: "2023-04-03T09:34:07+00:00",
+                                               into: store, policy: .replace)
+        #expect(outcome.rawChannelID == Self.chatID)
+        #expect(try store.storedMessageIDs(forChannel: "testgroup") == [10, 12])
+    }
+
+    @Test("an unverified row with no posts is claimed without a comparison")
+    func emptyUnverifiedRowIsClaimedFreely() async throws {
+        let store = try Self.store()
+        try store.upsert(channel: Channel(username: "testgroup", rawChannelID: 0, reachability: .group))
+        let outcome = try await ChatImport(store: store, fetcher: Self.telegram())
+            .run(export: try Self.exportDirectory(), channel: "testgroup", timeZone: Self.moscow)
+        #expect(outcome.rawChannelID == Self.chatID && outcome.written == 3)
     }
 
     @Test("offline, nothing is verified and no id is learned")

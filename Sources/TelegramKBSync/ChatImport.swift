@@ -26,7 +26,9 @@ import TelegramKBStore
 ///    embed is fetched and held until the last batch commits, so two `tgkb import` processes
 ///    cannot interleave under one username (TD-21). The identity checks and the write then share
 ///    `claimChannelIdentity`'s single transaction, so no claimant can pass them against state a
-///    rival has already replaced (PR #3, review round 1).
+///    rival has already replaced (PR #3, review round 1). A row an unverified import left at id
+///    0 matches any chat, so a verified import names it only once the posts already stored
+///    agree with the export's (``confirm(_:against:channel:claimUnconfirmed:)``, `TD-19`).
 /// 5. **Write in batches**, each one `commitPage`: the posts and the id bounds they extend commit
 ///    together. `backfillComplete` is never set — an export is a snapshot of a chat, not a walk
 ///    that proved it reached the start — and a group is never synced, so nothing reads it.
@@ -79,6 +81,13 @@ public struct ChatImport: Sendable {
         case embedFailed(URL, status: Int)
         /// The page verified the message but carries no readable `data-peer`.
         case malformedEmbed(URL)
+        /// A message an unverified import stored under this name was sent at another moment.
+        case storedDateDiffers(channel: String, messageID: Int, offset: TimeInterval)
+        /// A message an unverified import stored under this name, edited on neither side, says
+        /// something else.
+        case storedTextDiffers(channel: String, messageID: Int)
+        /// An unverified import's posts are stored under this name, and none can be compared.
+        case storedHistoryUnconfirmed(channel: String)
 
         public var description: String {
             switch self {
@@ -105,6 +114,19 @@ public struct ChatImport: Sendable {
             case .malformedEmbed(let url):
                 return "\(url.absoluteString) verified the message but names no chat — the "
                      + "embed's data-peer is missing or changed; pass --no-verify to import unchecked"
+            case .storedDateDiffers(let c, let id, let offset):
+                return "@\(c) already holds message \(id) from an unverified import, sent "
+                     + "\(String(format: "%+g", offset / 3600)) h from this export's — the name belonged to "
+                     + "another chat when one of the two was exported, or the earlier import read its dates "
+                     + "in another zone; either way the two cannot be merged"
+            case .storedTextDiffers(let c, let id):
+                return "@\(c) already holds message \(id) from an unverified import, and it says something "
+                     + "else than this export's — the name belonged to another chat when one of the two "
+                     + "was exported"
+            case .storedHistoryUnconfirmed(let c):
+                return "@\(c) holds posts from an unverified import, and none of them can be compared with "
+                     + "this export — no message in common, or only edited ones — so nothing shows they are "
+                     + "this chat's; pass --replace to claim them for it anyway"
             }
         }
     }
@@ -165,8 +187,13 @@ public struct ChatImport: Sendable {
             outcome.rawChannelID = verified.rawChannelID
         }
         do {
+            let exported = Dictionary(export.posts.map { ($0.id.messageID, $0) }, uniquingKeysWith: { a, _ in a })
             try store.claimChannelIdentity(username: channel, rawChannelID: outcome.rawChannelID,
-                                           reachability: .group)
+                                           reachability: .group,
+                                           candidates: export.posts.map(\.id.messageID)) { stored in
+                try Self.confirm(stored, against: exported, channel: channel,
+                                 claimUnconfirmed: policy == .replace)
+            }
         } catch Store.StoreError.channelCrawled(let c) {
             throw ImportError.crawledChannel(c)
         } catch Store.StoreError.channelIDConflict(let why) {
@@ -269,6 +296,42 @@ public struct ChatImport: Sendable {
             throw ImportError.malformedEmbed(url)
         }
         return rawID
+    }
+
+    /// Refuses unless a history an unverified import left under this name — stored at id 0,
+    /// which matches any chat — is the history of the chat this verified export belongs to
+    /// (`TD-19`: the username is a reassignable label). Both sides are exports from a client, so
+    /// the overlap must agree, and all of it is compared, not only the newest posts:
+    ///
+    /// - **The send time, for every pair.** An edit keeps the send time in the export's title
+    ///   (`ChatExportParser`), so a date that differs is another message, edited or not. Compared
+    ///   to the second: the export writes whole seconds, GRDB stores milliseconds.
+    /// - **The words, when neither side is edited.** An edited pair is neutral evidence: its words
+    ///   changed on purpose. `sameText` rather than equality, because the stored text may be an
+    ///   older parser's rendering of the same message.
+    /// - **At least one pair that agreed on both**, unless `claimUnconfirmed` (`--replace`): no
+    ///   message in common — an export of only newer messages — or only edited ones shows nothing
+    ///   either way. One agreeing pair is enough, because a foreign chat would have to repeat
+    ///   every overlapping message's send time, to the second, at the same id; a minimum would
+    ///   refuse the common re-import that overlaps by one message.
+    static func confirm(_ stored: [Store.StoredPost], against exported: [Int: Post], channel: String,
+                        claimUnconfirmed: Bool) throws {
+        var agreeing = 0
+        for old in stored {
+            guard let new = exported[old.messageID] else { continue }
+            let offset = new.date.timeIntervalSince(old.date)
+            guard abs(offset) < 1 else {
+                throw ImportError.storedDateDiffers(channel: channel, messageID: old.messageID, offset: offset)
+            }
+            if old.isEdited || new.isEdited { continue }
+            guard sameText(old.text, new.text) else {
+                throw ImportError.storedTextDiffers(channel: channel, messageID: old.messageID)
+            }
+            agreeing += 1
+        }
+        guard agreeing > 0 || claimUnconfirmed else {
+            throw ImportError.storedHistoryUnconfirmed(channel: channel)
+        }
     }
 
     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and

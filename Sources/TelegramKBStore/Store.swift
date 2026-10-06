@@ -754,6 +754,16 @@ extension Store {
         return (ended.value, ended.cleanupFailed)
     }
 
+    /// A stored post as an identity claim compares it: what a second export of the same chat
+    /// must repeat — the send time, the words, and whether it was edited since. Decoded by
+    /// property name, so the column names are not repeated as `Row` subscripts (`TD-20`).
+    public struct StoredPost: Sendable, Decodable, FetchableRecord {
+        public var messageID: Int
+        public var date: Date
+        public var text: String
+        public var isEdited: Bool
+    }
+
     /// Claims `username` for the chat `rawChannelID`, **atomically**: the checks and the write
     /// share one transaction, so a concurrent claimant cannot pass the same checks against the
     /// same old state (PR #3, review round 1). The caller holds the channel's lease.
@@ -762,8 +772,19 @@ extension Store {
     /// is ensured and its *reachability* corrected — imported posts make a `previewDisabled` or
     /// `unresolvable` row a `group`, and leaving the stale class would misreport it (PR #3,
     /// review round 5) — while its `rawChannelID`, known or not, is left alone.
+    ///
+    /// An id of `0` is the one stored identity the id check cannot judge: an unverified import
+    /// leaves it, and it matches any claim — so naming it once let a verified import of ANOTHER
+    /// chat, under a username reassigned between two exports, take the row over and merge both
+    /// histories (`TD-19`). When the claim would name such a row and it already holds posts, the
+    /// stored posts among `candidates` — one primary-key lookup each — are handed to `confirm`
+    /// in this transaction, and a throw refuses the claim; the history judged is the history the
+    /// write lands on. The judgement is the caller's, and the parameter is not optional, so no
+    /// claim of an id-0 history can skip it. A row with no posts is claimed without asking.
     public func claimChannelIdentity(username: String, rawChannelID: Int64?,
-                                     reachability: Channel.Reachability) throws {
+                                     reachability: Channel.Reachability,
+                                     candidates: [Int],
+                                     confirm: ([StoredPost]) throws -> Void) throws {
         try dbPool.write { db in
             try assertChannelLease(in: db, channel: username)
             if let row = try Row.fetchOne(db, sql: """
@@ -776,6 +797,17 @@ extension Store {
                 if let rawChannelID, known != 0, known != rawChannelID {
                     throw StoreError.channelIDConflict(
                         "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
+                }
+                if rawChannelID != nil, known == 0,
+                   try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM post WHERE channelUsername = ?)",
+                                     arguments: [username]) == true {
+                    let lookup = try db.cachedStatement(sql: """
+                        SELECT messageID, date, text, isEdited FROM post
+                        WHERE channelUsername = ? AND messageID = ?
+                        """)
+                    try confirm(try candidates.compactMap {
+                        try StoredPost.fetchOne(lookup, arguments: [username, $0])
+                    })
                 }
             }
             if let rawChannelID {

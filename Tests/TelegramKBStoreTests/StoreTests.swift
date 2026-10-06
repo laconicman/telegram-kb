@@ -1423,6 +1423,39 @@ extension StoreTests {
         #expect(try store.integrity(forChannel: "iosgr")?.reachability == .webPreview)
     }
 
+    /// TD-19: an id-0 row matches any claim, so naming one that holds posts is the caller's
+    /// judgement — asked inside the claim's transaction, over the stored posts among its
+    /// candidates, and asked only then.
+    @Test("a claim naming an unverified history asks the caller first, and only then")
+    func unverifiedHistoryIsConfirmedBeforeItIsClaimed() throws {
+        struct NotThisChat: Error {}
+        let (store, _) = try Self.seeded()
+        try store.upsert(channel: Channel(username: "iosgr", rawChannelID: 0, reachability: .group))
+        try store.upsert(posts: [Self.post(1, "one"), Self.post(2, "two")])
+        try store.acquireChannelLease(for: "iosgr")
+
+        var asked: [Int] = []
+        #expect(throws: NotThisChat.self) {
+            try store.claimChannelIdentity(username: "iosgr", rawChannelID: 42, reachability: .group,
+                                           candidates: [2, 3]) { stored in
+                asked = stored.map(\.messageID)
+                throw NotThisChat()
+            }
+        }
+        #expect(asked == [2], "the stored posts among the candidates, and nothing else")
+        #expect(try store.identity(forChannel: "iosgr")?.rawChannelID == 0, "a refusal claims nothing")
+
+        try store.claimChannelIdentity(username: "iosgr", rawChannelID: 42, reachability: .group,
+                                       candidates: [2]) { stored in
+            #expect(stored.first?.date == Self.post(2, "two").date, "dates survive the round trip exactly")
+        }
+        #expect(try store.identity(forChannel: "iosgr")?.rawChannelID == 42)
+
+        // Known now: the id check judges, and the caller is not asked again.
+        try store.claimChannelIdentity(username: "iosgr", rawChannelID: 42, reachability: .group,
+                                       candidates: [2]) { _ in Issue.record("asked about a known row") }
+    }
+
     // MARK: - The channel lease (TD-21)
 
     @Test("a lease held by a live process refuses; released, dead, or silent ones are taken")
