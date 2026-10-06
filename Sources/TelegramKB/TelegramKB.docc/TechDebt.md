@@ -431,6 +431,17 @@ new channel. Three review findings have circled this already: a casing mismatch 
 foreign key, the `0` placeholder overwriting a learned id, and identity taken from the first
 `data-view` on a page. None of those are separate bugs; they are the same wrong key.
 
+A fourth, closed 2026-10-06: an `--no-verify` import leaves its row at id `0`, which matches any
+claim, so a verified import of **another** chat — the name reassigned between two exports — set
+its id on that row and merged both histories. `Store.claimChannelIdentity` now asks the caller,
+inside its transaction, to confirm a stored id-0 history before naming it, and `ChatImport`
+compares the whole overlap: a send time that differs refuses (an edit keeps it), words that
+differ refuse unless either side is edited (an edit is neutral evidence), and an overlap where
+nothing agreed refuses unless `--replace`. Two residuals: a row whose unverified import read its
+dates in the wrong zone can only be refused, never repaired — `tgkb` has no command that removes
+a channel — and two `--no-verify` imports still merge unchecked, since neither has an id to
+protect.
+
 **Discharge.** Schema `v4` as described in `S7`: key on `rawChannelID`, keep `username` as a
 unique-when-present label, render permalinks from the label with a `t.me/c/<rawChannelID>/<id>`
 fallback.

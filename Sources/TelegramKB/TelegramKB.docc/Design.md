@@ -378,7 +378,11 @@ the stored row inside the page transaction — before a post lands, and again on
 (PR #3, review round 4). An id of `0` matches anything, and a group imported with `--no-verify`
 stores exactly that; for it the row's *kind* is the evidence: a group never becomes a broadcast
 channel, so `ensureChannel` refuses a web crawl of a `.group` row, under the lease, before the
-first page (the round-4 finding's second half).
+first page (the round-4 finding's second half). A verified *import* naming such a row has a
+better witness than the kind: the history itself. Both sides are exports from a client, so the
+messages they share must agree — the send time always, the words unless either side is edited —
+and `claimChannelIdentity` asks for that judgement inside its transaction before it sets the id
+(`TD-19`, 2026-10-06).
 
 **The cost of the pivot, stated rather than waved away.** The id is not known until the first page
 is parsed, so a row must exist before it can be identified. That is acceptable: a crawl always

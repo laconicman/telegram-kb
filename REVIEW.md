@@ -29,7 +29,9 @@ there rather than re-arguing the decision.
   transaction consuming it — `Store.commitPage` re-checks it against the stored row inside its
   own `dbPool.write`, so a username reassigned between the check and the write cannot merge two
   chats under one name. An id of `0` (an unverified import) passes that check, so also flag a
-  web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it.
+  web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it —
+  and a `confirm` passed to `Store.claimChannelIdentity` that accepts a stored id-0 history
+  without comparing it with the claimant's (`ChatImport.confirm`).
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`). `swift-log`
   and `swift-system` are the SDK's own dependencies, named only because its `StdioTransport` and
