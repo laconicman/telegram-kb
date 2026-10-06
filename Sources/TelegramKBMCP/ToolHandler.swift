@@ -16,8 +16,10 @@ import TelegramKBStore
 /// The tool-call surface: argument decoding, dispatch, and server assembly.
 ///
 /// The SDK does not validate arguments against `inputSchema`, so this file decodes and rejects
-/// by hand — a malformed call is a protocol-level `invalidParams`, not a tool error, per the
-/// spec's split between *the call was ill-formed* and *the tool ran and failed*.
+/// by hand. Where a failure goes follows the 2025-11-25 spec's split (SEP-1303): an argument the
+/// tool cannot use is a **tool execution error** — a result with `isError: true`, whose text the
+/// model reads and corrects itself from — while an unknown tool is a **protocol error**, because
+/// no tool ran at all.
 ///
 /// Lives in the library so tests drive the real `Server` over `InMemoryTransport` rather than
 /// a re-implementation.
@@ -64,17 +66,28 @@ public enum TGKBServer {
 
     static func call(_ name: String, arguments: [String: Value]?, store: Store) async throws
         -> CallTool.Result {
-        switch name {
-        case TGKBTools.searchPosts.name: return try await searchPosts(Args(arguments), store: store)
-        case TGKBTools.findLinks.name: return try findLinks(Args(arguments), store: store)
-        case TGKBTools.getPost.name: return try getPost(Args(arguments), store: store)
-        // The conformance server's convention: a tool-level error result, not a protocol error —
-        // the call was well-formed, the name just isn't ours.
-        default:
-            return CallTool.Result(
-                content: [.text(text: "Unknown tool: \(name)", annotations: nil, _meta: nil)],
-                isError: true)
+        let args = Args(arguments)
+        do {
+            switch name {
+            case TGKBTools.searchPosts.name: return try await searchPosts(args, store: store)
+            case TGKBTools.findLinks.name: return try findLinks(args, store: store)
+            case TGKBTools.getPost.name: return try getPost(args, store: store)
+            // Both spec revisions list an unknown tool as a protocol error, and 2025-06-18's own
+            // example answers it with -32602: nothing ran, so there is no tool result to report.
+            default: throw MCPError.invalidParams("Unknown tool: \(name)")
+            }
+        } catch let error as ToolInputError {
+            return failure(error.message)
+        } catch let error as Store.SearchError {
+            // A stale or foreign cursor is an argument the tool cannot use, like any other.
+            return failure(error.description)
         }
+    }
+
+    /// A tool execution error: the call reached a tool, which could not do what was asked. The
+    /// text is all the model sees of it, so it says what to do instead.
+    static func failure(_ message: String) -> CallTool.Result {
+        CallTool.Result(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
     }
 
     // MARK: - search_posts
@@ -91,8 +104,7 @@ public enum TGKBServer {
         }
         if let kind = try args.string("kind") {
             guard let k = PostKind(rawValue: kind) else {
-                throw MCPError.invalidParams(
-                    "kind must be one of \(TGKBTools.postKinds.joined(separator: ", "))")
+                throw ToolInputError("kind must be one of \(TGKBTools.postKinds.joined(separator: ", "))")
             }
             filter.kind = k
         }
@@ -111,9 +123,7 @@ public enum TGKBServer {
 
         // Hits and their posts from ONE read: a sync committing between two would pair this
         // page's total and cursor with bodies from a corpus they were not computed against.
-        let page = try invalidParamsOnSearchError {
-            try store.searchPosts(query, mode: mode, filter: filter, limit: limit, cursor: cursor)
-        }
+        let page = try store.searchPosts(query, mode: mode, filter: filter, limit: limit, cursor: cursor)
         let results = page.results
         let posts = page.posts.map(PostSummary.init)
         let output = SearchPostsOutput(
@@ -134,9 +144,7 @@ public enum TGKBServer {
         let url = try args.require("url")
         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
         let cursor = try args.string("cursor")
-        let page = try invalidParamsOnSearchError {
-            try store.linkedPosts(to: url, limit: limit, cursor: cursor)
-        }
+        let page = try store.linkedPosts(to: url, limit: limit, cursor: cursor)
         let results = page.results
         let byID = page.posts.reduce(into: [:]) { $0[$1.id] = $1 }
         let links = results.hits.map { hit -> LinkHitRecord in
@@ -160,16 +168,6 @@ public enum TGKBServer {
                 index_moved_since_cursor: results.indexMovedSinceCursor))
     }
 
-    /// The cursor is a parameter; a stale or foreign one is an invalid argument, not a tool
-    /// failure — -32602 is the honest signal.
-    static func invalidParamsOnSearchError<T>(_ body: () throws -> T) throws -> T {
-        do {
-            return try body()
-        } catch let e as Store.SearchError {
-            throw MCPError.invalidParams(e.description)
-        }
-    }
-
     // MARK: - get_post
 
     static func getPost(_ args: Args, store: Store) throws -> CallTool.Result {
@@ -177,15 +175,12 @@ public enum TGKBServer {
         try Task.checkCancellation()
         let ref = try args.require("post")
         guard let id = parsePostRef(ref) else {
-            throw MCPError.invalidParams(
-                "post must be @channel/id or https://t.me/channel/id — got \(ref.debugDescription)")
+            throw ToolInputError("post must be @channel/id or https://t.me/channel/id — got \(ref.debugDescription)")
         }
         guard let post = try store.post(id) else {
             // A successful call with no such post is still a failed lookup — isError, so the
             // model does not mistake an empty result for a post that exists.
-            return CallTool.Result(
-                content: [.text(text: "No post \(ref) in the archive.", annotations: nil, _meta: nil)],
-                isError: true)
+            return failure("No post \(ref) in the archive.")
         }
         return try CallTool.Result(
             content: [.text(text: render(post), annotations: nil, _meta: nil)],
@@ -201,8 +196,8 @@ public enum TGKBServer {
         }
         if s.hasPrefix("@") { s.removeFirst() }
         let parts = s.split(separator: "/", omittingEmptySubsequences: false)
-        // `Channel.isUsername`, not merely non-empty: `@bad name/1` is a malformed reference and
-        // belongs on the protocol channel (`invalidParams`), not reported as a missing post.
+        // `Channel.isUsername`, not merely non-empty: `@bad name/1` is a malformed reference, and
+        // saying so tells the model to fix the reference rather than that the post is missing.
         guard parts.count == 2, let id = Int(parts[1]), id > 0, Channel.isUsername(String(parts[0]))
         else { return nil }
         return Post.ID(channelUsername: parts[0].lowercased(), messageID: id)
@@ -263,23 +258,30 @@ public enum TGKBServer {
     }
 }
 
+/// An argument the tool cannot use. ``TGKBServer/call(_:arguments:store:)`` turns it into a tool
+/// execution error, so the model reads the message and retries with the argument fixed.
+struct ToolInputError: Error {
+    let message: String
+    init(_ message: String) { self.message = message }
+}
+
 /// Argument decoding over `[String: Value]` — strict, because the SDK validates nothing.
 struct Args {
     let values: [String: Value]
     init(_ values: [String: Value]?) { self.values = values ?? [:] }
 
-    /// `additionalProperties: false`, enforced ourselves: a misspelled key must be a call
-    /// error, not a silently dropped filter.
+    /// `additionalProperties: false`, enforced ourselves: a misspelled key must be an error the
+    /// model sees, not a silently dropped filter.
     func expecting(_ keys: [String]) throws {
         let extra = values.keys.filter { !keys.contains($0) }
         guard extra.isEmpty else {
-            throw MCPError.invalidParams("unknown argument(s): \(extra.sorted().joined(separator: ", "))")
+            throw ToolInputError("unknown argument(s): \(extra.sorted().joined(separator: ", "))")
         }
     }
 
     func require(_ key: String) throws -> String {
         guard let s = try string(key), !s.isEmpty else {
-            throw MCPError.invalidParams("\(key) is required")
+            throw ToolInputError("\(key) is required")
         }
         return s
     }
@@ -287,7 +289,7 @@ struct Args {
     func string(_ key: String) throws -> String? {
         guard let v = values[key] else { return nil }
         guard let s = v.stringValue else {
-            throw MCPError.invalidParams("\(key) must be a string")
+            throw ToolInputError("\(key) must be a string")
         }
         return s
     }
@@ -305,7 +307,7 @@ struct Args {
             n = nil
         }
         guard let n, n >= 0 else {
-            throw MCPError.invalidParams("\(key) must be a non-negative integer")
+            throw ToolInputError("\(key) must be a non-negative integer")
         }
         return Swift.min(n, max)
     }
@@ -314,7 +316,7 @@ struct Args {
         where T.RawValue == String {
         guard let s = try string(key) else { return nil }
         guard let v = T(rawValue: s) else {
-            throw MCPError.invalidParams("\(key) must be one of the declared values, not \(s.debugDescription)")
+            throw ToolInputError("\(key) must be one of the declared values, not \(s.debugDescription)")
         }
         return v
     }
@@ -336,7 +338,7 @@ struct Args {
         if let d = try? Self.iso.parse(s) { return .instant(d) }
         if let d = try? Self.isoFractional.parse(s) { return .instant(d) }
         if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") { return .day(start: start) }
-        throw MCPError.invalidParams("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
+        throw ToolInputError("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
     }
 
     static let iso = Date.ISO8601FormatStyle()

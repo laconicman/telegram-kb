@@ -52,8 +52,27 @@ struct MCPServerTests {
         return try JSONDecoder().decode(Output.self, from: data)
     }
 
-    /// -32602 specifically — not just "some error surfaced". A misspelled param reported as
-    /// an internal error would pass a looser assertion while telling the client the wrong thing.
+    /// A tool execution error: a result with `isError: true` whose text says what was wrong — not
+    /// a thrown protocol error. The 2025-11-25 spec routes argument-validation failures here
+    /// (SEP-1303) because the model reads a tool result and can correct itself from it.
+    static func expectToolError(
+        _ comment: String,
+        mentioning needle: String,
+        _ body: () async throws -> CallTool.Result
+    ) async {
+        do {
+            let result = try await body()
+            #expect(result.isError == true, "\(comment): expected isError, got a result")
+            guard case .text(let text, _, _) = result.content.first else {
+                Issue.record("\(comment): an error result must say why in text"); return
+            }
+            #expect(text.contains(needle), "\(comment): \(text.debugDescription) should mention \(needle)")
+        } catch {
+            Issue.record("\(comment): expected an isError result, got a thrown \(error)")
+        }
+    }
+
+    /// -32602 specifically — not just "some error surfaced". Only for a call no tool received.
     static func expectInvalidParams(
         _ comment: String,
         _ body: () async throws -> CallTool.Result
@@ -125,34 +144,36 @@ struct MCPServerTests {
         #expect(out2.posts[0].post != out1.posts[0].post, "the second page must not repeat")
     }
 
-    @Test("search_posts with a foreign cursor is an invalidParams error, not a wrong page")
+    @Test("search_posts with a foreign cursor is a tool error, not a wrong page")
     func foreignCursorRejected() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
         let page1 = try await client.callTool(
             name: "search_posts", arguments: ["query": "про", "limit": .int(1)]).value
         let cursor = try #require(try Self.decode(page1, as: SearchPostsOutput.self).next_cursor)
         // A cursor minted by "и" must not page through "вёрстка".
-        await Self.expectInvalidParams("foreign cursor") {
+        await Self.expectToolError("foreign cursor", mentioning: "different query") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": "вёрстка", "cursor": .string(cursor)]).value
         }
     }
 
-    @Test("malformed calls are invalidParams — missing arg, wrong type, unknown key, bad kind")
+    /// 🟡 These threw -32602, a protocol error. The 2025-11-25 spec makes input validation a tool
+    /// execution error (SEP-1303): a result the model reads, so it can fix the argument and retry.
+    @Test("malformed calls are tool errors that say what was wrong — missing arg, wrong type, unknown key, bad kind")
     func invalidArgsRejected() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
-        await Self.expectInvalidParams("missing query") {
+        await Self.expectToolError("missing query", mentioning: "query is required") {
             try await client.callTool(name: "search_posts", arguments: [:]).value
         }
-        await Self.expectInvalidParams("query of wrong type") {
+        await Self.expectToolError("query of wrong type", mentioning: "query must be a string") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": .int(3)]).value
         }
-        await Self.expectInvalidParams("misspelled key") {
+        await Self.expectToolError("misspelled key", mentioning: "chanel") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": "x", "chanel": "iosgr"]).value
         }
-        await Self.expectInvalidParams("undeclared kind") {
+        await Self.expectToolError("undeclared kind", mentioning: "kind must be one of") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": "x", "kind": "tesseract"]).value
         }
@@ -221,11 +242,11 @@ struct MCPServerTests {
                 "a final page omits next_cursor rather than sending null against a string schema")
 
         // A link cursor is bound to its URL, and to find_links: neither misuse pages silently.
-        await Self.expectInvalidParams("cursor for another URL") {
+        await Self.expectToolError("cursor for another URL", mentioning: "different query") {
             try await client.callTool(
                 name: "find_links", arguments: ["url": "https://example.com", "cursor": .string(cursor)]).value
         }
-        await Self.expectInvalidParams("link cursor passed to search_posts") {
+        await Self.expectToolError("link cursor passed to search_posts", mentioning: "different query") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": "про", "cursor": .string(cursor)]).value
         }
@@ -380,11 +401,11 @@ struct MCPServerTests {
         let out = try await client.callTool(
             name: "search_posts", arguments: ["query": "про", "limit": .double(1e20)]).value
         #expect(try Self.decode(out, as: SearchPostsOutput.self).posts.count == 2)
-        await Self.expectInvalidParams("a hugely negative limit is still a negative limit") {
+        await Self.expectToolError("a hugely negative limit is still a negative limit", mentioning: "limit") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": "про", "limit": .double(-1e20)]).value
         }
-        await Self.expectInvalidParams("a fractional limit is not an integer") {
+        await Self.expectToolError("a fractional limit is not an integer", mentioning: "limit") {
             try await client.callTool(
                 name: "search_posts", arguments: ["query": "про", "limit": .double(1.5)]).value
         }
@@ -492,17 +513,20 @@ struct MCPServerTests {
         let missing = try await client.callTool(
             name: "get_post", arguments: ["post": "@iosgr/404"]).value
         #expect(missing.isError == true)
-        await Self.expectInvalidParams("unparseable post ref") {
+        await Self.expectToolError("unparseable post ref", mentioning: "not a ref") {
             try await client.callTool(name: "get_post",
                                       arguments: ["post": "not a ref"]).value
         }
     }
 
-    @Test("an unknown tool name is a tool error, the conformance server's convention")
+    /// 🟡 This was an `isError` result, after the SDK conformance server. Both spec revisions list an
+    /// unknown tool as a protocol error — no tool ran, so there is no tool result to report.
+    @Test("an unknown tool name is a protocol error, -32602, as both spec revisions say")
     func unknownTool() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
-        let result = try await client.callTool(name: "rm_everything").value
-        #expect(result.isError == true)
+        await Self.expectInvalidParams("unknown tool") {
+            try await client.callTool(name: "rm_everything").value
+        }
     }
 
     /// The post-ref parser is the surface a model types against most — pin its accepted forms.

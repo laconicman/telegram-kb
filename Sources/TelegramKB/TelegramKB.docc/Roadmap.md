@@ -167,7 +167,8 @@ startup.
   `content` for clients that render only text.
 - Set all four annotations, `destructiveHint: false` and `idempotentHint: true` included.
 - Arguments are not validated against `inputSchema` by the SDK: decode and reject with
-  `invalidParams` ourselves.
+  `invalidParams` ourselves. *(Reversed 2026-10-06: rejected as an `isError` result, per the
+  2025-11-25 spec — <doc:Design> § MCP tool surface.)*
 - Keep `strict` initialisation on, check `Task.isCancelled` in handlers, and keep each
   `dbPool.read` short. A long read holds a stale snapshot and blocks WAL checkpoints.
 

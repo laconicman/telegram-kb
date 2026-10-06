@@ -1,13 +1,14 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index db231ff..775bce7 100644
+index af39b68..a4acd8a 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -158,7 +158,7 @@ public enum TGKBServer {
-         do {
-             return try body()
-         } catch let e as Store.SearchError {
--            throw MCPError.invalidParams(e.description)
-+            throw MCPError.internalError(e.description)
+@@ -78,9 +78,6 @@ public enum TGKBServer {
+             }
+         } catch let error as ToolInputError {
+             return failure(error.message)
+-        } catch let error as Store.SearchError {
+-            // A stale or foreign cursor is an argument the tool cannot use, like any other.
+-            return failure(error.description)
          }
      }
  

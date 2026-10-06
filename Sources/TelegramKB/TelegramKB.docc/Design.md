@@ -492,12 +492,22 @@ model's loop.
 **As implemented (S6).** Three tools — `search_posts`, `find_links`, `get_post` — with the
 details the spec-level decisions left open:
 
-- **Errors split where the spec splits them.** Malformed calls — missing or mistyped
-  arguments, an unknown key (`additionalProperties: false` is enforced by hand, because the SDK
-  validates nothing against `inputSchema`), a bad `kind`/`mode`/date, a foreign or malformed
-  cursor — throw `MCPError.invalidParams`, a protocol error. Calls that ran and failed — an
-  unknown tool name, a `get_post` miss — return `isError: true`, the conformance server's own
-  convention, so the failure is a tool result a model reads rather than a transport fault.
+- **Errors split where the 2025-11-25 spec splits them.** An argument the tool cannot use — a
+  missing or mistyped argument, an unknown key (`additionalProperties: false` is enforced by hand,
+  because the SDK validates nothing against `inputSchema`), a bad `kind`/`mode`/date, a foreign or
+  malformed cursor, a malformed post reference — is a **tool execution error**: a result with
+  `isError: true` whose text says what to fix, because that is what a model reads and corrects
+  itself from. So is a `get_post` miss. An **unknown tool name** is a protocol error, -32602:
+  no tool ran, so there is no tool result to give. Handlers throw `ToolInputError`, and
+  `TGKBServer.call` turns it — and `Store.SearchError` — into the result in one place.
+
+  *Reversed 2026-10-06, by the `mcp-builder` review.* S6 shipped the opposite split: validation
+  threw -32602 and an unknown tool returned `isError`. That read the 2025-06-18 revision, which
+  lists "invalid arguments" among protocol errors. The 2025-11-25 revision — the SDK's
+  `Version.latest` — moves input validation to tool execution errors "to enable model
+  self-correction" (changelog item 5, SEP-1303), and both revisions list unknown tools as protocol
+  errors. The SDK's conformance server, cited for the old unknown-tool convention, returns
+  `isError` for bad arguments too ("Invalid arguments: expected numbers a and b").
 - **fd 1 is made untouchable.** `guardedStdioTransport` `dup`s real stdout to a spare
   descriptor for the transport, then `dup2`s stderr onto fd 1 — after which a stray `print()`
   lands on the spec-sanctioned diagnostics channel instead of corrupting JSON-RPC framing

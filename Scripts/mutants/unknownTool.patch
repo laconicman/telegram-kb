@@ -1,15 +1,13 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index f715f0c..df63c35 100644
+index af39b68..8755ce7 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -71,9 +71,7 @@ public enum TGKBServer {
-         // The conformance server's convention: a tool-level error result, not a protocol error —
-         // the call was well-formed, the name just isn't ours.
-         default:
--            return CallTool.Result(
--                content: [.text(text: "Unknown tool: \(name)", annotations: nil, _meta: nil)],
--                isError: true)
-+            throw MCPError.methodNotFound(name)
-         }
-     }
- 
+@@ -74,7 +74,7 @@ public enum TGKBServer {
+             case TGKBTools.getPost.name: return try getPost(args, store: store)
+             // Both spec revisions list an unknown tool as a protocol error, and 2025-06-18's own
+             // example answers it with -32602: nothing ran, so there is no tool result to report.
+-            default: throw MCPError.invalidParams("Unknown tool: \(name)")
++            default: return failure("Unknown tool: \(name)")
+             }
+         } catch let error as ToolInputError {
+             return failure(error.message)
