@@ -62,7 +62,9 @@ def main():
     ap.add_argument("--only", default=None, help="comma-separated 1-based question numbers")
     ap.add_argument("--server", type=Path, default=None, help="a tgkb-mcp binary to grade instead of this checkout's")
     args = ap.parse_args()
-    out = args.out or Path(tempfile.mkdtemp(prefix="tgkb-mcp-eval."))
+    # Absolute: `swift test` writes the store from the repository root, and this script checks
+    # for it from wherever it was called.
+    out = (args.out or Path(tempfile.mkdtemp(prefix="tgkb-mcp-eval."))).resolve()
     out.mkdir(parents=True, exist_ok=True)
 
     pairs = [(q.findtext("question").strip(), q.findtext("answer").strip())
