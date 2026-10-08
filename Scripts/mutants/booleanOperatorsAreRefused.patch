@@ -1,18 +1,21 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index 30e4e9c..be73b9d 100644
+index cfe7c5c..8a65be0 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -104,15 +104,6 @@ public enum TGKBServer {
-         // `startup OR launch` matched nothing, and `swiftui NOT uikit` only posts WITH uikit. A
-         // wrong answer that looks like an answer; refusing it is what lets the model recover.
-         // Here, not in `QueryParser`: `tgkb query` shares the grammar and is not a model.
--        let operators = QueryParser.parse(query).tokens.filter(queryOperators.contains)
+@@ -126,18 +126,6 @@ public enum TGKBServer {
+         // digit — so `OR,`, `(NOT` and `either-OR` are caught as the words they become. That also
+         // refuses `IS_NOT_NULL`, which word search reads as three words: a refusal costs one retry
+         // with quotes, which then search the identifier as a phrase; a pass costs a silent answer.
+-        let operators = QueryParser.parse(query).tokens
+-            .flatMap { $0.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) }
+-            .map(String.init)
+-            .filter(queryOperators.contains)
 -        guard operators.isEmpty else {
 -            throw ToolInputError("""
 -                query has no operators: "\(operators[0])" would be searched as a word, since every \
 -                word must appear in a post. Search each alternative in a separate call; to exclude \
--                a word, leave it out and filter the results yourself. To search for the word \
--                itself, put it in quotes.
+-                a word, leave it out and filter the results yourself. To search for the word, or \
+-                an identifier containing it, put it in quotes.
 -                """)
 -        }
          var filter = Store.SearchFilter()

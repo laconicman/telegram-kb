@@ -122,13 +122,20 @@ public enum TGKBServer {
         // `startup OR launch` matched nothing, and `swiftui NOT uikit` only posts WITH uikit. A
         // wrong answer that looks like an answer; refusing it is what lets the model recover.
         // Here, not in `QueryParser`: `tgkb query` shares the grammar and is not a model.
-        let operators = QueryParser.parse(query).tokens.filter(queryOperators.contains)
+        // Split where word search splits — FTS5's unicode61 breaks on anything not a letter or a
+        // digit — so `OR,`, `(NOT` and `either-OR` are caught as the words they become. That also
+        // refuses `IS_NOT_NULL`, which word search reads as three words: a refusal costs one retry
+        // with quotes, which then search the identifier as a phrase; a pass costs a silent answer.
+        let operators = QueryParser.parse(query).tokens
+            .flatMap { $0.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) }
+            .map(String.init)
+            .filter(queryOperators.contains)
         guard operators.isEmpty else {
             throw ToolInputError("""
                 query has no operators: "\(operators[0])" would be searched as a word, since every \
                 word must appear in a post. Search each alternative in a separate call; to exclude \
-                a word, leave it out and filter the results yourself. To search for the word \
-                itself, put it in quotes.
+                a word, leave it out and filter the results yourself. To search for the word, or \
+                an identifier containing it, put it in quotes.
                 """)
         }
         var filter = Store.SearchFilter()

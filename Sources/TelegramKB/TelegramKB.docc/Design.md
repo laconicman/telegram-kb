@@ -527,7 +527,11 @@ details the spec-level decisions left open:
   habitual `startup OR launch` searched for the word "or" and matched nothing (11 and 58 posts
   alone, on the owner's corpus), and `swiftui NOT uikit` returned only posts containing "uikit".
   `tgkb_search_posts` refuses an uppercase `AND`, `OR` or `NOT` outside quotes with what to do
-  instead; quoted or lowercase, it is a word. The check lives in the MCP handler, not in
+  instead, found where word search splits words — FTS5's `unicode61` breaks on anything not a
+  letter or digit — so `OR,`, `(NOT` and `either-OR` are caught, and so is `IS_NOT_NULL`, which
+  word search reads as three words. A false refusal costs one retry, quoted, which then searches the
+  identifier as a phrase; a false pass costs a silent answer (Devin Review, PR #10). Quoted or
+  lowercase, it is a word. The check lives in the MCP handler, not in
   `QueryParser`, which `tgkb query` shares. Real operators would be a grammar change in Track A
   (<doc:Roadmap>).
 - **fd 1 is made untouchable.** `guardedStdioTransport` `dup`s real stdout to a spare

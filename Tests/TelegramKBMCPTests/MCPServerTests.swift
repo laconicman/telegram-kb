@@ -207,6 +207,27 @@ struct MCPServerTests {
         }
     }
 
+    /// 🔴 Only a bare operator was refused: tokens split on whitespace, so `OR,`, `(OR` and `NOT:`
+    /// passed — while word search, which splits on punctuation, still required "or". Devin Review,
+    /// PR #10.
+    @Test("an operator is found where word search splits words, not only between spaces")
+    func punctuatedOperatorsAreRefused() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        for (query, op) in [("вёрстка OR, моки", "OR"), ("вёрстка (OR моки)", "OR"),
+                            ("NOT: моки вёрстка", "NOT"), ("вёрстка AND) моки", "AND"),
+                            ("either-OR вёрстка", "OR"), ("IS_NOT_NULL", "NOT")] {
+            await Self.expectToolError(query, mentioning: "\"\(op)\"") {
+                try await client.callTool(name: "tgkb_search_posts", arguments: ["query": .string(query)]).value
+            }
+        }
+        // Quoted, an identifier is a phrase; lowercase, those are words. Neither is refused.
+        for query in ["\"IS_NOT_NULL\"", "is_not_null вёрстка"] {
+            let result = try await client.callTool(
+                name: "tgkb_search_posts", arguments: ["query": .string(query)]).value
+            #expect(result.isError != true, "\(query) is a search, not an operator")
+        }
+    }
+
     @Test("tgkb_search_posts honours the @channel filter")
     func searchFiltersChannel() async throws {
         let (client, _) = try await Self.connected(try Self.seededStore())
