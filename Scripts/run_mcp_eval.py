@@ -54,6 +54,21 @@ def tag(text, name):
     return found[-1].strip() if found else None
 
 
+def diagnose(proc, final, denied):
+    """Why a question was not graded, or None when it was. A run that never finished is not a
+    wrong answer: with no result event, or a non-zero exit, nothing was graded, and the exit
+    status must say so rather than report a completed evaluation."""
+    if final.get("is_error"):
+        return final.get("result") or "claude reported an error"
+    if denied:
+        return f"permission denied: {denied}"
+    if final and proc.returncode == 0:
+        return None
+    stderr = proc.stderr.strip().splitlines()
+    return (f"claude exited {proc.returncode}" + ("" if final else ", with no result event")
+            + (f": {stderr[-1]}" if stderr else ""))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, default=None, help="where transcripts and the report go")
@@ -105,6 +120,8 @@ def main():
         started = time.time()
         proc = subprocess.run(cmd, cwd=out, text=True, capture_output=True, timeout=900)
         (out / f"q{number}.jsonl").write_text(proc.stdout)
+        if proc.stderr:
+            (out / f"q{number}.err").write_text(proc.stderr)
         events = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
         final = next((e for e in reversed(events) if e.get("type") == "result"), {})
         calls = [block["name"] for e in events if e.get("type") == "assistant"
@@ -113,13 +130,15 @@ def main():
         text = final.get("result", "")
         denied = final.get("permission_denials") or []
         got = tag(text, "response")
+        error = diagnose(proc, final, denied)
         rows.append(dict(number=number, question=question, expected=answer, got=got,
-                         correct=got == answer, calls=calls, seconds=round(time.time() - started),
+                         correct=got == answer and not error, calls=calls,
+                         seconds=round(time.time() - started),
                          feedback=tag(text, "feedback"), summary=tag(text, "summary"),
-                         error=(text if final.get("is_error") else None) or
-                               (f"permission denied: {denied}" if denied else None), model=model))
-        print(f"{number:>2} {'PASS' if got == answer else 'FAIL'}  {len(calls):>2} calls  "
-              f"expected {answer!r}, got {got!r}", flush=True)
+                         error=error, model=model))
+        verdict = "ERROR" if error else "PASS" if got == answer else "FAIL"
+        print(f"{number:>2} {verdict:<5} {len(calls):>2} calls  expected {answer!r}, got {got!r}"
+              + (f"  — {error}" if error else ""), flush=True)
 
     # The report: the numbers first, then what the model said about the tools.
     correct = sum(r["correct"] for r in rows)
@@ -127,7 +146,7 @@ def main():
              "", f"Model: {rows[0]['model'] if rows else '?'}. Server: `{binary}`. "
                  "Transcripts: `q<n>.jsonl` beside this file.", "",
              "| # | result | tool calls | seconds | expected | got |", "|---|---|---:|---:|---|---|"]
-    lines += [f"| {r['number']} | {'PASS' if r['correct'] else 'FAIL'} | {len(r['calls'])} | {r['seconds']} "
+    lines += [f"| {r['number']} | {'ERROR' if r['error'] else 'PASS' if r['correct'] else 'FAIL'} | {len(r['calls'])} | {r['seconds']} "
               f"| {r['expected']} | {r['got']} |" for r in rows]
     for r in rows:
         lines += ["", f"## {r['number']}. {r['question']}", "",
