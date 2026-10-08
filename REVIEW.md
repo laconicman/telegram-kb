@@ -29,7 +29,9 @@ there rather than re-arguing the decision.
   transaction consuming it — `Store.commitPage` re-checks it against the stored row inside its
   own `dbPool.write`, so a username reassigned between the check and the write cannot merge two
   chats under one name. An id of `0` (an unverified import) passes that check, so also flag a
-  web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it.
+  web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it —
+  and a `confirm` passed to `Store.claimChannelIdentity` that accepts a stored id-0 history
+  without comparing it with the claimant's (`ChatImport.confirm`).
 - Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`). `swift-log`
   and `swift-system` are the SDK's own dependencies, named only because its `StdioTransport` and
@@ -53,6 +55,11 @@ there rather than re-arguing the decision.
   does. Require it to print its reason when it exits non-zero, and add one only for a platform
   difference actually observed (a mutant red on one toolchain, green on another): an UNPROVEN
   without a cause is a STILL GREEN hidden.
+- Require every fix round, a Devin session's included, to leave
+  `Scripts/mutation-check.sh --check-applies` passing. A commit that edits a mutant's context
+  lines leaves its patch stale, and a stale mutant guards nothing until someone re-anchors it. The
+  check builds nothing and needs no lemma model, so any machine can run it; it does not replace
+  the full run, because a patch that applies can still be semantically stale.
 - Flag a test asserting only that a walk stopped, without asserting the `Store.CrawlState` it left.
 - Flag a channel username reaching `Store` without `.lowercased()` in
   `Sources/TelegramKBSync/ChannelSync.swift`, `Sources/tgkb/Doctor.swift` or
@@ -94,6 +101,10 @@ there rather than re-arguing the decision.
   Use the `NodeText` walk.
 - Flag a body selector in `Sources/TelegramKBIngest/WebPreviewParser.swift` that can match
   `js-message_reply_text`.
+- Flag `try?` on a cleanup a write session owes — `Store.releaseChannelLease`, `Store.truncateWAL`
+  — anywhere in `Sources/`. Run the session through `Store.holdingChannelLease` or
+  `Store.endingWithWALReclaim`, which carry a failed cleanup with the run's error or report it on
+  the outcome.
 - Flag `@unchecked Sendable` or `nonisolated(unsafe)` added in `Sources/` to silence a Swift 6
   diagnostic; use an actor.
 - Flag posts retained in `WebPreviewSource.crawl` when `onPage` is given.

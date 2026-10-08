@@ -431,6 +431,18 @@ new channel. Three review findings have circled this already: a casing mismatch 
 foreign key, the `0` placeholder overwriting a learned id, and identity taken from the first
 `data-view` on a page. None of those are separate bugs; they are the same wrong key.
 
+A fourth, closed 2026-10-06: an `--no-verify` import leaves its row at id `0`, which matches any
+claim, so a verified import of **another** chat — the name reassigned between two exports — set
+its id on that row and merged both histories. `Store.claimChannelIdentity` now asks the caller,
+inside its transaction, to confirm a stored id-0 history before naming it, and `ChatImport`
+compares the whole overlap: a send time that differs refuses (an edit keeps it), words that
+differ refuse unless either side is edited (an edit is neutral evidence), a pair with no words on
+either side — a photo, a sticker, an emoji, a poll — is neutral too (PR #9's review: two empty texts
+compared equal), and an overlap where nothing agreed refuses unless `--replace`. Two residuals: a row whose unverified import read its
+dates in the wrong zone can only be refused, never repaired — `tgkb` has no command that removes
+a channel — and two `--no-verify` imports still merge unchecked, since neither has an id to
+protect.
+
 **Discharge.** Schema `v4` as described in `S7`: key on `rawChannelID`, keep `username` as a
 unique-when-present label, render permalinks from the label with a `t.me/c/<rawChannelID>/<id>`
 fallback.
@@ -464,7 +476,11 @@ hold: every channel-scoped write transaction renews the heartbeat and refuses wh
 longer names this holder, so a holder suspended past the TTL cannot resume and interleave with
 the stealer (`Store.assertChannelLease`). The row's `nonce` is per `Store` value — a pid alone
 cannot tell two stores in one process apart, so the assertion and the release both bind it
-(review round 4).
+(review round 4). A release that fails is reported, not dropped: both writers ran it as
+`defer { try? … }`, the shape PR #6 rejected for the WAL reclaim, so the row stayed and nothing
+said why the channel was busy. `Store.holdingChannelLease` now runs every leased session under
+the reclaim's rule — carried in `Store.CleanupAlsoFailed` after a failed run, returned as the
+outcome's `leaseReleaseFailed` after one whose commits landed (2026-10-06).
 
 `busyMode = .timeout(10)` makes a second writer wait rather than fail instantly, which is right
 for two writers on *different* channels sharing one file. Two on the *same* channel now see the
@@ -505,7 +521,8 @@ import, and `--import-resolutions` all end by giving the space back. The attempt
 policy — the writer's 10s timeout would otherwise stall cleanup behind a pinned reader.
 `SQLITE_BUSY` (a reader mid-snapshot) is tolerated: the residue then clears on the next
 writer's checkpoint; any other error surfaces as the outcome's `walCleanupFailed` (or, when the
-session itself failed, as `Store.CleanupAlsoFailed` carrying both errors). No mid-backfill
+session itself failed, as `Store.CleanupAlsoFailed` carrying both errors — and the lease
+release's too, when that failed first). No mid-backfill
 cadence — the measurement showed checkpoints already slip through; and never
 `.full`/`.restart`/`.truncate` mid-walk, which would block on readers.
 

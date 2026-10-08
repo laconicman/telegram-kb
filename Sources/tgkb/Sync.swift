@@ -107,6 +107,11 @@ struct Sync: AsyncParsableCommand {
                             + "by the next write instead\n"
                 FileHandle.standardError.write(Data(warning.utf8))
             }
+            if outcome.leaseReleaseFailed {
+                let warning = "\(outcome.channel): its lease could not be released — another "
+                            + "writer takes it once this process exits\n"
+                FileHandle.standardError.write(Data(warning.utf8))
+            }
             print("\(outcome.channel): \(outcome.postCount) posts, \(outcome.pagesFetched) pages"
                 + (outcome.since.map { ", since \($0)" } ?? ", full backfill"))
         }

@@ -26,7 +26,9 @@ import TelegramKBStore
 ///    embed is fetched and held until the last batch commits, so two `tgkb import` processes
 ///    cannot interleave under one username (TD-21). The identity checks and the write then share
 ///    `claimChannelIdentity`'s single transaction, so no claimant can pass them against state a
-///    rival has already replaced (PR #3, review round 1).
+///    rival has already replaced (PR #3, review round 1). A row an unverified import left at id
+///    0 matches any chat, so a verified import names it only once the posts already stored
+///    agree with the export's (`ChatImport.confirm`, `TD-19`).
 /// 5. **Write in batches**, each one `commitPage`: the posts and the id bounds they extend commit
 ///    together. `backfillComplete` is never set — an export is a snapshot of a chat, not a walk
 ///    that proved it reached the start — and a group is never synced, so nothing reads it.
@@ -63,6 +65,9 @@ public struct ChatImport: Sendable {
         /// The end-of-session WAL reclaim failed with a real error (`TD-22`). The import itself
         /// is complete; the residue is reclaimed by a later write instead.
         public var walCleanupFailed = false
+        /// The channel's lease could not be released after the last batch committed (`TD-21`).
+        /// The import is complete; the row lapses once this process exits, or after the lease TTL.
+        public var leaseReleaseFailed = false
     }
 
     public enum ImportError: Error, CustomStringConvertible, Equatable {
@@ -76,6 +81,14 @@ public struct ChatImport: Sendable {
         case embedFailed(URL, status: Int)
         /// The page verified the message but carries no readable `data-peer`.
         case malformedEmbed(URL)
+        /// A message an unverified import stored under this name was sent at another moment.
+        case storedDateDiffers(channel: String, messageID: Int, offset: TimeInterval)
+        /// A message an unverified import stored under this name, edited on neither side, says
+        /// something else.
+        case storedTextDiffers(channel: String, messageID: Int)
+        /// An unverified import's posts are stored under this name, and none can be compared:
+        /// `shared` messages in common with this export, each edited on a side or wordless on both.
+        case storedHistoryUnconfirmed(channel: String, shared: Int)
 
         public var description: String {
             switch self {
@@ -102,6 +115,22 @@ public struct ChatImport: Sendable {
             case .malformedEmbed(let url):
                 return "\(url.absoluteString) verified the message but names no chat — the "
                      + "embed's data-peer is missing or changed; pass --no-verify to import unchecked"
+            case .storedDateDiffers(let c, let id, let offset):
+                return "@\(c) already holds message \(id) from an unverified import, sent "
+                     + "\(String(format: "%+g", offset / 3600)) h from this export's — the name belonged to "
+                     + "another chat when one of the two was exported, or the earlier import read its dates "
+                     + "in another zone; either way the two cannot be merged — remove @\(c)'s stored posts "
+                     + "before importing this export"
+            case .storedTextDiffers(let c, let id):
+                return "@\(c) already holds message \(id) from an unverified import, and it says something "
+                     + "else than this export's — the name belonged to another chat when one of the two "
+                     + "was exported"
+            case .storedHistoryUnconfirmed(let c, let shared):
+                let why = shared == 0 ? "it shares no message with this export"
+                                      : "the \(shared) message(s) it shares with this export are all "
+                                        + "edited or carry no words"
+                return "@\(c) holds posts from an unverified import, and \(why) — nothing shows they are this "
+                     + "chat's; pass --replace to claim them for it anyway"
             }
         }
     }
@@ -140,10 +169,19 @@ public struct ChatImport: Sendable {
         if known?.reachability == .webPreview { throw ImportError.crawledChannel(channel) }
 
         // Held from here to the last batch: a second tgkb writing this channel fails fast
-        // instead of interleaving its checks and rows with ours.
-        try store.acquireChannelLease(for: channel)
-        defer { try? store.releaseChannelLease(for: channel) }
+        // instead of interleaving its checks and rows with ours. Released whichever way the
+        // import ends, and a failed release is reported, not dropped (`Store.holdingChannelLease`).
+        let held = try await store.holdingChannelLease(for: channel) {
+            try await claimAndWrite(export, channel: channel, timeZone: timeZone, policy: policy)
+        }
+        var outcome = held.value
+        outcome.leaseReleaseFailed = held.leaseReleaseFailed
+        return outcome
+    }
 
+    /// Verifies, claims the identity, and writes the batches — everything the lease covers.
+    private func claimAndWrite(_ export: ChatExportParser.Export, channel: String,
+                               timeZone: TimeZone, policy: Store.WritePolicy) async throws -> Outcome {
         var outcome = Outcome(channel: channel, title: export.title, posts: export.posts.count,
                               serviceMessages: export.serviceMessages, unreadable: export.unreadable)
         if let fetcher {
@@ -153,8 +191,13 @@ public struct ChatImport: Sendable {
             outcome.rawChannelID = verified.rawChannelID
         }
         do {
+            let exported = Dictionary(export.posts.map { ($0.id.messageID, $0) }, uniquingKeysWith: { a, _ in a })
             try store.claimChannelIdentity(username: channel, rawChannelID: outcome.rawChannelID,
-                                           reachability: .group)
+                                           reachability: .group,
+                                           candidates: export.posts.map(\.id.messageID)) { stored in
+                try Self.confirm(stored, against: exported, channel: channel,
+                                 claimUnconfirmed: policy == .replace)
+            }
         } catch Store.StoreError.channelCrawled(let c) {
             throw ImportError.crawledChannel(c)
         } catch Store.StoreError.channelIDConflict(let why) {
@@ -259,6 +302,48 @@ public struct ChatImport: Sendable {
         return rawID
     }
 
+    /// Refuses unless a history an unverified import left under this name — stored at id 0,
+    /// which matches any chat — is the history of the chat this verified export belongs to
+    /// (`TD-19`: the username is a reassignable label). Both sides are exports from a client, so
+    /// the overlap must agree, and all of it is compared, not only the newest posts:
+    ///
+    /// - **The send time, for every pair.** An edit keeps the send time in the export's title
+    ///   (`ChatExportParser`), so a date that differs is another message, edited or not. Compared
+    ///   to the second: the export writes whole seconds, GRDB stores milliseconds.
+    /// - **The words, when neither side is edited and either has any.** An edited pair is neutral
+    ///   evidence: its words changed on purpose. So is a pair with no words on either side — an
+    ///   uncaptioned photo, a sticker, an emoji, a poll — because `sameText` calls two wordless
+    ///   texts equal, and two chats' wordless messages at the same id and second once counted as
+    ///   agreement (Devin Review, PR #9). A word is letters or digits, so two different emoji are
+    ///   neutral, not refused, and so is an emoji added to a photo; one side with words and one
+    ///   without refuses. `sameText` rather than equality, because the stored text may be an older
+    ///   parser's rendering of the same message.
+    /// - **At least one pair that agreed on both**, unless `claimUnconfirmed` (`--replace`): no
+    ///   message in common — an export of only newer messages — or only edited or wordless ones
+    ///   shows nothing either way. One agreeing pair is enough, because a foreign chat would have
+    ///   to repeat its words and every shared message's send time, to the second, at the same
+    ///   id; a minimum would refuse the common re-import that overlaps by one message.
+    static func confirm(_ stored: [Store.StoredPost], against exported: [Int: Post], channel: String,
+                        claimUnconfirmed: Bool) throws {
+        var agreeing = 0
+        for old in stored {
+            guard let new = exported[old.messageID] else { continue }
+            let offset = new.date.timeIntervalSince(old.date)
+            guard abs(offset) < 1 else {
+                throw ImportError.storedDateDiffers(channel: channel, messageID: old.messageID, offset: offset)
+            }
+            if old.isEdited || new.isEdited { continue }
+            if words(old.text).isEmpty && words(new.text).isEmpty { continue }
+            guard sameText(old.text, new.text) else {
+                throw ImportError.storedTextDiffers(channel: channel, messageID: old.messageID)
+            }
+            agreeing += 1
+        }
+        guard agreeing > 0 || claimUnconfirmed else {
+            throw ImportError.storedHistoryUnconfirmed(channel: channel, shared: stored.count)
+        }
+    }
+
     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and
     /// what each renders around a link or an emoji, may differ; the words may not — and neither
     /// may their ORDER or repetition. The earlier Set-based overlap accepted "Bob paid Alice" for
@@ -268,12 +353,15 @@ public struct ChatImport: Sendable {
     /// checked message matched token-for-token. It stays for a message edited between the export
     /// and the import; if a real divergence ever asks for more, name it here.
     static func sameText(_ a: String, _ b: String) -> Bool {
-        func words(_ s: String) -> [Substring] {
-            s.lowercased().split { !$0.isLetter && !$0.isNumber }
-        }
         let wa = words(a), wb = words(b)
         if wa == wb { return true }
         let common = wa.count - wb.difference(from: wa).removals.count
         return Double(common) / Double(max(wa.count, wb.count)) >= 0.9
+    }
+
+    /// The words `sameText` compares: letters and digits, lower-cased. An uncaptioned photo, a
+    /// sticker, an emoji or a poll has none.
+    static func words(_ s: String) -> [Substring] {
+        s.lowercased().split { !$0.isLetter && !$0.isNumber }
     }
 }

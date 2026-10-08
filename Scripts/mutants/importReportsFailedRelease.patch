@@ -1,8 +1,8 @@
 diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index b4f560d..c37578b 100644
+index b4f560d..81bc8e7 100644
 --- a/Sources/TelegramKBSync/ChatImport.swift
 +++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -145,12 +145,7 @@ public struct ChatImport: Sendable {
+@@ -145,12 +145,9 @@ public struct ChatImport: Sendable {
          // Held from here to the last batch: a second tgkb writing this channel fails fast
          // instead of interleaving its checks and rows with ours. Released whichever way the
          // import ends, and a failed release is reported, not dropped (`Store.holdingChannelLease`).
@@ -12,6 +12,8 @@ index b4f560d..c37578b 100644
 -        var outcome = held.value
 -        outcome.leaseReleaseFailed = held.leaseReleaseFailed
 -        return outcome
++        try store.acquireChannelLease(for: channel)
++        defer { try? store.releaseChannelLease(for: channel) }
 +        return try await claimAndWrite(export, channel: channel, timeZone: timeZone, policy: policy)
      }
  

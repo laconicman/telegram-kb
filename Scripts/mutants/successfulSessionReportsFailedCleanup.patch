@@ -1,19 +1,19 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index cda6e67..8265ef6 100644
+index 2b9b42d..cf781b2 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
-@@ -180,12 +180,8 @@ public struct Store: Sendable {
+@@ -211,12 +211,8 @@ public struct Store: Sendable {
              }
              throw sessionError
          }
 -        do {
--            try truncateWAL()
+-            try run()
 -            return (value, false)
 -        } catch {
 -            return (value, true)
 -        }
-+        try? truncateWAL()
++        try? run()
 +        return (value, false)
      }
  
-     // MARK: - Writing
+     /// Runs one write session and gives the WAL's space back at its end, whichever way it ends
