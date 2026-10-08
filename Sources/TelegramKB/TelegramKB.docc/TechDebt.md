@@ -436,8 +436,9 @@ claim, so a verified import of **another** chat — the name reassigned between 
 its id on that row and merged both histories. `Store.claimChannelIdentity` now asks the caller,
 inside its transaction, to confirm a stored id-0 history before naming it, and `ChatImport`
 compares the whole overlap: a send time that differs refuses (an edit keeps it), words that
-differ refuse unless either side is edited (an edit is neutral evidence), and an overlap where
-nothing agreed refuses unless `--replace`. Two residuals: a row whose unverified import read its
+differ refuse unless either side is edited (an edit is neutral evidence), a pair with no words on
+either side — a photo, a sticker, an emoji, a poll — is neutral too (PR #9's review: two empty texts
+compared equal), and an overlap where nothing agreed refuses unless `--replace`. Two residuals: a row whose unverified import read its
 dates in the wrong zone can only be refused, never repaired — `tgkb` has no command that removes
 a channel — and two `--no-verify` imports still merge unchecked, since neither has an id to
 protect.

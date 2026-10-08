@@ -521,6 +521,28 @@ struct ChatImportTests {
         #expect(try store.storedMessageIDs(forChannel: "testgroup") == [10, 12])
     }
 
+    /// 🔴 Devin Review, PR #9: an uncaptioned photo stores no text, and `sameText` calls two
+    /// texts with no words equal — so two chats' wordless messages at the same id and second
+    /// counted as agreement, and a verified import of the second chat claimed the first's
+    /// history. A pair with no words on either side compares nothing: its date is still checked,
+    /// and it confirms nothing. The emoji is the case an `isEmpty` test would miss.
+    @Test("wordless messages confirm nothing, so a wordless overlap needs --replace")
+    func wordlessPairIsNeutralEvidence() async throws {
+        let store = try Self.store()
+        let wordless = [Message(id: 7, title: "3 April 2023, 11:00:00", text: "", media: true),
+                        Message(id: 8, title: "3 April 2023, 11:30:00", text: "👍")]
+        try await importOffline(wordless, into: store)
+        let other = wordless + [Self.foreignNewest]
+        await #expect(throws: ChatImport.ImportError.storedHistoryUnconfirmed(channel: "testgroup", shared: 2)) {
+            try await importVerified(other, newestUTC: Self.foreignNewestUTC, into: store)
+        }
+        #expect(try store.identity(forChannel: "testgroup")?.rawChannelID == 0)
+
+        let outcome = try await importVerified(other, newestUTC: Self.foreignNewestUTC, into: store,
+                                               policy: .replace)
+        #expect(outcome.rawChannelID == Self.chatID, "--replace still claims it, on the operator's word")
+    }
+
     @Test("an unverified row with no posts is claimed without a comparison")
     func emptyUnverifiedRowIsClaimedFreely() async throws {
         let store = try Self.store()

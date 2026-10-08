@@ -87,7 +87,7 @@ public struct ChatImport: Sendable {
         /// something else.
         case storedTextDiffers(channel: String, messageID: Int)
         /// An unverified import's posts are stored under this name, and none can be compared:
-        /// `shared` messages in common with this export, every one of them edited on a side.
+        /// `shared` messages in common with this export, each edited on a side or wordless on both.
         case storedHistoryUnconfirmed(channel: String, shared: Int)
 
         public var description: String {
@@ -127,7 +127,8 @@ public struct ChatImport: Sendable {
                      + "was exported"
             case .storedHistoryUnconfirmed(let c, let shared):
                 let why = shared == 0 ? "it shares no message with this export"
-                                      : "the \(shared) message(s) it shares with this export are all edited"
+                                      : "the \(shared) message(s) it shares with this export are all "
+                                        + "edited or carry no words"
                 return "@\(c) holds posts from an unverified import, and \(why) — nothing shows they are this "
                      + "chat's; pass --replace to claim them for it anyway"
             }
@@ -309,14 +310,19 @@ public struct ChatImport: Sendable {
     /// - **The send time, for every pair.** An edit keeps the send time in the export's title
     ///   (`ChatExportParser`), so a date that differs is another message, edited or not. Compared
     ///   to the second: the export writes whole seconds, GRDB stores milliseconds.
-    /// - **The words, when neither side is edited.** An edited pair is neutral evidence: its words
-    ///   changed on purpose. `sameText` rather than equality, because the stored text may be an
-    ///   older parser's rendering of the same message.
+    /// - **The words, when neither side is edited and either has any.** An edited pair is neutral
+    ///   evidence: its words changed on purpose. So is a pair with no words on either side — an
+    ///   uncaptioned photo, a sticker, an emoji, a poll — because `sameText` calls two wordless
+    ///   texts equal, and two chats' wordless messages at the same id and second once counted as
+    ///   agreement (Devin Review, PR #9). A word is letters or digits, so two different emoji are
+    ///   neutral, not refused, and so is an emoji added to a photo; one side with words and one
+    ///   without refuses. `sameText` rather than equality, because the stored text may be an older
+    ///   parser's rendering of the same message.
     /// - **At least one pair that agreed on both**, unless `claimUnconfirmed` (`--replace`): no
-    ///   message in common — an export of only newer messages — or only edited ones shows nothing
-    ///   either way. One agreeing pair is enough, because a foreign chat would have to repeat
-    ///   every overlapping message's send time, to the second, at the same id; a minimum would
-    ///   refuse the common re-import that overlaps by one message.
+    ///   message in common — an export of only newer messages — or only edited or wordless ones
+    ///   shows nothing either way. One agreeing pair is enough, because a foreign chat would have
+    ///   to repeat its words and every shared message's send time, to the second, at the same
+    ///   id; a minimum would refuse the common re-import that overlaps by one message.
     static func confirm(_ stored: [Store.StoredPost], against exported: [Int: Post], channel: String,
                         claimUnconfirmed: Bool) throws {
         var agreeing = 0
@@ -327,6 +333,7 @@ public struct ChatImport: Sendable {
                 throw ImportError.storedDateDiffers(channel: channel, messageID: old.messageID, offset: offset)
             }
             if old.isEdited || new.isEdited { continue }
+            if words(old.text).isEmpty && words(new.text).isEmpty { continue }
             guard sameText(old.text, new.text) else {
                 throw ImportError.storedTextDiffers(channel: channel, messageID: old.messageID)
             }
@@ -346,12 +353,15 @@ public struct ChatImport: Sendable {
     /// checked message matched token-for-token. It stays for a message edited between the export
     /// and the import; if a real divergence ever asks for more, name it here.
     static func sameText(_ a: String, _ b: String) -> Bool {
-        func words(_ s: String) -> [Substring] {
-            s.lowercased().split { !$0.isLetter && !$0.isNumber }
-        }
         let wa = words(a), wb = words(b)
         if wa == wb { return true }
         let common = wa.count - wb.difference(from: wa).removals.count
         return Double(common) / Double(max(wa.count, wb.count)) >= 0.9
+    }
+
+    /// The words `sameText` compares: letters and digits, lower-cased. An uncaptioned photo, a
+    /// sticker, an emoji or a poll has none.
+    static func words(_ s: String) -> [Substring] {
+        s.lowercased().split { !$0.isLetter && !$0.isNumber }
     }
 }
