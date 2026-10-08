@@ -1,9 +1,9 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index cfe7c5c..8a65be0 100644
+index ec5566b..fa6cb09 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -126,18 +126,6 @@ public enum TGKBServer {
-         // digit — so `OR,`, `(NOT` and `either-OR` are caught as the words they become. That also
+@@ -128,18 +128,6 @@ public enum TGKBServer {
+         // refuse more, never let an operator through — leave it so.) That also
          // refuses `IS_NOT_NULL`, which word search reads as three words: a refusal costs one retry
          // with quotes, which then search the identifier as a phrase; a pass costs a silent answer.
 -        let operators = QueryParser.parse(query).tokens

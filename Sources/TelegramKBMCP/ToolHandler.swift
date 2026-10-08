@@ -123,7 +123,9 @@ public enum TGKBServer {
         // wrong answer that looks like an answer; refusing it is what lets the model recover.
         // Here, not in `QueryParser`: `tgkb query` shares the grammar and is not a model.
         // Split where word search splits — FTS5's unicode61 breaks on anything not a letter or a
-        // digit — so `OR,`, `(NOT` and `either-OR` are caught as the words they become. That also
+        // digit — so `OR,`, `(NOT` and `either-OR` are caught as the words they become. (unicode61
+        // also keeps private-use characters inside a word; this splits on them, which can only
+        // refuse more, never let an operator through — leave it so.) That also
         // refuses `IS_NOT_NULL`, which word search reads as three words: a refusal costs one retry
         // with quotes, which then search the identifier as a phrase; a pass costs a silent answer.
         let operators = QueryParser.parse(query).tokens
