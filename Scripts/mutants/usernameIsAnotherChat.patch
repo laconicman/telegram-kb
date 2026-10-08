@@ -1,16 +1,15 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index fd5b62d..f7f241d 100644
+index 4266a96..784d83a 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
-@@ -536,11 +536,6 @@ extension Store {
-                 if row["reachability"] as String == Channel.Reachability.webPreview.rawValue {
+@@ -794,10 +794,6 @@ extension Store {
                      throw StoreError.channelCrawled(username)
                  }
--                let known: Int64 = row["rawChannelID"]
+                 let known: Int64 = row["rawChannelID"]
 -                if let rawChannelID, known != 0, known != rawChannelID {
 -                    throw StoreError.channelIDConflict(
 -                        "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
 -                }
-             }
-             if let rawChannelID {
-                 let others = try String.fetchAll(db, sql: """
+                 if rawChannelID != nil, known == 0,
+                    try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM post WHERE channelUsername = ?)",
+                                      arguments: [username]) == true {

@@ -28,11 +28,45 @@
 # The baseline matters: on the run that introduced it, five checks were red before any mutation and
 # would have been reported as proofs.
 #
-# Usage: Scripts/mutation-check.sh [name ...]      (default: every mutant)
+# `--check-applies` asks only whether each patch still applies: `git apply --check`, per patch. A
+# patch goes stale when a later commit edits its context lines — nine did in one week of merges,
+# each caught at once by exactly this loop. It builds nothing, needs no green baseline (so no
+# Russian lemma model, TD-4), and leaves the tree alone, so it runs on a dirty tree mid-fix-round.
+# Its limit: a patch that applies can still be semantically stale — it may land on code that no
+# longer carries the fix, or its test may have stopped reaching it. Only a full run, which watches
+# the test go red, tells those apart.
+#
+# Usage: Scripts/mutation-check.sh [name ...]                   (default: every mutant)
+#        Scripts/mutation-check.sh --check-applies [name ...]
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 MUTANTS_DIR="Scripts/mutants"
+
+if [ "${1:-}" = "--check-applies" ]; then
+  shift
+  names=("$@")
+  if [ ${#names[@]} -eq 0 ]; then
+    for p in "$MUTANTS_DIR"/*.patch; do names+=("$(basename "$p" .patch)"); done
+  fi
+  ok=0; stale=0
+  for name in "${names[@]}"; do
+    patch="$MUTANTS_DIR/$name.patch"
+    if [ ! -f "$patch" ]; then
+      printf '%-42s %s\n' "$name" "ERROR — no such mutant"
+    elif [ ! -s "$patch" ]; then
+      printf '%-42s %s\n' "$name" "ERROR — the patch is empty; it mutates nothing"
+    elif ! git apply --check "$patch" 2>/dev/null; then
+      printf '%-42s %s\n' "$name" "STALE — does not apply; the code moved under it"
+    else
+      ok=$((ok + 1)); continue
+    fi
+    stale=$((stale + 1))
+  done
+  echo "$ok patch(es) apply, $stale do not. Applying is necessary, not sufficient: only a full run proves a mutant red."
+  [ "$stale" -eq 0 ]
+  exit
+fi
 # Per-run logs. Fixed /tmp names let two runs overwrite each other's diagnostics (PR #2, round 2).
 # Two runs in ONE checkout remain unsafe for a bigger reason — both apply patches to the same
 # files — so this fixes the diagnostics, not concurrency; don't run two harnesses in one tree.

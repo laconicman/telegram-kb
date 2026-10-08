@@ -1,18 +1,13 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index cda6e67..defd267 100644
+index 2b9b42d..80f6f67 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
-@@ -180,12 +180,7 @@ public struct Store: Sendable {
-             }
-             throw sessionError
-         }
--        do {
--            try truncateWAL()
--            return (value, false)
--        } catch {
--            return (value, true)
--        }
-+        return (value, false)
+@@ -232,7 +232,7 @@ public struct Store: Sendable {
+     public func endingWithWALReclaim<T>(
+         _ session: () async throws -> T
+     ) async throws -> (value: T, walCleanupFailed: Bool) {
+-        let ended = try await ending(with: .walReclaim, truncateWAL, session)
++        let ended = try await ending(with: .walReclaim, {}, session)
+         return (ended.value, ended.cleanupFailed)
      }
  
-     // MARK: - Writing

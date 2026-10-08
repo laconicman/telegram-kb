@@ -30,8 +30,9 @@ must run `tgkb sync` periodically.
 **Superseded — there is no advisory file lock.** This section once said the writer takes one for
 the duration of a sync. It never did, and the storage question it deferred has since been
 answered: SQLite and GRDB stay (§ *SQLite + GRDB stays*), the writer waits on a bounded busy
-timeout, and the store is one file (§ *One writer per store*). Two syncs of the same channel are
-still unguarded; that is `TD-21`, not a lock that exists.
+timeout, and the store is one file (§ *One writer per store*). Two writers of the same channel
+are refused by a lease row inside the database, not by a lock file — the same section records
+it, and it is what discharged `TD-21`.
 
 **Caveat that must be designed for, not discovered.** GRDB's own `DatabaseSharing.md` opens by
 discouraging database sharing, and its concrete hazard for us is that
@@ -355,6 +356,9 @@ release cannot delete a sibling's row (review round 4) nor erase a *reacquisitio
 the token map's remove is conditional on the nonce the releaser captured (round 5). A claimant steals the lease only from a
 dead pid or a heartbeat older than the 120 s TTL. The `upsert` primitives stay unleased — they
 are the seeding/fixture path, not a run. No lock file.
+Both writers take the lease through `Store.holdingChannelLease`, which releases it under the same
+end-of-session rule as the WAL reclaim: a release that fails rides along with a failed run's
+error, or is reported on a finished run's outcome — never a `try?` (2026-10-06).
 That was `TD-21`'s discharge; PR #3's review supplied the import-side instance that made it real.
 
 ## Channel identity is `rawChannelID`, not the username
@@ -374,7 +378,12 @@ the stored row inside the page transaction — before a post lands, and again on
 (PR #3, review round 4). An id of `0` matches anything, and a group imported with `--no-verify`
 stores exactly that; for it the row's *kind* is the evidence: a group never becomes a broadcast
 channel, so `ensureChannel` refuses a web crawl of a `.group` row, under the lease, before the
-first page (the round-4 finding's second half).
+first page (the round-4 finding's second half). A verified *import* naming such a row has a
+better witness than the kind: the history itself. Both sides are exports from a client, so the
+messages they share must agree — the send time always, the words when either side has any and
+neither is edited —
+and `claimChannelIdentity` asks for that judgement inside its transaction before it sets the id
+(`TD-19`, 2026-10-06).
 
 **The cost of the pivot, stated rather than waved away.** The id is not known until the first page
 is parsed, so a row must exist before it can be identified. That is acceptable: a crawl always

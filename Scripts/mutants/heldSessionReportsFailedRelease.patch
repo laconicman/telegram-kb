@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 4266a96..b4e44df 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -749,9 +749,8 @@ extension Store {
+         for username: String, _ session: () async throws -> T
+     ) async throws -> (value: T, leaseReleaseFailed: Bool) {
+         try acquireChannelLease(for: username)
+-        let ended = try await ending(with: .leaseRelease(channel: username),
+-                                     { try releaseChannelLease(for: username) }, session)
+-        return (ended.value, ended.cleanupFailed)
++        defer { try? releaseChannelLease(for: username) }
++        return (try await session(), false)
+     }
+ 
+     /// A stored post as an identity claim compares it: what a second export of the same chat

@@ -1,8 +1,8 @@
 diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
-index 64619a7..1e93bf1 100644
+index 7eead31..bfad8f0 100644
 --- a/Sources/TelegramKBSync/ChatImport.swift
 +++ b/Sources/TelegramKBSync/ChatImport.swift
-@@ -235,12 +235,7 @@ public struct ChatImport: Sendable {
+@@ -290,12 +290,7 @@ public struct ChatImport: Sendable {
          guard offset == 0 else {
              throw ImportError.wrongZone(channel: channel, messageID: post.id.messageID, offset: offset)
          }
@@ -15,4 +15,4 @@ index 64619a7..1e93bf1 100644
 +        return try MessageEmbed.rawChannelID(html: page.body)
      }
  
-     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and
+     /// Refuses unless a history an unverified import left under this name — stored at id 0,

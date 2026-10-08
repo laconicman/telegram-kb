@@ -1,0 +1,14 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index 0df7f61..afdb924 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -332,9 +332,6 @@ public struct ChatImport: Sendable {
+             }
+             agreeing += 1
+         }
+-        guard agreeing > 0 || claimUnconfirmed else {
+-            throw ImportError.storedHistoryUnconfirmed(channel: channel, shared: stored.count)
+-        }
+     }
+ 
+     /// The same message, rendered twice: by the exporting client and by `t.me`. Whitespace, and

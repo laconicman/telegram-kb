@@ -1,0 +1,22 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index 4266a96..f935989 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -798,17 +798,6 @@ extension Store {
+                     throw StoreError.channelIDConflict(
+                         "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
+                 }
+-                if rawChannelID != nil, known == 0,
+-                   try Bool.fetchOne(db, sql: "SELECT EXISTS (SELECT 1 FROM post WHERE channelUsername = ?)",
+-                                     arguments: [username]) == true {
+-                    let lookup = try db.cachedStatement(sql: """
+-                        SELECT messageID, date, text, isEdited FROM post
+-                        WHERE channelUsername = ? AND messageID = ?
+-                        """)
+-                    try confirm(try candidates.compactMap {
+-                        try StoredPost.fetchOne(lookup, arguments: [username, $0])
+-                    })
+-                }
+             }
+             if let rawChannelID {
+                 let others = try String.fetchAll(db, sql: """

@@ -231,8 +231,10 @@ extension SyncTests {
     /// TD-22's error path: a walk that fails after committing a page still reclaims, and if THAT
     /// fails with a real error the walk's error still leads — the cleanup's rides along instead
     /// of vanishing into `try?`. The first page commits; the fetcher then closes the pool and
-    /// rate-limits the second, so the walk fails mid-session with nothing left to reclaim on.
-    @Test("a failed walk whose cleanup also fails reports both, the walk's error first")
+    /// rate-limits the second, so the walk fails mid-session with nothing left to clean up on.
+    /// Both cleanups the walk owes fail — the lease release, then the reclaim — and the second is
+    /// appended to the first rather than wrapping it, so `session` is still the walk's error.
+    @Test("a failed walk whose cleanups also fail reports them, the walk's error first")
     func failedWalkReportsFailedCleanup() async throws {
         let store = try Self.store()
         let fetcher = ClosingFetcher(store: store,
@@ -242,7 +244,32 @@ extension SyncTests {
             try await ChannelSync(store: store, fetcher: fetcher).sync(channel: "swiftui_dev")
         }
         #expect(error?.session is WebPreviewSource.CrawlError, "the walk's own error is the one to act on")
-        #expect(error?.cleanup is DatabaseError, "and the reclaim's failure is named, not dropped")
+        #expect(error?.failures.map { $0.cleanup } == [.leaseRelease(channel: "swiftui_dev"), .walReclaim],
+                "each failed cleanup is named, in the order it ran")
+        #expect(error?.failures.allSatisfy { $0.error is DatabaseError } == true)
+    }
+
+    /// Makes every lease release fail with a real error, and nothing else: an acquire with no row
+    /// to steal only inserts, so the release's `DELETE` is the one statement that meets it.
+    static func refuseLeaseRelease(in store: Store) throws {
+        try store.dbPool.write { db in
+            try db.execute(sql: """
+                CREATE TRIGGER refuseLeaseRelease BEFORE DELETE ON channelLease
+                BEGIN SELECT RAISE(ABORT, 'lease release refused'); END
+                """)
+        }
+    }
+
+    /// 🔴 `walk` released its lease with `defer { try? … }`: a release that failed left the row
+    /// behind and said nothing. A sync whose commits landed now reports it on its outcome.
+    @Test("a sync whose lease release fails completes, and says so")
+    func syncReportsFailedRelease() async throws {
+        let store = try Self.store()
+        try Self.refuseLeaseRelease(in: store)
+        let outcome = try await ChannelSync(store: store, fetcher: try Self.twoPages())
+            .sync(channel: "swiftui_dev")
+        #expect(outcome.postCount > 0 && !outcome.walCleanupFailed)
+        #expect(outcome.leaseReleaseFailed, "the release error is reported, not swallowed")
     }
 
     /// A skipped channel is not a write session — classification only reads t.me — so it runs no

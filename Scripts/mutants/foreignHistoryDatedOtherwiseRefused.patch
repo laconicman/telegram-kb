@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBSync/ChatImport.swift b/Sources/TelegramKBSync/ChatImport.swift
+index f041b3f..8acf64a 100644
+--- a/Sources/TelegramKBSync/ChatImport.swift
++++ b/Sources/TelegramKBSync/ChatImport.swift
+@@ -329,10 +329,10 @@ public struct ChatImport: Sendable {
+         for old in stored {
+             guard let new = exported[old.messageID] else { continue }
+             let offset = new.date.timeIntervalSince(old.date)
++            if old.isEdited || new.isEdited { continue }
+             guard abs(offset) < 1 else {
+                 throw ImportError.storedDateDiffers(channel: channel, messageID: old.messageID, offset: offset)
+             }
+-            if old.isEdited || new.isEdited { continue }
+             if words(old.text).isEmpty && words(new.text).isEmpty { continue }
+             guard sameText(old.text, new.text) else {
+                 throw ImportError.storedTextDiffers(channel: channel, messageID: old.messageID)

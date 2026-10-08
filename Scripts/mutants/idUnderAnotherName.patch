@@ -1,9 +1,9 @@
 diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
-index 6d1258f..38608a9 100644
+index 4266a96..dec5284 100644
 --- a/Sources/TelegramKBStore/Store.swift
 +++ b/Sources/TelegramKBStore/Store.swift
-@@ -619,17 +619,6 @@ extension Store {
-                         "@\(username) is stored as chat \(known); the claim is for chat \(rawChannelID)")
+@@ -810,17 +810,6 @@ extension Store {
+                     })
                  }
              }
 -            if let rawChannelID {

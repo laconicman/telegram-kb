@@ -1423,6 +1423,39 @@ extension StoreTests {
         #expect(try store.integrity(forChannel: "iosgr")?.reachability == .webPreview)
     }
 
+    /// TD-19: an id-0 row matches any claim, so naming one that holds posts is the caller's
+    /// judgement — asked inside the claim's transaction, over the stored posts among its
+    /// candidates, and asked only then.
+    @Test("a claim naming an unverified history asks the caller first, and only then")
+    func unverifiedHistoryIsConfirmedBeforeItIsClaimed() throws {
+        struct NotThisChat: Error {}
+        let (store, _) = try Self.seeded()
+        try store.upsert(channel: Channel(username: "iosgr", rawChannelID: 0, reachability: .group))
+        try store.upsert(posts: [Self.post(1, "one"), Self.post(2, "two")])
+        try store.acquireChannelLease(for: "iosgr")
+
+        var asked: [Int] = []
+        #expect(throws: NotThisChat.self) {
+            try store.claimChannelIdentity(username: "iosgr", rawChannelID: 42, reachability: .group,
+                                           candidates: [2, 3]) { stored in
+                asked = stored.map(\.messageID)
+                throw NotThisChat()
+            }
+        }
+        #expect(asked == [2], "the stored posts among the candidates, and nothing else")
+        #expect(try store.identity(forChannel: "iosgr")?.rawChannelID == 0, "a refusal claims nothing")
+
+        try store.claimChannelIdentity(username: "iosgr", rawChannelID: 42, reachability: .group,
+                                       candidates: [2]) { stored in
+            #expect(stored.first?.date == Self.post(2, "two").date, "dates survive the round trip exactly")
+        }
+        #expect(try store.identity(forChannel: "iosgr")?.rawChannelID == 42)
+
+        // Known now: the id check judges, and the caller is not asked again.
+        try store.claimChannelIdentity(username: "iosgr", rawChannelID: 42, reachability: .group,
+                                       candidates: [2]) { _ in Issue.record("asked about a known row") }
+    }
+
     // MARK: - The channel lease (TD-21)
 
     @Test("a lease held by a live process refuses; released, dead, or silent ones are taken")
@@ -1557,5 +1590,35 @@ extension StoreTests {
         tokens.set("theirs", for: "iosgr")
         tokens.remove("iosgr", onlyIf: nil)
         #expect(tokens.token(for: "iosgr") == "theirs")
+    }
+
+    /// 🔴 Sync and import released their lease with `defer { try? … }`: a release that failed
+    /// left the row behind and said nothing. The helper follows the WAL reclaim's rule instead —
+    /// after a session whose commits landed, the failure is returned as a flag…
+    @Test("a held session whose release fails returns its value and the flag")
+    func heldSessionReportsFailedRelease() async throws {
+        let (store, _) = try Self.seeded()
+        let held = try await store.holdingChannelLease(for: "iosgr") {
+            try store.dbPool.close()      // the release now has no pool to run on
+            return "done"
+        }
+        #expect(held.value == "done")
+        #expect(held.leaseReleaseFailed, "a real release error is reported, not swallowed")
+    }
+
+    /// …and after a failed session it rides along with the session's error, which still leads.
+    @Test("a failed held session carries its failed release, its own error first")
+    func failedHeldSessionCarriesFailedRelease() async throws {
+        struct SessionFailed: Error {}
+        let (store, _) = try Self.seeded()
+        let error = await #expect(throws: Store.CleanupAlsoFailed.self) {
+            try await store.holdingChannelLease(for: "iosgr") {
+                try store.dbPool.close()
+                throw SessionFailed()
+            }
+        }
+        #expect(error?.session is SessionFailed, "the session's own error is the one to act on")
+        #expect(error?.failures.map { $0.cleanup } == [.leaseRelease(channel: "iosgr")])
+        #expect(error?.failures.first?.error is DatabaseError, "and the release's failure is named")
     }
 }

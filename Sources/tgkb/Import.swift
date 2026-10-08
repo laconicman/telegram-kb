@@ -31,7 +31,12 @@ struct Import: AsyncParsableCommand {
     @Option(help: "The time zone of the Mac that wrote the export, e.g. Europe/Moscow. Default: this Mac's.")
     var timezone: String?
 
-    @Flag(help: "Overwrite posts already stored — for an export taken after edits.")
+    @Flag(help: ArgumentHelp(
+        "Overwrite posts already stored — for an export taken after edits.",
+        discussion: """
+            Also lets a verified import claim the posts an earlier --no-verify import stored under \
+            this name when no message the two exports share confirms they are this chat's.
+            """))
     var replace = false
 
     @Flag(name: .customLong("no-verify"), help: "Import without the check against t.me: nothing verified, no id learned.")
@@ -67,6 +72,11 @@ struct Import: AsyncParsableCommand {
         }
         if outcome.walCleanupFailed {
             let warning = "warning: WAL cleanup failed — the space is reclaimed by the next write instead\n"
+            FileHandle.standardError.write(Data(warning.utf8))
+        }
+        if outcome.leaseReleaseFailed {
+            let warning = "warning: @\(outcome.channel)'s lease could not be released — another writer "
+                        + "takes it once this process exits\n"
             FileHandle.standardError.write(Data(warning.utf8))
         }
         if outcome.unreadable > 0 {
