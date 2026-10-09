@@ -87,10 +87,12 @@ there rather than re-arguing the decision.
 - Flag a `total` or count field derived from the returned page's contents in
   `Sources/TelegramKBStore/` or `Sources/TelegramKBMCP/`; it must be a COUNT over the same
   predicate, or a `limit`-truncated list reports itself complete.
-- Flag the error-channel split in `Sources/TelegramKBMCP/` crossing the wrong way: a malformed
-  argument (missing key, wrong type, unknown key, foreign cursor, `Store.SearchError`) must be
-  `MCPError.invalidParams`, not an `isError` result; a call that ran and failed (unknown tool
-  name, a `get_post` miss) must be `isError: true`, not a thrown protocol error.
+- Flag the error-channel split in `Sources/TelegramKBMCP/` crossing the wrong way (MCP
+  2025-11-25, SEP-1303): an argument the tool cannot use (missing key, wrong type, unknown key,
+  foreign cursor, `Store.SearchError`, a malformed post reference) and a `tgkb_get_post` miss must be an
+  `isError: true` result whose text says what to fix — thrown as `ToolInputError` and turned into
+  a result in `TGKBServer.call` — not a thrown `MCPError`; an unknown tool name must be
+  `MCPError.invalidParams`, not a result.
 
 ## Anti-patterns to Flag
 

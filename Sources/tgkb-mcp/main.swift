@@ -51,6 +51,11 @@ do {
 }
 
 logger.info("tgkb-mcp \(TGKBServer.version) serving \(databasePath)")
-let server = await TGKBServer.makeServer(store: store)
+let server: Server
+do {
+    server = try await TGKBServer.makeServer(store: store)
+} catch {
+    fail("cannot read \(databasePath): \(error)")
+}
 try await server.start(transport: TGKBServer.guardedStdioTransport(logger: logger))
 await server.waitUntilCompleted()

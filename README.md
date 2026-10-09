@@ -24,15 +24,16 @@ swift package --disable-sandbox preview-documentation --target TelegramKB
 
 ## Status
 
-**Phase 1, slices S0–S5.5 done; S6 (`tgkb-mcp`) is next.**
+**Phase 1, slices S0–S6 done; S7 (channel identity by `rawChannelID`) is next.**
 
 | Works today | Not yet |
 |---|---|
-| `tgkb sync`: public channels through the web preview, incremental and resumable | `tgkb-mcp`: the target exists as a placeholder (S6) |
+| `tgkb sync`: public channels through the web preview, incremental and resumable | A channel that renames its username keeping one history (S7) |
 | `tgkb import`: a public group from a Telegram client's chat export, verified against `t.me` | Channels with the preview disabled, and groups kept current without a manual export (Phase 2, TDLib) |
 | `tgkb query`: word search with Russian lemmatisation, plus substring search | Reactions and links as ranking signals (Phase 3) |
 | `tgkb doctor`: store health and a per-channel integrity report | Fetching the content behind links (done in the sibling project) |
 | URL canonicalisation to a versioned spec, shared with a sibling project | |
+| `tgkb-mcp`: `tgkb_search_posts`, `tgkb_find_links`, `tgkb_get_post` for a Claude client, every record with a citable `t.me` link | |
 
 Measured on a 7,444-post corpus from four channels: `навигация` finds 108 posts, including
 other inflected forms; `imation` finds 66, where Telegram's own search finds none; a query with
@@ -56,6 +57,15 @@ swift build -c release
 The store defaults to `~/Library/Application Support/telegram-kb/kb.sqlite`; every subcommand
 takes `--db`. `sync --full` refreshes stored posts but never removes one. Posts deleted on
 Telegram are kept on purpose (`Design`, *Edits are not refreshed; deletions are kept*).
+
+To ask a Claude client, register the read-only server — here with Claude Code:
+
+```bash
+claude mcp add tgkb -- "$PWD/.build/release/tgkb-mcp"   # append --db <path> for another store
+```
+
+`tgkb-mcp` never writes, so it cannot migrate a store an older `tgkb` wrote. After upgrading, run
+a `tgkb sync` first: the writer migrates the store when it opens it.
 
 ```bash
 ./Scripts/run-evals.sh           # golden queries G1–G10 against the default store
@@ -91,7 +101,7 @@ swift build --traits TDLib       # adds the TDLib ingestion source
 | `Sources/tgkb`, `Sources/tgkb-mcp` | The two executables |
 | `Sources/TelegramKB/TelegramKB.docc` | The direction documents |
 | `Spec/url-canonical` | A versioned contract shared with another implementation, and its golden files |
-| `evals/` | Golden queries, grounded in the real corpus |
+| `evals/` | Golden queries, grounded in the real corpus; `tgkb-mcp/`, the MCP tool-surface evaluation over a synthetic corpus |
 | `research/` | Investigation notes and reproducible probes. Evidence for `Research`, not API documentation. |
 | `reports/` | Drafts of upstream bug reports and their reproductions |
 | `upstream/` | Drafts of feedback to projects this one builds on. Nothing here is posted without the maintainer saying so. |

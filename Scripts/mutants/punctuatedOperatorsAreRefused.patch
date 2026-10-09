@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index cfe7c5c..2fd608a 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -127,8 +127,6 @@ public enum TGKBServer {
+         // refuses `IS_NOT_NULL`, which word search reads as three words: a refusal costs one retry
+         // with quotes, which then search the identifier as a phrase; a pass costs a silent answer.
+         let operators = QueryParser.parse(query).tokens
+-            .flatMap { $0.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) }
+-            .map(String.init)
+             .filter(queryOperators.contains)
+         guard operators.isEmpty else {
+             throw ToolInputError("""

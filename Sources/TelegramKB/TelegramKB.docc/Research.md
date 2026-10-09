@@ -115,6 +115,28 @@ not with missed pages. `tgkb doctor` reports this per channel.
   Folded into S6 in <doc:Roadmap>.
   [Conversation](https://deepwiki.com/search/i-am-about-to-build-a-read-onl_a94e89e4-6ce5-453c-b199-99706ad4f70d?mode=deep).
 
+### The MCP surface, reviewed — `research/s6-mcp-builder-review.md`
+Checked 2026-10-06 for the `mcp-builder` review of S6, against primary sources.
+- **Where a tool's errors go changed between spec revisions.** 2025-06-18 lists "invalid
+  arguments" with unknown tools as protocol errors. 2025-11-25 moves input validation to tool
+  execution errors — `isError: true` — "to enable model self-correction" (changelog item 5,
+  SEP-1303); an unknown tool stays a protocol error in both. Read in
+  `modelcontextprotocol/modelcontextprotocol`, not recalled.
+- **The SDK validates nothing against a schema**, on either side, input or output (0.12.1 source
+  and DeepWiki at `a0ae212e`, agreeing). A handler's thrown `MCPError.invalidParams("x")` reaches
+  the client as -32602 with the message `Invalid params: x`; an `isError` result decodes normally.
+- **At end of input the server stops without answering.** The stdio read loop finishes its stream,
+  `waitUntilCompleted()` returns, and request tasks are never awaited: piped requests followed by
+  EOF got no response at all, five runs of five. The spec makes closing stdin the client's way to
+  *initiate shutdown* (2025-11-25 `basic/lifecycle`).
+- **The query grammar has no operators.** `startup OR launch` searched for the word "or" and
+  matched nothing on the owner's corpus, where each word alone matched 11 and 58 posts.
+- **Claude Code gives the model `structuredContent`, never the text block** — every tool result in
+  the S6 done test (Claude Code 2.1.291) was the serialized JSON. `research/s6-done-test.md`.
+- **A short Latin query is lemmatised in a guessed language**: `NLLanguageRecognizer` reads `se` as
+  Spanish and the query becomes `usted`, so no `SE-NNNN` proposal is findable by word — 46 posts on
+  the owner's corpus. `TD-28`.
+
 ### Binary artifact — `research/Swiftgram-TDLibFramework.md`
 Measured from the shipped zip's central directory via an HTTP range request — actual bytes.
 
@@ -247,6 +269,8 @@ Every note in `research/`, with what it settles. Read these rather than re-deriv
 | `swift-docc-plugin.md` | Docs-only target wiring, `.spi.yml` |
 | `swiftsoup.md` | Parser choice, performance, the `text()` drops-`<br/>` trap |
 | `prior-art-telegram-mcp.md` | Seven Telegram MCP servers; the gap; what to copy |
+| `s6-mcp-builder-review.md` | The `mcp-builder` review of `tgkb-mcp`: findings, what changed, where the design differs and why |
+| `s6-done-test.md` | S6's done test, run: Claude answering from `tgkb-mcp` with cited `t.me` links |
 | `xcframework-skill-addendum.md` | Proposed additions to the `xcframework-distribution` skill (for review) |
 | `link-content-fetching.md` | Fetch/parse/extract stack; per-domain shortcuts; what is reachable |
 | `BRIEF-link-content-fetching.md` | The task brief that produced the above (for re-running) |

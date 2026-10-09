@@ -1,10 +1,10 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index 6350b41..afb3df1 100644
+index 16708c6..fc7a275 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -216,7 +216,7 @@ public enum TGKBServer {
-     /// permalink names the channel; a signed post's author has nowhere else to appear in text.
-     static func render(_ posts: [PostSummary], total: Int, nextCursor: String?) -> String {
+@@ -233,7 +233,7 @@ public enum TGKBServer {
+                  + "synonyms, or the language the posts are written in — nothing is translated."
+         }
          var lines = posts.map {
 -            "\($0.date.prefix(10))  \($0.link)\($0.author.map { "  by \($0)" } ?? "")"
 +            "\($0.date.prefix(10))  \($0.link)"

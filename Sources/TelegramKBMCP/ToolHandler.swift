@@ -16,8 +16,10 @@ import TelegramKBStore
 /// The tool-call surface: argument decoding, dispatch, and server assembly.
 ///
 /// The SDK does not validate arguments against `inputSchema`, so this file decodes and rejects
-/// by hand — a malformed call is a protocol-level `invalidParams`, not a tool error, per the
-/// spec's split between *the call was ill-formed* and *the tool ran and failed*.
+/// by hand. Where a failure goes follows the 2025-11-25 spec's split (SEP-1303): an argument the
+/// tool cannot use is a **tool execution error** — a result with `isError: true`, whose text the
+/// model reads and corrects itself from — while an unknown tool is a **protocol error**, because
+/// no tool ran at all.
 ///
 /// Lives in the library so tests drive the real `Server` over `InMemoryTransport` rather than
 /// a re-implementation.
@@ -27,10 +29,11 @@ public enum TGKBServer {
     public static let version = "0.1.0"
 
     /// Builds the `Server` with `tools/list` and `tools/call` wired to this store.
-    public static func makeServer(store: Store) async -> Server {
+    public static func makeServer(store: Store) async throws -> Server {
         let server = Server(
             name: "tgkb-mcp",
             version: version,
+            instructions: try instructions(for: store),
             capabilities: .init(tools: .init(listChanged: false)))
         await server.withMethodHandler(ListTools.self) { _ in
             ListTools.Result(tools: TGKBTools.all, nextCursor: nil)
@@ -39,6 +42,23 @@ public enum TGKBServer {
             try await call(params.name, arguments: params.arguments, store: store)
         }
         return server
+    }
+
+    /// What a model is told at `initialize`, before any call: which channels the archive holds.
+    ///
+    /// No tool lists them, so without this a model cannot map "the architecture channel" to a
+    /// username, nor tell "nothing on this topic" from "this archive never covered it" — the
+    /// evaluation's most repeated ask (`research/s6-mcp-builder-review.md`). Counted once, at start.
+    static func instructions(for store: Store) throws -> String {
+        let channels = try store.channelUsernames().compactMap { username in
+            try store.integrity(forChannel: username).map { "@\(username) (\($0.posts) posts)" }
+        }
+        return """
+            A read-only, local archive of Telegram posts. Channels: \
+            \(channels.isEmpty ? "none yet" : channels.joined(separator: ", ")). Nothing is \
+            translated: search in the language the posts are written in. Cite each post an answer \
+            uses by its t.me link.
+            """
     }
 
     /// A `StdioTransport` that a stray `print()` cannot poison.
@@ -64,25 +84,62 @@ public enum TGKBServer {
 
     static func call(_ name: String, arguments: [String: Value]?, store: Store) async throws
         -> CallTool.Result {
-        switch name {
-        case TGKBTools.searchPosts.name: return try await searchPosts(Args(arguments), store: store)
-        case TGKBTools.findLinks.name: return try findLinks(Args(arguments), store: store)
-        case TGKBTools.getPost.name: return try getPost(Args(arguments), store: store)
-        // The conformance server's convention: a tool-level error result, not a protocol error —
-        // the call was well-formed, the name just isn't ours.
-        default:
-            return CallTool.Result(
-                content: [.text(text: "Unknown tool: \(name)", annotations: nil, _meta: nil)],
-                isError: true)
+        let args = Args(arguments)
+        do {
+            switch name {
+            case TGKBTools.searchPosts.name: return try await searchPosts(args, store: store)
+            case TGKBTools.findLinks.name: return try findLinks(args, store: store)
+            case TGKBTools.getPost.name: return try getPost(args, store: store)
+            // Both spec revisions list an unknown tool as a protocol error, and 2025-06-18's own
+            // example answers it with -32602: nothing ran, so there is no tool result to report.
+            default: throw MCPError.invalidParams("Unknown tool: \(name)")
+            }
+        } catch let error as ToolInputError {
+            return failure(error.message)
+        } catch let error as Store.SearchError {
+            // A stale or foreign cursor is an argument the tool cannot use, like any other.
+            return failure(error.description)
         }
     }
 
-    // MARK: - search_posts
+    /// A tool execution error: the call reached a tool, which could not do what was asked. The
+    /// text is all the model sees of it, so it says what to do instead.
+    static func failure(_ message: String) -> CallTool.Result {
+        CallTool.Result(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
+    }
+
+    // MARK: - tgkb_search_posts
+
+    /// What a model writes when it expects boolean search. Uppercase only: a lowercase `or` is a
+    /// word somebody may be looking for.
+    static let queryOperators: Set<String> = ["AND", "OR", "NOT"]
 
     static func searchPosts(_ args: Args, store: Store) async throws -> CallTool.Result {
         try args.expecting(["query", "channel", "kind", "from", "to", "mode", "limit", "cursor"])
         try Task.checkCancellation()
         let query = try args.require("query")
+        // There are no operators — every word must appear — so `OR` would be searched as a word:
+        // `startup OR launch` matched nothing, and `swiftui NOT uikit` only posts WITH uikit. A
+        // wrong answer that looks like an answer; refusing it is what lets the model recover.
+        // Here, not in `QueryParser`: `tgkb query` shares the grammar and is not a model.
+        // Split where word search splits — FTS5's unicode61 breaks on anything not a letter or a
+        // digit — so `OR,`, `(NOT` and `either-OR` are caught as the words they become. (unicode61
+        // also keeps private-use characters inside a word; this splits on them, which can only
+        // refuse more, never let an operator through — leave it so.) That also
+        // refuses `IS_NOT_NULL`, which word search reads as three words: a refusal costs one retry
+        // with quotes, which then search the identifier as a phrase; a pass costs a silent answer.
+        let operators = QueryParser.parse(query).tokens
+            .flatMap { $0.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) }
+            .map(String.init)
+            .filter(queryOperators.contains)
+        guard operators.isEmpty else {
+            throw ToolInputError("""
+                query has no operators: "\(operators[0])" would be searched as a word, since every \
+                word must appear in a post. Search each alternative in a separate call; to exclude \
+                a word, leave it out and filter the results yourself. To search for the word, or \
+                an identifier containing it, put it in quotes.
+                """)
+        }
         var filter = Store.SearchFilter()
         if let channel = try args.string("channel") {
             // The record emits `@username`; accept the bare form too — a model that drops the
@@ -91,8 +148,7 @@ public enum TGKBServer {
         }
         if let kind = try args.string("kind") {
             guard let k = PostKind(rawValue: kind) else {
-                throw MCPError.invalidParams(
-                    "kind must be one of \(TGKBTools.postKinds.joined(separator: ", "))")
+                throw ToolInputError("kind must be one of \(TGKBTools.postKinds.joined(separator: ", "))")
             }
             filter.kind = k
         }
@@ -111,9 +167,7 @@ public enum TGKBServer {
 
         // Hits and their posts from ONE read: a sync committing between two would pair this
         // page's total and cursor with bodies from a corpus they were not computed against.
-        let page = try invalidParamsOnSearchError {
-            try store.searchPosts(query, mode: mode, filter: filter, limit: limit, cursor: cursor)
-        }
+        let page = try store.searchPosts(query, mode: mode, filter: filter, limit: limit, cursor: cursor)
         let results = page.results
         let posts = page.posts.map(PostSummary.init)
         let output = SearchPostsOutput(
@@ -126,7 +180,7 @@ public enum TGKBServer {
             structuredContent: output)
     }
 
-    // MARK: - find_links
+    // MARK: - tgkb_find_links
 
     static func findLinks(_ args: Args, store: Store) throws -> CallTool.Result {
         try args.expecting(["url", "limit", "cursor"])
@@ -134,9 +188,7 @@ public enum TGKBServer {
         let url = try args.require("url")
         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
         let cursor = try args.string("cursor")
-        let page = try invalidParamsOnSearchError {
-            try store.linkedPosts(to: url, limit: limit, cursor: cursor)
-        }
+        let page = try store.linkedPosts(to: url, limit: limit, cursor: cursor)
         let results = page.results
         let byID = page.posts.reduce(into: [:]) { $0[$1.id] = $1 }
         let links = results.hits.map { hit -> LinkHitRecord in
@@ -160,32 +212,20 @@ public enum TGKBServer {
                 index_moved_since_cursor: results.indexMovedSinceCursor))
     }
 
-    /// The cursor is a parameter; a stale or foreign one is an invalid argument, not a tool
-    /// failure — -32602 is the honest signal.
-    static func invalidParamsOnSearchError<T>(_ body: () throws -> T) throws -> T {
-        do {
-            return try body()
-        } catch let e as Store.SearchError {
-            throw MCPError.invalidParams(e.description)
-        }
-    }
-
-    // MARK: - get_post
+    // MARK: - tgkb_get_post
 
     static func getPost(_ args: Args, store: Store) throws -> CallTool.Result {
         try args.expecting(["post"])
         try Task.checkCancellation()
         let ref = try args.require("post")
         guard let id = parsePostRef(ref) else {
-            throw MCPError.invalidParams(
-                "post must be @channel/id or https://t.me/channel/id — got \(ref.debugDescription)")
+            throw ToolInputError("post must be @channel/id or https://t.me/channel/id — got \(ref.debugDescription)")
         }
         guard let post = try store.post(id) else {
             // A successful call with no such post is still a failed lookup — isError, so the
             // model does not mistake an empty result for a post that exists.
-            return CallTool.Result(
-                content: [.text(text: "No post \(ref) in the archive.", annotations: nil, _meta: nil)],
-                isError: true)
+            return failure("No post \(ref) in the archive. Take `post` from a tgkb_search_posts or "
+                           + "tgkb_find_links record.")
         }
         return try CallTool.Result(
             content: [.text(text: render(post), annotations: nil, _meta: nil)],
@@ -201,8 +241,8 @@ public enum TGKBServer {
         }
         if s.hasPrefix("@") { s.removeFirst() }
         let parts = s.split(separator: "/", omittingEmptySubsequences: false)
-        // `Channel.isUsername`, not merely non-empty: `@bad name/1` is a malformed reference and
-        // belongs on the protocol channel (`invalidParams`), not reported as a missing post.
+        // `Channel.isUsername`, not merely non-empty: `@bad name/1` is a malformed reference, and
+        // saying so tells the model to fix the reference rather than that the post is missing.
         guard parts.count == 2, let id = Int(parts[1]), id > 0, Channel.isUsername(String(parts[0]))
         else { return nil }
         return Post.ID(channelUsername: parts[0].lowercased(), messageID: id)
@@ -213,6 +253,12 @@ public enum TGKBServer {
     /// One hit per pair of lines: `date  permalink  [by author]  [♥n]`, then the snippet. The
     /// permalink names the channel; a signed post's author has nowhere else to appear in text.
     static func render(_ posts: [PostSummary], total: Int, nextCursor: String?) -> String {
+        // No match is the case where an invented answer does the most harm, so say it in words —
+        // and what else to try, since nothing here translates a query.
+        guard total > 0 else {
+            return "No posts match. Every word must appear in a post: try fewer or other words, "
+                 + "synonyms, or the language the posts are written in — nothing is translated."
+        }
         var lines = posts.map {
             "\($0.date.prefix(10))  \($0.link)\($0.author.map { "  by \($0)" } ?? "")"
                 + "\($0.reactions > 0 ? "  ♥\($0.reactions)" : "")\n    \($0.snippet)"
@@ -222,7 +268,10 @@ public enum TGKBServer {
     }
 
     static func render(_ links: [LinkHitRecord], total: Int, nextCursor: String?) -> String {
-        guard total > 0 else { return "No posts link to that URL." }
+        guard total > 0 else {
+            return "No posts link to that URL. It must be a whole link, not a site or a word; to search "
+                 + "by site or topic, use tgkb_search_posts, which indexes link-preview titles."
+        }
         let foot = footer(links.count, of: total, noun: "post", nextCursor: nextCursor)
         guard !links.isEmpty else { return foot }
         return links.map {
@@ -230,6 +279,8 @@ public enum TGKBServer {
             if let resolved = $0.resolved_url, resolved != $0.url_raw {
                 line += "  →  \(resolved)"
             }
+            // What the post said about the link — the same snippet the structured record carries.
+            if !$0.snippet.isEmpty { line += "\n    \($0.snippet)" }
             return line
         }
         .joined(separator: "\n") + "\n\n" + foot
@@ -259,8 +310,26 @@ public enum TGKBServer {
         } else if p.text.isEmpty {
             lines.append("[\(p.kind.rawValue), no text]")
         }
+        // What the post shared. A body often says "статья" over its URL, so without these a
+        // text-only client sees a post about a link it cannot name.
+        if let origin = p.forward?.channelUsername, let id = p.forward?.messageID {
+            lines.append("Forwarded from https://t.me/\(origin)/\(id)")
+        }
+        if !p.links.isEmpty {
+            lines.append("Links:")
+            lines.append(contentsOf: p.links.map { link in
+                "  • \(link.urlRaw)" + (link.preview?.title.map { " — \($0)" } ?? "")
+            })
+        }
         return lines.joined(separator: "\n")
     }
+}
+
+/// An argument the tool cannot use. ``TGKBServer/call(_:arguments:store:)`` turns it into a tool
+/// execution error, so the model reads the message and retries with the argument fixed.
+struct ToolInputError: Error {
+    let message: String
+    init(_ message: String) { self.message = message }
 }
 
 /// Argument decoding over `[String: Value]` — strict, because the SDK validates nothing.
@@ -268,18 +337,19 @@ struct Args {
     let values: [String: Value]
     init(_ values: [String: Value]?) { self.values = values ?? [:] }
 
-    /// `additionalProperties: false`, enforced ourselves: a misspelled key must be a call
-    /// error, not a silently dropped filter.
+    /// `additionalProperties: false`, enforced ourselves: a misspelled key must be an error the
+    /// model sees, not a silently dropped filter.
     func expecting(_ keys: [String]) throws {
         let extra = values.keys.filter { !keys.contains($0) }
         guard extra.isEmpty else {
-            throw MCPError.invalidParams("unknown argument(s): \(extra.sorted().joined(separator: ", "))")
+            throw ToolInputError("unknown argument(s): \(extra.sorted().joined(separator: ", ")) — "
+                                 + "accepted: \(keys.joined(separator: ", "))")
         }
     }
 
     func require(_ key: String) throws -> String {
         guard let s = try string(key), !s.isEmpty else {
-            throw MCPError.invalidParams("\(key) is required")
+            throw ToolInputError("\(key) is required")
         }
         return s
     }
@@ -287,7 +357,7 @@ struct Args {
     func string(_ key: String) throws -> String? {
         guard let v = values[key] else { return nil }
         guard let s = v.stringValue else {
-            throw MCPError.invalidParams("\(key) must be a string")
+            throw ToolInputError("\(key) must be a string")
         }
         return s
     }
@@ -305,7 +375,7 @@ struct Args {
             n = nil
         }
         guard let n, n >= 0 else {
-            throw MCPError.invalidParams("\(key) must be a non-negative integer")
+            throw ToolInputError("\(key) must be a non-negative integer")
         }
         return Swift.min(n, max)
     }
@@ -314,7 +384,7 @@ struct Args {
         where T.RawValue == String {
         guard let s = try string(key) else { return nil }
         guard let v = T(rawValue: s) else {
-            throw MCPError.invalidParams("\(key) must be one of the declared values, not \(s.debugDescription)")
+            throw ToolInputError("\(key) must be one of the declared values, not \(s.debugDescription)")
         }
         return v
     }
@@ -336,7 +406,7 @@ struct Args {
         if let d = try? Self.iso.parse(s) { return .instant(d) }
         if let d = try? Self.isoFractional.parse(s) { return .instant(d) }
         if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") { return .day(start: start) }
-        throw MCPError.invalidParams("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
+        throw ToolInputError("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
     }
 
     static let iso = Date.ISO8601FormatStyle()

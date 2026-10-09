@@ -1,0 +1,13 @@
+diff --git a/evals/tgkb-mcp/corpus.json b/evals/tgkb-mcp/corpus.json
+index 1b8a670..36b57f1 100644
+--- a/evals/tgkb-mcp/corpus.json
++++ b/evals/tgkb-mcp/corpus.json
+@@ -321,7 +321,7 @@
+   },
+   {
+    "channel": "iosarch_demo",
+-   "date": "2023-06-06T08:30:00Z",
++   "date": "2023-06-09T08:30:00Z",
+    "text": "Макросы в Swift 5.9 — главное для архитектуры с WWDC: меньше бойлерплейта в DI и моках.",
+    "kind": "text",
+    "reactions": [

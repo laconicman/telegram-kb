@@ -636,6 +636,60 @@ synthetic message rendered both ways, and by the mutants `crossSourceFieldsAgree
   no live page had such a link: 32 cashtags across 18 pages were plain text, as `t.me` writes an
   email address. Harmless: no field derives from a cashtag.
 
+## TD-27 — `tgkb-mcp`'s output schemas declare objects and say nothing about them
+
+**Status: Open** — 2026-10-06, found by the `mcp-builder` review (`research/s6-mcp-builder-review.md`).
+
+Each tool declares an `outputSchema`, as the skill and <doc:Design> ask, but every record in it is
+`{"type": "object"}`: the items of `posts` and `links`, and the whole of `tgkb_get_post`'s result.
+The spec's rule — structured content MUST conform to the declared schema — holds trivially, and a
+client that validates against it or reads it learns no field name, type, or which fields may be
+absent.
+
+**Cost.** Low while nothing reads it: the SDK validates neither side (0.12.1). It rises with a
+client that validates structured content, as the spec says clients SHOULD, or that generates code
+from the schema.
+
+**Why not now.** The SDK derives no schema from a type, so a declared schema is a second,
+hand-written copy of `Records.swift` — and two copies drift without a sound, the `TD-16` failure
+class. A schema without the check that keeps it true would add that risk for little.
+
+**Discharge.** Declare each record's properties, `required` keys and nullable ones; and a test that
+encodes every record kind and fails on a key the schema does not declare or a required key the
+output lacks, with a mutant that drops a field from the schema.
+
+## TD-28 — A short Latin query is lemmatised in a guessed language, and can match nothing
+
+**Status: Open** — 2026-10-06, found by the `mcp-builder` evaluation (`research/s6-mcp-builder-review.md`).
+Measured, with a reproduction.
+
+`Store.patterns(for:)` replaces a query that has no phrase with its lemmas,
+`TextNormalizer.lemmas(folded) ?? folded`, and passes no language — so `NLLanguageRecognizer`
+guesses one from the query alone. On a few Latin characters it guesses wrong, and the lemma it then
+produces is a word no post contains:
+
+| query | detected | searched for |
+|---|---|---|
+| `se` | Spanish | `usted` |
+| `SE-0413` | Spanish | `usted 0413` |
+| `c++` | Catalan | `c` |
+| `swift-0413` | Polish | `swift 0413` (harmless here) |
+
+**Cost, measured.** On the owner's corpus 46 posts cite a Swift Evolution proposal as `SE-0…`, and a
+words search for any `SE-NNNN` returns none of them; `SE-0413` returned nothing on the evaluation
+corpus either, in every mode, though the post's own text says it. Silent: an empty answer, not an
+error. The index side is unaffected — a post's language is detected over its whole text — so the
+two sides disagree only for short queries, which is most of them.
+
+**Not the same as `TD-23`**, where the language is right and the lexicon has no lemma. Here the
+lexicon has one, for the wrong language.
+
+**Discharge.** Search each loose token as its surface form OR its lemma, as phrases already are
+(`QueryParser.expression`), so a wrong lemma can only widen a query, never empty it; or decide the
+query's language from its script and the corpus rather than from three letters. Either way, a
+regression test on `SE-0413` and a mutant that drops the surface form. Track A — `Search.swift`
+and `TextNormalizer.swift`.
+
 ## See Also
 
 - <doc:Design>

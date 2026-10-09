@@ -1,0 +1,23 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index ec5566b..fa6cb09 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -128,18 +128,6 @@ public enum TGKBServer {
+         // refuse more, never let an operator through — leave it so.) That also
+         // refuses `IS_NOT_NULL`, which word search reads as three words: a refusal costs one retry
+         // with quotes, which then search the identifier as a phrase; a pass costs a silent answer.
+-        let operators = QueryParser.parse(query).tokens
+-            .flatMap { $0.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) }
+-            .map(String.init)
+-            .filter(queryOperators.contains)
+-        guard operators.isEmpty else {
+-            throw ToolInputError("""
+-                query has no operators: "\(operators[0])" would be searched as a word, since every \
+-                word must appear in a post. Search each alternative in a separate call; to exclude \
+-                a word, leave it out and filter the results yourself. To search for the word, or \
+-                an identifier containing it, put it in quotes.
+-                """)
+-        }
+         var filter = Store.SearchFilter()
+         if let channel = try args.string("channel") {
+             // The record emits `@username`; accept the bare form too — a model that drops the

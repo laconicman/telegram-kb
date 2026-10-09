@@ -485,7 +485,7 @@ account, and reaction sync must use `updateMessageInteractionInfo`.
 **Decision.** Few composable tools, compact records, opaque cursors, always a `t.me` link.
 
 Search results return `(channel, date, author, snippet, reactions, t.me link)` — never full
-bodies. Full text comes from a follow-up `get_post`. A result list that dumps whole posts
+bodies. Full text comes from a follow-up `tgkb_get_post`. A result list that dumps whole posts
 wastes the context window that the tool exists to protect.
 
 **Every returned record carries a `t.me` permalink.** Of seven Telegram MCP servers surveyed,
@@ -498,25 +498,52 @@ emits exactly the literal the next tool accepts (`@username`, or a synthetic for
 without one). One parameter instead of an id/hash/type triple, and no resolve call inside the
 model's loop.
 
-**As implemented (S6).** Three tools — `search_posts`, `find_links`, `get_post` — with the
+**As implemented (S6).** Three tools — `tgkb_search_posts`, `tgkb_find_links`, `tgkb_get_post` — with the
 details the spec-level decisions left open:
 
-- **Errors split where the spec splits them.** Malformed calls — missing or mistyped
-  arguments, an unknown key (`additionalProperties: false` is enforced by hand, because the SDK
-  validates nothing against `inputSchema`), a bad `kind`/`mode`/date, a foreign or malformed
-  cursor — throw `MCPError.invalidParams`, a protocol error. Calls that ran and failed — an
-  unknown tool name, a `get_post` miss — return `isError: true`, the conformance server's own
-  convention, so the failure is a tool result a model reads rather than a transport fault.
+- **Names carry the server's prefix.** The `mcp-builder` skill's rule — `{service}_{action}_{resource}`
+  — because a model picks a tool by its name, and a bare `search_posts` beside a forum server's
+  `search_posts` is ambiguous. Claude clients already namespace by server, so there the name reads
+  `mcp__tgkb__tgkb_search_posts`; the spec asks only for uniqueness within one server. Renamed
+  from `search_posts`, `find_links` and `get_post` on 2026-10-06, before any client depended on
+  them — the repo owner's call over keeping the shorter names.
+- **Errors split where the 2025-11-25 spec splits them.** An argument the tool cannot use — a
+  missing or mistyped argument, an unknown key (`additionalProperties: false` is enforced by hand,
+  because the SDK validates nothing against `inputSchema`), a bad `kind`/`mode`/date, a foreign or
+  malformed cursor, a malformed post reference — is a **tool execution error**: a result with
+  `isError: true` whose text says what to fix, because that is what a model reads and corrects
+  itself from. So is a `tgkb_get_post` miss. An **unknown tool name** is a protocol error, -32602:
+  no tool ran, so there is no tool result to give. Handlers throw `ToolInputError`, and
+  `TGKBServer.call` turns it — and `Store.SearchError` — into the result in one place.
+
+  *Reversed 2026-10-06, by the `mcp-builder` review.* S6 shipped the opposite split: validation
+  threw -32602 and an unknown tool returned `isError`. That read the 2025-06-18 revision, which
+  lists "invalid arguments" among protocol errors. The 2025-11-25 revision — the SDK's
+  `Version.latest` — moves input validation to tool execution errors "to enable model
+  self-correction" (changelog item 5, SEP-1303), and both revisions list unknown tools as protocol
+  errors. The SDK's conformance server, cited for the old unknown-tool convention, returns
+  `isError` for bad arguments too ("Invalid arguments: expected numbers a and b").
+- **There are no query operators, and the tool says so.** Every word must appear, so a model's
+  habitual `startup OR launch` searched for the word "or" and matched nothing (11 and 58 posts
+  alone, on the owner's corpus), and `swiftui NOT uikit` returned only posts containing "uikit".
+  `tgkb_search_posts` refuses an uppercase `AND`, `OR` or `NOT` outside quotes with what to do
+  instead, found where word search splits words — FTS5's `unicode61` breaks on anything not a
+  letter or digit — so `OR,`, `(NOT` and `either-OR` are caught, and so is `IS_NOT_NULL`, which
+  word search reads as three words. A false refusal costs one retry, quoted, which then searches the
+  identifier as a phrase; a false pass costs a silent answer (Devin Review, PR #10). Quoted or
+  lowercase, it is a word. The check lives in the MCP handler, not in
+  `QueryParser`, which `tgkb query` shares. Real operators would be a grammar change in Track A
+  (<doc:Roadmap>).
 - **fd 1 is made untouchable.** `guardedStdioTransport` `dup`s real stdout to a spare
   descriptor for the transport, then `dup2`s stderr onto fd 1 — after which a stray `print()`
   lands on the spec-sanctioned diagnostics channel instead of corrupting JSON-RPC framing
   (`research/mcp-swift-sdk.md` § Logging 5; the SDK guards only its own logger).
-- **`find_links` matches on the effective URL both ways** — `COALESCE(resolvedCanonical,
+- **`tgkb_find_links` matches on the effective URL both ways** — `COALESCE(resolvedCanonical,
   urlCanonical)` on the link side against the same expression for the query — so a shortener
   finds the destination's posts and a destination finds every spelling that resolved to it.
   A query that cannot be canonicalised falls back to the raw spelling, which is what `url_raw`
   exists for. `total` counts the full match set in the same read, so a `limit`-truncated list
-  never presents as complete, and the list pages with the same opaque cursor as `search_posts`
+  never presents as complete, and the list pages with the same opaque cursor as `tgkb_search_posts`
   because a page cap with no continuation would make every match past it unreachable. The
   cursor is fingerprinted over the query's canonical URL, not the key it currently resolves to:
   a resolution written mid-walk then reads as `index_moved_since_cursor`, the drift signal the
@@ -525,6 +552,23 @@ details the spec-level decisions left open:
   invitation to fetch more — and prints the cursor itself, under the name of the argument
   that takes it (`cursor`, not the `next_cursor` field it came from), since a client that
   shows only `content` has no other way to obtain it.
+- **The text rendering stands on its own — for the clients that read it.** Claude Code (2.1.291,
+  the S6 done test) hands the model the `structuredContent` JSON and drops the text block, so there
+  the JSON and the tool descriptions are all the model has. A client may instead show only
+  `content`, so the text carries what an answer needs: `tgkb_find_links` gives each post's snippet, `tgkb_get_post`
+  lists the post's links with Telegram's preview title — a body often says "статья" over its URL
+  — and a search with no match says so in words, with what to try, because that is where an
+  invented answer does most harm (`G10`). Tool descriptions say what is indexed, that every word
+  must appear, that nothing is translated, and that `tgkb_find_links` takes a whole link, not a
+  site. All from the `mcp-builder` review, 2026-10-06.
+- **The archive introduces itself at `initialize`.** The server's `instructions` name its
+  channels with their post counts, say nothing is translated, and ask for `t.me` citations. No
+  tool lists channels, so without them a model cannot map "the architecture channel" to a
+  username, nor tell an empty answer from a topic the archive never covered — the evaluation's
+  most repeated ask, against `main` and the review branch alike. Counted once at start, from
+  `integrity(forChannel:)`: a sync during a session leaves the numbers behind, which is fine for a
+  scope and wrong for a statistic. A forward's origin carries its `t.me` link as well, the one
+  place a record named a post without one.
 - **A page and its posts come from one snapshot.** `Store.searchPosts` and `Store.linkedPosts`
   load the hits' posts inside the read that computed the hits, total and cursor. Hydrating
   from a second read would pair them with bodies from whatever a concurrent sync had committed
@@ -546,6 +590,17 @@ details the spec-level decisions left open:
   protocol framing included — rather than a re-implementation. `tgkb-mcp` itself is ~50 lines:
   stderr logging bootstrap, a hand-rolled `--db` flag (ArgumentParser would widen the
   allowlisted closure for one option), `openForReading` — a reader never migrates.
+- **End of input ends the server; in-flight requests are not drained.** At EOF the SDK's stdio
+  read loop finishes its stream, `Server.waitUntilCompleted()` returns, and `main` exits — while
+  each request runs in an unstructured task that nothing awaits (`Server.swift`, 0.12.1). So a
+  client that writes its requests and then closes stdin gets no answer at all: reproduced five
+  times out of five on 2026-10-06, `initialize` included. Left as it is, on purpose. The spec
+  names closing the server's input as how a stdio client *initiates shutdown*, then waits for the
+  exit (2025-11-25 `basic/lifecycle`, § Shutdown), so answers after it go to a client that has
+  stopped listening; interactive clients hold the stream open until they are done. Draining would
+  take a `Transport` wrapper matching request ids to responses — new code in the one module whose
+  closure is allowlisted — for a shell pipe, which `tgkb query` already serves. Revisit if a real
+  client is seen closing early.
 
 ## Why `tgkb` has no `serve` subcommand
 
@@ -697,7 +752,7 @@ server is an ingestion filter, not a query engine.
 ## URLs: store both forms, derive the canonical, rewrite nothing
 
 **Decision.** Every link is stored **twice** — `url_raw` exactly as it appeared in the post, and
-`url_canonical` derived from it. Both are searchable. `find_links` returns `url_canonical` as the
+`url_canonical` derived from it. Both are searchable. `tgkb_find_links` returns `url_canonical` as the
 identity.
 
 The governing principle is that **canonicalisation is derived, never destructive**. What was
