@@ -32,10 +32,12 @@ there rather than re-arguing the decision.
   web crawl reaching `commitPage` for a row stored as `.group` — `Store.ensureChannel` refuses it —
   and a `confirm` passed to `Store.claimChannelIdentity` that accepts a stored id-0 history
   without comparing it with the claimant's (`ChatImport.confirm`).
-- Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift` beyond
+- Flag a new dependency of `tgkb-mcp` or `TelegramKBMCP` in `Package.swift`, under
+  `dependencies:` or `plugins:`, beyond
   `TelegramKBStore`, `TelegramKBModel` and the MCP SDK (`Scripts/check-invariants.sh`). `swift-log`
   and `swift-system` are the SDK's own dependencies, named only because its `StdioTransport` and
-  `Logger` signatures require their types; they add nothing to the closure.
+  `Logger` signatures require their types; they add nothing to the closure. The `StampVersion`
+  build plugin is allowlisted separately: it links nothing, and generates one string literal.
 - Require a `specVersion` bump plus `Spec/url-canonical/SPEC.md` and
   `Spec/url-canonical/fixtures.json` cases in any diff that changes
   `Sources/TelegramKBModel/URLCanonicaliser.swift` rules.
@@ -119,7 +121,8 @@ there rather than re-arguing the decision.
 - Flag string interpolation into a `MATCH` clause in `Sources/TelegramKBStore/`; queries come from
   an LLM tool call and must pass through `FTS5Pattern`.
 - Flag `print` or any stdout write in `Sources/tgkb-mcp/` or `Sources/TelegramKBMCP/`; stdout is
-  the MCP protocol stream.
+  the MCP protocol stream. One exception: `tgkb-mcp --version` prints and exits before any
+  transport exists.
 - Reject code copied from the Telegram-iOS or Swiftgram Telegram-iOS repositories into `Sources/`;
   both are GPLv2.
 - Flag CAPTCHA solving or fingerprint spoofing in `Sources/TelegramKBIngest/`; the design rejects

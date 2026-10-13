@@ -21,29 +21,45 @@ swift package describe --type json > /tmp/tgkb-describe.json 2>/dev/null || {
 python3 - <<'PY' || fail=1
 import json, sys
 ALLOWED = {"tgkb-mcp", "TelegramKBMCP", "TelegramKBStore", "TelegramKBModel"}
+# A build-tool plugin runs at build time and links nothing into the binary, so it is not part of the
+# closure. `describe` lists one among `target_dependencies` all the same (Swift 6.4), so plugins are
+# told apart by type and allowlisted separately: a second plugin still fails loudly. Unlike the
+# closure, the plugin list may come up short — a toolchain that left plugins out of the walk would
+# otherwise fail here — and losing StampVersion fails the build-version check below instead.
+ALLOWED_PLUGINS = {"StampVersion"}
 d = json.load(open("/tmp/tgkb-describe.json"))
 tgts = {t["name"]: t for t in d["targets"]}
 
-seen, stack = set(), ["tgkb-mcp"]
+seen, plugins, stack = set(), set(), ["tgkb-mcp"]
 while stack:
     n = stack.pop()
-    if n in seen or n not in tgts: continue
+    if n in seen or n in plugins or n not in tgts: continue
+    if tgts[n].get("type") == "plugin":
+        plugins.add(n)
+        continue
     seen.add(n)
     stack += [x for x in tgts[n].get("target_dependencies", []) or []]
 
-extra = seen - ALLOWED
-missing = ALLOWED - seen
-ok = not extra and not missing
-print(f"  {'closure == allowlist':<58} {'OK' if ok else 'FAIL'}")
-print(f"    closure: {sorted(seen)}")
-if extra:   print(f"    UNEXPECTED: {sorted(extra)}")
-if missing: print(f"    MISSING:    {sorted(missing)}")
+def check(label, found, allowed, exact=True):
+    extra, missing = found - allowed, (allowed - found if exact else set())
+    ok = not extra and not missing
+    print(f"  {label + ' == allowlist':<58} {'OK' if ok else 'FAIL'}")
+    print(f"    {label}: {sorted(found)}")
+    if extra:   print(f"    UNEXPECTED: {sorted(extra)}")
+    if missing: print(f"    MISSING:    {sorted(missing)}")
+    return ok
+
+ok = check("closure", seen, ALLOWED)
+ok = check("build plugins", plugins, ALLOWED_PLUGINS, exact=False) and ok
 sys.exit(0 if ok else 1)
 PY
 
 echo "== traits-off build hygiene =="
 swift build >/dev/null 2>&1 || { echo "  build failed"; exit 1; }
 
+# Run this BEFORE the DocC build, never after: `generate-documentation` extracts the xcframework
+# into .build/artifacts whatever the traits, and this check would then fail a tree that is fine.
+# In the gate, DocC goes last.
 xcf=$(find .build -name '*.xcframework' -maxdepth 6 2>/dev/null | wc -l | tr -d ' ')
 [ "$xcf" -eq 0 ] && note "no xcframework extracted into .build" "OK" \
                  || { note "no xcframework extracted into .build" "FAIL ($xcf)"; fail=1; }
@@ -55,6 +71,19 @@ for b in tgkb-mcp tgkb; do
   [ "$n" -eq 0 ] && note "$b free of TelegramKBIngestTDLib symbols" "OK" \
                  || { note "$b free of TelegramKBIngestTDLib symbols" "FAIL ($n)"; fail=1; }
 done
+
+echo "== build version =="
+# Both binaries carry the string the StampVersion plugin generated for this build (#12), and it is
+# what Scripts/build-version.sh — the one rule, which the plugin runs — gives for this tree now: so
+# the build is not stale, and before a commit, -dirty is expected. The rule's own cases are
+# VersionTests'. `serverInfo.version` is the same string, passed in by tgkb-mcp's main and pinned by
+# the `serverInfoNamesTheBuild` test.
+expected=$(GIT_OPTIONAL_LOCKS=0 sh Scripts/build-version.sh .)
+cli=$(.build/debug/tgkb --version 2>/dev/null); mcp=$(.build/debug/tgkb-mcp --version 2>/dev/null)
+[ -n "$cli" ] && [ "$cli" = "$mcp" ] && note "tgkb --version == tgkb-mcp --version" "OK ($cli)" \
+  || { note "tgkb --version == tgkb-mcp --version" "FAIL (${cli:-nothing} vs ${mcp:-nothing})"; fail=1; }
+[ "$cli" = "$expected" ] && note "the version names this tree" "OK" \
+  || { note "the version names this tree" "FAIL (expected $expected)"; fail=1; }
 
 echo "== seam contract =="
 # The spec file is the source of truth; the test target needs its own copy as a resource.

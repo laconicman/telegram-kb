@@ -4,6 +4,9 @@ import PackageDescription
 // The TDLib ingestion path is trait-gated. Verified empirically (research/spm-traits-binarytarget.md):
 // with the trait off, SwiftPM does not resolve the dependency, does not download the ~binary
 // artifact, and `swift package show-dependencies` reports it as absent entirely.
+//
+// Package.resolved: on Swift 6.4 a manifest change re-resolves with the trait off and DROPS the
+// TDLib pins. Keep them; commit only the new `originHash`, which is what SwiftPM checks.
 let package = Package(
     name: "telegram-kb",
     platforms: [.macOS(.v13)],
@@ -75,16 +78,23 @@ let package = Package(
             "TelegramKBIngest", "TelegramKBStore", "TelegramKBSync",
             .target(name: "TelegramKBIngestTDLib", condition: .when(traits: ["TDLib"])),
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
-        ]),
+        ], plugins: ["StampVersion"]),
 
         // Hard invariant, stated positively: the transitive target closure of `tgkb-mcp` must
         // be exactly {TelegramKBMCP, TelegramKBStore, TelegramKBModel}. An allowlist fails
         // loudly on any addition; a check for the *absence* of TelegramKBIngestTDLib would
         // pass for the wrong reasons as the graph grows. Enforced by Scripts/check-invariants.sh.
+        // StampVersion is not in that closure: a build-tool plugin runs at build time and links
+        // nothing, and the script allowlists it separately, so a second plugin still fails.
         .executableTarget(name: "tgkb-mcp", dependencies: [
             "TelegramKBMCP", "TelegramKBStore",
             .product(name: "Logging", package: "swift-log"),
-        ]),
+        ], plugins: ["StampVersion"]),
+
+        // Generates `BuildVersion.string` — `0.1.0+<commit>[-dirty]` — into both executables, so
+        // they report one version, and every build says which commit it is (#12). See
+        // <doc:Design> "Every build says which commit it is".
+        .plugin(name: "StampVersion", capability: .buildTool()),
 
         // Runs Spec/url-canonical/fixtures.json — the co-owned seam contract with `artanl`.
         .testTarget(

@@ -14,6 +14,9 @@ struct MCPServerTests {
             .appendingPathComponent("tgkb-mcp-\(UUID().uuidString).sqlite").path
     }
 
+    /// What the binary would pass from its generated `BuildVersion.string`.
+    static let version = "0.1.0+abc1234-dirty"
+
     /// Two posts: one linking the shortener, one plain text — enough for all three tools.
     static func seededStore() throws -> Store {
         let store = try Store.openForWriting(at: tempPath())
@@ -36,7 +39,7 @@ struct MCPServerTests {
     /// Server + client on the in-memory pair. The serve task is scoped to the test process —
     /// the transports die with the suite, which is all the teardown this needs.
     static func connected(_ store: Store) async throws -> (Client, Server) {
-        let server = try await TGKBServer.makeServer(store: store)
+        let server = try await TGKBServer.makeServer(store: store, version: Self.version)
         let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
         let client = Client(name: "test", version: "0")
         Task { try await server.start(transport: serverTransport) }
@@ -520,13 +523,24 @@ struct MCPServerTests {
     /// this topic" from "this archive never covered it". Sent once, at `initialize`.
     @Test("initialize tells the model which channels the archive holds, and how many posts each")
     func instructionsNameTheArchive() async throws {
-        let server = try await TGKBServer.makeServer(store: try Self.seededStore())
+        let server = try await TGKBServer.makeServer(store: try Self.seededStore(), version: Self.version)
         let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
         Task { try await server.start(transport: serverTransport) }
         let initialized = try await Client(name: "test", version: "0").connect(transport: clientTransport)
         let instructions = try #require(initialized.instructions)
         #expect(instructions.contains("@iosgr (2 posts)"))
         #expect(instructions.contains("t.me"), "and that answers cite the posts' links")
+    }
+
+    /// `serverInfo.version` was the constant `0.1.0` whatever was built, so an answer could not be
+    /// traced to the code that gave it (#12). It is now the version the binary passes in.
+    @Test("serverInfo names the build the binary was given, not a constant")
+    func serverInfoNamesTheBuild() async throws {
+        let server = try await TGKBServer.makeServer(store: try Self.seededStore(), version: Self.version)
+        let (clientTransport, serverTransport) = await InMemoryTransport.createConnectedPair()
+        Task { try await server.start(transport: serverTransport) }
+        let initialized = try await Client(name: "test", version: "0").connect(transport: clientTransport)
+        #expect(initialized.serverInfo.version == Self.version)
     }
 
     /// 🟡 A forward origin came as `@channel/id` alone — the one place a record named a post without
