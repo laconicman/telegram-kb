@@ -1,8 +1,8 @@
 diff --git a/Scripts/build-version.sh b/Scripts/build-version.sh
-index 03be32d..b9d05b9 100755
+index 6c616d5..be74833 100755
 --- a/Scripts/build-version.sh
 +++ b/Scripts/build-version.sh
-@@ -27,8 +27,7 @@ package_version=0.1.0
+@@ -30,8 +30,7 @@ package_version=0.1.0
  commit=unknown
  changes=
  top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || true)
@@ -10,5 +10,5 @@ index 03be32d..b9d05b9 100755
 -   && hash=$(git -C "$1" rev-parse --short HEAD 2>/dev/null); then
 +if hash=$(git -C "$1" rev-parse --short HEAD 2>/dev/null); then
    commit=$hash
-   changes=$(git -C "$1" status --porcelain 2>/dev/null | head -n 1)
- fi
+   changes=$(git -C "$1" status --porcelain --untracked-files=no 2>/dev/null | head -n 1)
+   [ -n "$changes" ] \

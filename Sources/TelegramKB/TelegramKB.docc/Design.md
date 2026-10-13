@@ -696,8 +696,10 @@ the code that produced it (#12).
 change it. Where no commit can be named honestly, the build part is `unknown`, with no `-dirty`:
 without git, before the repository's first commit, and when the package is not the root of its own
 repository. That last case is an unpacked archive inside some other checkout, where `git -C` would
-walk up and name that checkout's commit (Devin Review, #19). Untracked files count as changes,
-because SwiftPM compiles every source file under a target, tracked or not. The rule's cases are
+walk up and name that checkout's commit (Devin Review, #19). A tracked file changed anywhere is a
+change. An untracked file is one only under `Sources/` or `Plugins/`, where SwiftPM compiles it
+whether tracked or not. Anywhere else it is not: a tool's `.claude/` once made every build `-dirty`,
+because the plugin's git does not read the user's global ignore file. The rule's cases are
 `VersionTests`, run on scratch repositories, and mutant `stampRuleNamesTheTree` puts the walk-up
 back.
 

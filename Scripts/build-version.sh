@@ -14,8 +14,11 @@
 #   agree.
 # - No commit — no git, another repository's tree, or a repository before its first commit — is
 #   `unknown`, with no `-dirty`: there is nothing for the changes to be relative to.
-# - Untracked files count as changes: SwiftPM compiles every source file under a target, tracked or
-#   not.
+# - A tracked file changed anywhere is a change. An untracked file is one only where SwiftPM would
+#   compile it — under Sources/ or Plugins/ — since it compiles every file there, tracked or not.
+#   Elsewhere (a tool's .claude/, scratch notes) it is not: the plugin's git does not read the
+#   user's global ignore file, so counting untracked files everywhere made the stamp depend on whose
+#   configuration built it.
 #
 # usage: build-version.sh <package-dir>                 prints the version
 #        build-version.sh <package-dir> <output-dir>    writes <output-dir>/BuildVersion.swift, and
@@ -30,7 +33,9 @@ top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || true)
 if [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" = "$(cd "$1" && pwd -P)" ] \
    && hash=$(git -C "$1" rev-parse --short HEAD 2>/dev/null); then
   commit=$hash
-  changes=$(git -C "$1" status --porcelain 2>/dev/null | head -n 1)
+  changes=$(git -C "$1" status --porcelain --untracked-files=no 2>/dev/null | head -n 1)
+  [ -n "$changes" ] \
+    || changes=$(git -C "$1" ls-files --others --exclude-standard -- Sources Plugins 2>/dev/null | head -n 1)
 fi
 version="$package_version+$commit${changes:+-dirty}"
 

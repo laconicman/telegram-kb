@@ -18,7 +18,9 @@ struct VersionTests {
     /// 🟡 Run inside an unpacked archive that sat in some other checkout, the rule named that
     /// checkout's commit, because `git -C` walks up to the nearest repository (Devin Review, #19).
     /// Then, with the rule written twice, the plugin and the invariant check disagreed about a
-    /// repository with no commit yet. One rule now, and these are its cases.
+    /// repository with no commit yet. One rule now, and these are its cases — including the
+    /// untracked directory a tool leaves at the root, which the plugin's git, blind to the user's
+    /// global ignore file, once counted as a change.
     @Test("the stamp names the tree it is given: its commit, -dirty, or unknown — never another's")
     func stampRuleNamesTheTree() throws {
         let scratch = FileManager.default.temporaryDirectory
@@ -36,8 +38,20 @@ struct VersionTests {
         let hash = try Self.git(["rev-parse", "--short", "HEAD"], in: repo)
         #expect(try Self.stamp(repo) == hash)
 
-        try Data("b".utf8).write(to: repo.appendingPathComponent("Untracked.swift"))
-        #expect(try Self.stamp(repo) == "\(hash)-dirty", "SwiftPM compiles an untracked source too")
+        let tool = repo.appendingPathComponent(".claude")
+        try FileManager.default.createDirectory(at: tool, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: tool.appendingPathComponent("settings.local.json"))
+        #expect(try Self.stamp(repo) == hash, "an untracked file SwiftPM never compiles is no change")
+
+        let sources = repo.appendingPathComponent("Sources/tool")
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try Data("b".utf8).write(to: sources.appendingPathComponent("Untracked.swift"))
+        #expect(try Self.stamp(repo) == "\(hash)-dirty", "an untracked source is compiled all the same")
+        try FileManager.default.removeItem(at: sources)
+
+        try Data("changed".utf8).write(to: repo.appendingPathComponent("file"))
+        #expect(try Self.stamp(repo) == "\(hash)-dirty", "a tracked file changed anywhere is a change")
+        try Self.git(["checkout", "--", "file"], in: repo)
 
         let worktree = scratch.appendingPathComponent("worktree")
         try Self.git(["worktree", "add", "-q", worktree.path], in: repo)
