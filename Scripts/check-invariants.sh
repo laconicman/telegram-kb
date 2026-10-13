@@ -70,26 +70,17 @@ for b in tgkb-mcp tgkb; do
 done
 
 echo "== build version =="
-# Both binaries carry the string the StampVersion plugin generated for this build (#12), and it
-# names this tree: the package version, HEAD's short hash, and -dirty when anything is uncommitted —
-# so before a commit, -dirty is expected, and outside a git checkout, unknown. `serverInfo.version`
-# is the same string, passed in by tgkb-mcp's main and pinned by the `serverInfoNamesTheBuild` test.
-# The suffix is computed as the plugin computes it, git believed only when its worktree root is this
-# package; keep the two in step.
-top=$(git rev-parse --show-toplevel 2>/dev/null || true)
-if [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" = "$(pwd -P)" ] \
-   && commit=$(git rev-parse --short HEAD 2>/dev/null); then
-  tree="$commit$([ -n "$(git status --porcelain | head -n 1)" ] && echo -dirty)"
-else
-  tree=unknown
-fi
+# Both binaries carry the string the StampVersion plugin generated for this build (#12), and it is
+# what Scripts/build-version.sh — the one rule, which the plugin runs — gives for this tree now: so
+# the build is not stale, and before a commit, -dirty is expected. The rule's own cases are
+# VersionTests'. `serverInfo.version` is the same string, passed in by tgkb-mcp's main and pinned by
+# the `serverInfoNamesTheBuild` test.
+expected=$(GIT_OPTIONAL_LOCKS=0 sh Scripts/build-version.sh .)
 cli=$(.build/debug/tgkb --version 2>/dev/null); mcp=$(.build/debug/tgkb-mcp --version 2>/dev/null)
 [ -n "$cli" ] && [ "$cli" = "$mcp" ] && note "tgkb --version == tgkb-mcp --version" "OK ($cli)" \
   || { note "tgkb --version == tgkb-mcp --version" "FAIL (${cli:-nothing} vs ${mcp:-nothing})"; fail=1; }
-case "$cli" in
-  *"+$tree") note "the version names this tree" "OK" ;;
-  *) note "the version names this tree" "FAIL (expected …+$tree)"; fail=1 ;;
-esac
+[ "$cli" = "$expected" ] && note "the version names this tree" "OK" \
+  || { note "the version names this tree" "FAIL (expected $expected)"; fail=1; }
 
 echo "== seam contract =="
 # The spec file is the source of truth; the test target needs its own copy as a resource.

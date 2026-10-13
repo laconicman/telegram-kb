@@ -686,24 +686,30 @@ parses it.
 
 **Decision.** Both binaries report one version string: the package version, then `+` and the
 short hash of the commit the tree was built from, with `-dirty` when the tree had uncommitted or
-untracked changes. That gives `0.1.0+539cf51` or `0.1.0+539cf51-dirty`. It gives
-`0.1.0+unknown` without git, and when the package is not the root of its own repository. An
-unpacked archive inside some other checkout would otherwise stamp that checkout's commit, because
-`git -C` walks up to the nearest repository (Devin Review, #19). `tgkb --version`, `tgkb-mcp --version`, `serverInfo.version` at `initialize` and the
-first line of `tgkb doctor` all print it. Binaries are installed by building from `main`, so until
-this, nothing on the machine recorded which commit was running, and an import, a sync or an MCP
-answer could not be traced to the code that produced it (#12).
+untracked changes. That gives `0.1.0+539cf51` or `0.1.0+539cf51-dirty`. `tgkb --version`,
+`tgkb-mcp --version`, `serverInfo.version` at `initialize` and the first line of `tgkb doctor` all
+print it. Binaries are installed by building from `main`, so until this, nothing on the machine
+recorded which commit was running, and an import, a sync or an MCP answer could not be traced to
+the code that produced it (#12).
 
-**How: a build-tool plugin that generates source.** `StampVersion`'s prebuild command runs the
-system `git` and writes `enum BuildVersion { static let string = "…" }` into each executable
-target. Prebuild commands run before every build, so an incremental build picks up a new commit or
-an edit — under `swift build`, `swift run` and `-c release` alike. The file is rewritten only when
-the string changes, so an unchanged tree does not recompile. This was verified on Swift 6.4 in a
-git worktree, whose `.git` points outside the package: the plugin sandbox allows reads anywhere
-(`Sources/Basics/Sandbox.swift` in SwiftPM, per DeepWiki at `af38fe0d`). `GIT_OPTIONAL_LOCKS=0`
-stops `git status` from attempting the index refresh the sandbox would refuse. Untracked files
-count as changes, because SwiftPM compiles every source file under a target, tracked or not. The
-package version is `StampVersion.packageVersion`, the one place to change it.
+**One rule, in `Scripts/build-version.sh`.** It also holds the package version, the one place to
+change it. Where no commit can be named honestly, the build part is `unknown`, with no `-dirty`:
+without git, before the repository's first commit, and when the package is not the root of its own
+repository. That last case is an unpacked archive inside some other checkout, where `git -C` would
+walk up and name that checkout's commit (Devin Review, #19). Untracked files count as changes,
+because SwiftPM compiles every source file under a target, tracked or not. The rule's cases are
+`VersionTests`, run on scratch repositories, and mutant `stampRuleNamesTheTree` puts the walk-up
+back.
+
+**How it reaches the binaries: a build-tool plugin that generates source.** `StampVersion` is a
+prebuild command that runs the script, which writes `enum BuildVersion { static let string = "…" }`
+into each executable target. Prebuild commands run before every build, so an incremental build
+picks up a new commit or an edit — under `swift build`, `swift run` and `-c release` alike. The file
+is rewritten only when the string changes, so an unchanged tree does not recompile. This was
+verified on Swift 6.4 in a git worktree, whose `.git` points outside the package: the plugin sandbox
+allows reads anywhere (`Sources/Basics/Sandbox.swift` in SwiftPM, per DeepWiki at `af38fe0d`).
+`GIT_OPTIONAL_LOCKS=0` stops `git status` from attempting the index refresh the sandbox would
+refuse.
 
 **Why not the alternatives.**
 
@@ -724,10 +730,12 @@ and this one's whole output is one string literal, so `Scripts/check-invariants.
 walk by target type. The linked closure is still exactly `{TelegramKBMCP, TelegramKBStore,
 TelegramKBModel}`. Build plugins get an allowlist of their own, `{StampVersion}`, and a second
 plugin still fails loudly; that was checked by adding one. A toolchain whose `describe` leaves
-plugins out of the walk passes this half, since losing `StampVersion` would break the build first. The same script requires that
-the two binaries print one string and that the string names the tree it just built.
-`serverInfo.version` is the string `tgkb-mcp`'s `main` passes to `TGKBServer.makeServer`, and a
-test pins that the server sends what it was given.
+plugins out of the walk passes this half, since losing `StampVersion` would break the build first.
+The same script requires that the two binaries print one string, and that it is what
+`Scripts/build-version.sh` gives for the tree now, so a stale build fails. It runs the plugin's own
+rule rather than a copy: two copies drifted twice in one review. `serverInfo.version` is the
+string `tgkb-mcp`'s `main` passes to `TGKBServer.makeServer`, and a test pins that the server sends
+what it was given.
 
 **Not done: recording the version in the store.** #12 suggested stamping each `sync` or `import`
 with the writer's version. That would be a schema change in Track A, and nothing would read it

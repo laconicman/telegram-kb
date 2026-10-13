@@ -1,0 +1,14 @@
+diff --git a/Scripts/build-version.sh b/Scripts/build-version.sh
+index 03be32d..b9d05b9 100755
+--- a/Scripts/build-version.sh
++++ b/Scripts/build-version.sh
+@@ -27,8 +27,7 @@ package_version=0.1.0
+ commit=unknown
+ changes=
+ top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || true)
+-if [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" = "$(cd "$1" && pwd -P)" ] \
+-   && hash=$(git -C "$1" rev-parse --short HEAD 2>/dev/null); then
++if hash=$(git -C "$1" rev-parse --short HEAD 2>/dev/null); then
+   commit=$hash
+   changes=$(git -C "$1" status --porcelain 2>/dev/null | head -n 1)
+ fi
