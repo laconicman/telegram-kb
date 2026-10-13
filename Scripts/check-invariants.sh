@@ -57,6 +57,9 @@ PY
 echo "== traits-off build hygiene =="
 swift build >/dev/null 2>&1 || { echo "  build failed"; exit 1; }
 
+# Run this BEFORE the DocC build, never after: `generate-documentation` extracts the xcframework
+# into .build/artifacts whatever the traits, and this check would then fail a tree that is fine.
+# In the gate, DocC goes last.
 xcf=$(find .build -name '*.xcframework' -maxdepth 6 2>/dev/null | wc -l | tr -d ' ')
 [ "$xcf" -eq 0 ] && note "no xcframework extracted into .build" "OK" \
                  || { note "no xcframework extracted into .build" "FAIL ($xcf)"; fail=1; }

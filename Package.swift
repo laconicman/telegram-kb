@@ -4,6 +4,9 @@ import PackageDescription
 // The TDLib ingestion path is trait-gated. Verified empirically (research/spm-traits-binarytarget.md):
 // with the trait off, SwiftPM does not resolve the dependency, does not download the ~binary
 // artifact, and `swift package show-dependencies` reports it as absent entirely.
+//
+// Package.resolved: on Swift 6.4 a manifest change re-resolves with the trait off and DROPS the
+// TDLib pins. Keep them; commit only the new `originHash`, which is what SwiftPM checks.
 let package = Package(
     name: "telegram-kb",
     platforms: [.macOS(.v13)],
