@@ -116,6 +116,11 @@ crawl, and a re-run fetches one page.
 CLI search over the store. Exists before the MCP server because it is how the evals run without
 an MCP client in the loop.
 
+*Extended 2026-10-13, after S6 (issue #11):* `query` takes the MCP tool's filters and cursor, and
+`links` and `show` are the other two tools from the terminal. Both binaries parse the shared
+arguments through one definition, in Track A's targets at the repo owner's call — <doc:Design>
+§ *One argument grammar for both binaries*.
+
 **Done:** `G1`–`G10` in `evals/golden-queries.md` are runnable and produce numbers.
 
 **Delivered in PR #1, through thirteen Devin review rounds: 34 inline findings, exactly one of

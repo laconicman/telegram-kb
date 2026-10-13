@@ -579,12 +579,16 @@ details the spec-level decisions left open:
   "last millisecond" either: a day has no last instant, and any approximation of one excludes
   the posts stamped after it. An explicit timestamp, with or without fractional seconds, stays
   the inclusive `to`. The schema declares `from`/`to` as plain strings, not `format:
-  date-time` — a validating client would otherwise refuse the date-only spelling.
+  date-time` — a validating client would otherwise refuse the date-only spelling. The rule is
+  `SearchFilter.narrow(to:)`, which `tgkb query --to` shares (§ *One argument grammar for both
+  binaries*).
 - **Dates go out at the precision the store keeps.** Every `date` a record carries is ISO-8601
   with fractional seconds, so a date read from one result and passed back as an inclusive `to`
   still admits the post it came from; the fraction-less rendering excluded it.
 - **The post reference is a grammar of three forms** — `@channel/id` (what records emit),
   `channel/id`, `https://t.me/channel/id` (what people paste). All fold to the lowercase key.
+  Defined once, as `Post.ID(reference:)`, which `tgkb show` takes too (§ *One argument grammar
+  for both binaries*).
 - **Server assembly lives in the library** (`TGKBServer.makeServer`), so `TelegramKBMCPTests`
   drives the real `Server` and a real `Client` over `InMemoryTransport.createConnectedPair` —
   protocol framing included — rather than a re-implementation. `tgkb-mcp` itself is ~50 lines:
@@ -613,16 +617,70 @@ make it *vestigial*. Whichever binary the Claude Desktop config points at become
 and if the all-in-one works, that is the one everybody uses. The slim binary would then exist
 only as documentation of an intention nobody is forced to honour.
 
-**`query` is not the same case and stays.** It needs only `TelegramKBStore`, it is how retrieval
-is exercised and the golden-query evals are run without an MCP client in the loop, and `tgkb` is
-the fat binary by design. The distinction is whether the subcommand duplicates the *product*
-(`serve` does) or merely uses the shared library (`query` does).
+**`query`, `links` and `show` are not the same case and stay.** Each needs only
+`TelegramKBStore`, one per MCP tool; they are how retrieval is exercised and the golden-query evals
+are run without an MCP client in the loop, and `tgkb` is the fat binary by design. The distinction
+is whether the subcommand duplicates the *product* (`serve` does) or merely uses the shared
+library (the read subcommands do). Their arguments are the tools' arguments, parsed by the same
+code (§ *One argument grammar for both binaries*).
 
 The invariant is stated **positively**: `tgkb-mcp`'s transitive target closure must be exactly
 `{TelegramKBMCP, TelegramKBStore, TelegramKBModel}`. A check for the *absence* of
 `TelegramKBIngestTDLib` would pass for the wrong reasons as the graph grows — it would still
 pass if someone added a different heavyweight target. `Scripts/check-invariants.sh` implements
 the allowlist, and a negative test confirms it fails on any addition.
+
+## One argument grammar for both binaries
+
+**Decision.** `tgkb query`, `links` and `show` take the arguments `tgkb-mcp`'s three tools take,
+and both binaries parse them through one definition, in the libraries both already link:
+
+- `Post.ID(reference:)` in `TelegramKBModel`: `@channel/id`, `channel/id`, `t.me/channel/id`,
+  `https://t.me/channel/id`, the channel folded to lowercase.
+- `Store.SearchFilter` in `TelegramKBStore`: a channel's leading `@` dropped and its case folded on
+  assignment and in the initialiser; `SearchFilter.DateBound(parsing:)` for ISO-8601, with or
+  without fractional seconds, or `YYYY-MM-DD`; and `narrow(from:)` and `narrow(to:)` decide what a
+  whole UTC day means on each side — from its first instant, and *everything before the next day*
+  (§ *MCP tool surface*, "A date-only `to` is the whole day").
+- `PostKind.allCases`: the kinds the schema's `enum` and `--kind`'s help both list.
+
+Each surface keeps its own *wording* of a refusal — a tool execution error that a model reads,
+a usage error with the flag's help — but not its own rule.
+
+**Why it has to be one.** The cursor's fingerprint covers the filter (§ *Filtering and paging*),
+so equal arguments must build equal filters. Two parsers that disagreed about `to: 2024-03-01` —
+one an inclusive `to` at the next midnight, the other an exclusive `before` — would each work
+alone, refuse each other's cursors, and one of them would silently admit the next day's
+first-instant posts. Agreed, a cursor printed by `tgkb query` continues in `tgkb_search_posts` and
+the reverse: on the evaluation corpus the two hand out the same strings for page one and page two.
+
+**Where it lives, and what that cost.** Three homes were weighed:
+
+1. **Track A, the model and the store — chosen**, by the repo owner on 2026-10-13. Both binaries
+   already link both targets, so `tgkb-mcp`'s closure is unchanged. The cost is a track C feature
+   editing track A's targets (<doc:Roadmap> § *Working in parallel*). It was kept additive — new
+   API, and a channel fold that now also drops the `@` — and `tgkb-mcp` was shown not to move: 46
+   recorded responses over the synthetic evaluation corpus (`initialize`, `tools/list`, every
+   argument path, both cursor pages) are byte-identical before and after.
+2. **Two copies and a test between them.** No track A edit, but the rule would exist twice, and
+   only the test would keep the copies equal.
+3. **`tgkb` links `TelegramKBMCP`.** One definition and no track A edit, but `tgkb` would link the
+   MCP SDK, and a `serve` subcommand would become three lines (§ *Why `tgkb` has no `serve`
+   subcommand*).
+
+**Pinned by a test all the same.** A single definition does not stop a surface from going around
+it — a `query` that set `filter.to` from a day by hand would build and pass its own tests.
+`Tests/tgkbTests` imports the `tgkb` executable and runs one table of arguments through
+`Query.parse` and through `TGKBServer.filter`, requiring equal filters and equal refusals, and
+`show` must take every reference `tgkb_get_post` takes. Mutant `filtersAgree` is that bypass.
+
+**What stays per surface.** The page cap: `tgkb_search_posts` clamps `limit` at 100, a page a
+model can read, and `tgkb query` takes up to `Store.maxPageSize` for eval scripts. The cursor
+encodes an offset, not a page size, so walks still cross over. The `AND`/`OR`/`NOT` refusal stays
+in the MCP handler (§ *MCP tool surface*): a person at a terminal is not a model guessing at
+boolean syntax. The rendering stays per surface too. A terminal gets text; a client gets
+`structuredContent`. `tgkb query --quiet` keeps its exact output, because `Scripts/run-evals.sh`
+parses it.
 
 ## OPEN — where does TDLib live once MCP needs it? *(unanswered, deliberately)*
 

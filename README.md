@@ -30,7 +30,8 @@ swift package --disable-sandbox preview-documentation --target TelegramKB
 |---|---|
 | `tgkb sync`: public channels through the web preview, incremental and resumable | A channel that renames its username keeping one history (S7) |
 | `tgkb import`: a public group from a Telegram client's chat export, verified against `t.me` | Channels with the preview disabled, and groups kept current without a manual export (Phase 2, TDLib) |
-| `tgkb query`: word search with Russian lemmatisation, plus substring search | Reactions and links as ranking signals (Phase 3) |
+| `tgkb query`: word search with Russian lemmatisation, plus substring search, filtered by channel, kind and date, paged by cursor | Reactions and links as ranking signals (Phase 3) |
+| `tgkb links`, `tgkb show`: the posts that shared a URL, and one post in full | |
 | `tgkb doctor`: store health and a per-channel integrity report | Fetching the content behind links (done in the sibling project) |
 | URL canonicalisation to a versioned spec, shared with a sibling project | |
 | `tgkb-mcp`: `tgkb_search_posts`, `tgkb_find_links`, `tgkb_get_post` for a Claude client, every record with a citable `t.me` link | |
@@ -50,13 +51,21 @@ swift build -c release
 .build/release/tgkb query навигация               # word hits first, then substring-only hits
 .build/release/tgkb query '"адаптивная вёрстка"'   # quoted: that word order only
 .build/release/tgkb query --mode substring imation
+.build/release/tgkb query swiftui --channel @iosgr --from 2024-01-01 --to 2024-03-31   # a date is a whole UTC day
+.build/release/tgkb query swiftui --cursor <the cursor the previous page printed>
+.build/release/tgkb links https://clck.ru/33ABCD  # every post that shared it, under any spelling
+.build/release/tgkb show @iosgr/4744              # one post in full: text, links with previews, reactions
 .build/release/tgkb doctor iosgr                  # coverage, gaps, reachability
 .build/release/tgkb import ~/Downloads/ChatExport_… --channel sdl_static --timezone Europe/Moscow   # a group, from its export
 ```
 
 The store defaults to `~/Library/Application Support/telegram-kb/kb.sqlite`; every subcommand
-takes `--db`. `sync --full` refreshes stored posts but never removes one. Posts deleted on
-Telegram are kept on purpose (`Design`, *Edits are not refreshed; deletions are kept*).
+takes `--db`. `query`, `links` and `show` are the CLI side of `tgkb-mcp`'s three tools, with the
+same arguments, parsed by the same code. A cursor from either binary continues in the other
+(`Design`, *One argument grammar for both binaries*).
+
+`sync --full` refreshes stored posts but never removes one. Posts deleted on Telegram are kept on
+purpose (`Design`, *Edits are not refreshed; deletions are kept*).
 
 To ask a Claude client, register the read-only server — here with Claude Code:
 
