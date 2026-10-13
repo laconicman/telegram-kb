@@ -3,7 +3,7 @@ import Foundation
 import TelegramKBModel
 import TelegramKBStore
 
-/// Searches the store from the terminal.
+/// Searches the store from the terminal — `tgkb_search_posts`, with the same filters and paging.
 ///
 /// Exists so retrieval quality is measurable without an MCP client in the loop — this is how
 /// `evals/golden-queries.md` is run.
@@ -29,19 +29,35 @@ struct Query: AsyncParsableCommand {
     @Option(name: .long, help: "words | substring | both (word hits first, then substring-only)")
     var mode: Store.SearchMode = .both
 
-    @Option(name: .shortAndLong, help: "Maximum results.")
-    var limit: Int = 20
+    @Option(help: "Only this channel or group; a leading @ is accepted.")
+    var channel: String?
+
+    @Option(help: "Only this kind of post.")
+    var kind: PostKind?
+
+    @Option(help: ArgumentHelp(
+        "Oldest post date, inclusive: ISO-8601, or YYYY-MM-DD for a whole UTC day.",
+        valueName: "date"))
+    var from: Store.SearchFilter.DateBound?
+
+    @Option(help: ArgumentHelp(
+        "Newest post date, inclusive: ISO-8601, or YYYY-MM-DD for a whole UTC day.",
+        valueName: "date"))
+    var to: Store.SearchFilter.DateBound?
+
+    @OptionGroup var page: PageOptions
 
     @Flag(name: .long, help: "Print ids and counts only — for eval scripting.")
     var quiet = false
 
-    /// `Array.prefix` **traps** on a negative length, so a bad `--limit` would crash rather than
-    /// report. SQLite treats a negative LIMIT as unlimited, so the failure surfaces only later,
-    /// in Swift. Zero stays valid — an empty result set is a legitimate request.
-    func validate() throws {
-        guard limit >= 0 else {
-            throw ValidationError("--limit must be zero or greater (got \(limit)).")
-        }
+    /// What `--channel`, `--kind`, `--from` and `--to` describe, through the grammar
+    /// `tgkb_search_posts` shares — so equal arguments build equal filters, and a cursor from one
+    /// binary continues in the other.
+    var filter: Store.SearchFilter {
+        var filter = Store.SearchFilter(channel: channel, kind: kind)
+        if let from { filter.narrow(from: from) }
+        if let to { filter.narrow(to: to) }
+        return filter
     }
 
     func run() async throws {
@@ -49,18 +65,23 @@ struct Query: AsyncParsableCommand {
         let query = terms.joined(separator: " ")
 
         // The merge policy lives in the store, not here: `tgkb-mcp` cannot depend on this target.
-        let results = try db.search(query, mode: mode, limit: limit)
-        let hits = results.hits
+        // Hits and their posts from ONE read, as `tgkb_search_posts` loads them: a sync committing
+        // between two reads would pair this page's total and cursor with another corpus.
+        let found = try db.searchPosts(query, mode: mode, filter: filter, limit: page.limit,
+                                       cursor: page.cursor)
+        let results = found.results
+        PageOptions.warnIfIndexMoved(results.indexMovedSinceCursor)
 
         if quiet {
-            print(hits.count)
-            for h in hits { print("\(h.id.channelUsername)/\(h.id.messageID)") }
+            print(results.hits.count)
+            for h in results.hits { print("\(h.id.channelUsername)/\(h.id.messageID)") }
             return
         }
-        guard !hits.isEmpty else { print("no results for \(query.debugDescription)"); return }
+        // `total`, not this page: `--limit 0`, or a cursor at the end, is an empty page of a
+        // non-empty result.
+        guard results.total > 0 else { print("no results for \(query.debugDescription)"); return }
 
-        for hit in hits {
-            guard let post = try db.post(hit.id) else { continue }
+        for post in found.posts {
             let date = post.date.formatted(.iso8601.year().month().day())
             let reactions = post.totalReactions > 0 ? "  ♥\(post.totalReactions)" : ""
             // A compact record with a citable link — never the full body. Of seven Telegram MCP
@@ -68,9 +89,8 @@ struct Query: AsyncParsableCommand {
             print("\(date)  \(post.permalink)\(reactions)")
             print("    \(Self.snippet(post.text.isEmpty ? (post.poll?.question ?? "") : post.text))")
         }
-        print(hits.count < results.total
-              ? "\n\(hits.count) of \(results.total) result(s) — raise --limit for the rest"
-              : "\n\(hits.count) result(s)")
+        print("\n" + PageOptions.footer(found.posts.count, of: results.total, noun: "result",
+                                        nextCursor: results.nextCursor))
     }
 
     static func snippet(_ text: String, limit: Int = 140) -> String {
@@ -81,3 +101,11 @@ struct Query: AsyncParsableCommand {
 }
 
 extension Store.SearchMode: ExpressibleByArgument {}
+
+// The grammar is the store's and the model's, shared with `tgkb-mcp`; these only adapt it to
+// ArgumentParser, which then lists the kinds in `--help`.
+extension PostKind: ExpressibleByArgument {}
+
+extension Store.SearchFilter.DateBound: ExpressibleByArgument {
+    public init?(argument: String) { self.init(parsing: argument) }
+}

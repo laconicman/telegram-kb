@@ -1,5 +1,6 @@
 import Foundation
 import MCP
+import TelegramKBModel
 
 /// The three tools `tgkb-mcp` exposes.
 ///
@@ -20,10 +21,9 @@ enum TGKBTools {
     static let maxLimit = 100
     static let defaultLimit = 20
 
-    /// `PostKind` is not `CaseIterable`; the enum list the schema declares and the decoder
-    /// reports must be spelled out once, here, or the two will drift.
-    static let postKinds = ["text", "photo", "album", "video", "videoNote", "audio", "voice",
-                            "document", "poll", "sticker", "location", "giveaway", "unknown"]
+    /// The enum list the schema declares and the decoder reports — from `PostKind` itself, which
+    /// `tgkb query --kind` lists too, so no copy of it can drift.
+    static let postKinds = PostKind.allCases.map(\.rawValue)
 
     static let all: [Tool] = [searchPosts, findLinks, getPost]
 

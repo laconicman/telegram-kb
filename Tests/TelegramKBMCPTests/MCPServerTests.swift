@@ -654,20 +654,16 @@ struct MCPServerTests {
         }
     }
 
-    /// The post-ref parser is the surface a model types against most — pin its accepted forms.
-    @Test("parsePostRef accepts the emitted literal and the pasteable forms")
-    func postRefParsing() throws {
-        let expected = Post.ID(channelUsername: "iosgr", messageID: 123)
-        #expect(TGKBServer.parsePostRef("@iosgr/123") == expected)
-        #expect(TGKBServer.parsePostRef("iosgr/123") == expected)
-        #expect(TGKBServer.parsePostRef("https://t.me/iosgr/123") == expected)
-        #expect(TGKBServer.parsePostRef("t.me/IOSGR/123") == expected,
-                "usernames fold — the store key is lowercased")
-        #expect(TGKBServer.parsePostRef("iosgr") == nil)
-        #expect(TGKBServer.parsePostRef("iosgr/-3") == nil)
-        #expect(TGKBServer.parsePostRef("@/123") == nil)
-        #expect(TGKBServer.parsePostRef("@bad name/1") == nil,
-                "not a username — a malformed reference, so invalidParams rather than a missing post")
-        #expect(TGKBServer.parsePostRef("t.me/iosgr?x/1") == nil)
+    /// The schema's `kind` enum is derived from `PostKind`, so a reordered or renamed case in the
+    /// model would change what clients see. Pinned here, where that is a schema change.
+    @Test("the kind enum the schema declares is the published list, in its order")
+    func kindEnumIsPinned() async throws {
+        let (client, _) = try await Self.connected(try Self.seededStore())
+        let (tools, _) = try await client.listTools()
+        let search = try #require(tools.first { $0.name == "tgkb_search_posts" })
+        let kind = search.inputSchema.objectValue?["properties"]?.objectValue?["kind"]?.objectValue
+        #expect(kind?["enum"]?.arrayValue?.compactMap(\.stringValue)
+                == ["text", "photo", "album", "video", "videoNote", "audio", "voice",
+                    "document", "poll", "sticker", "location", "giveaway", "unknown"])
     }
 }

@@ -1270,6 +1270,45 @@ extension StoreTests {
         #expect(try store.search("swift", mode: .both, filter: filter, limit: 100).total == 5)
     }
 
+    /// 🔍 Records emit `@username`, and both binaries take one back. The MCP handler dropped the
+    /// sigil itself; once the filter owned the fold, a filter that kept it would match nothing — a
+    /// silent empty answer — through the initialiser and the setter alike.
+    @Test("a channel's leading @ is dropped, through the initialiser and on assignment")
+    func channelSigilIsDropped() throws {
+        let store = try Self.filterStore()
+        var filter = Store.SearchFilter()
+        filter.channel = "@IOSDev"
+        #expect(filter.channel == "iosdev")
+        #expect(Store.SearchFilter(channel: "@@iosdev").channel == "iosdev", "every leading @")
+        #expect(try store.search("swift", mode: .both, filter: filter, limit: 100).total == 5)
+        #expect(try store.search("swift", mode: .both, filter: .init(channel: "@iosdev"), limit: 100)
+                    .total == 5)
+    }
+
+    /// The date grammar both binaries share. A day is a whole UTC day: on the lower side its first
+    /// instant, on the upper side *everything before the next day* — `before`, never an inclusive
+    /// `to` at an approximated last instant.
+    @Test("a date bound is an instant or a whole UTC day, and a day bounds each side differently")
+    func dateBoundsNarrowEachSide() throws {
+        let day = Date(timeIntervalSince1970: 1_699_920_000) // 2023-11-14T00:00:00Z
+        #expect(Store.SearchFilter.DateBound(parsing: "2023-11-14") == .day(start: day))
+        #expect(Store.SearchFilter.DateBound(parsing: "2023-11-14T23:59:59Z")
+                == .instant(day.addingTimeInterval(86_399)))
+        #expect(Store.SearchFilter.DateBound(parsing: "2023-11-14T23:59:59.500Z")
+                == .instant(day.addingTimeInterval(86_399.5)))
+        for malformed in ["", "yesterday", "2023-11-1", "20231114", "14.11.2023"] {
+            #expect(Store.SearchFilter.DateBound(parsing: malformed) == nil, "\(malformed.debugDescription)")
+        }
+
+        var filter = Store.SearchFilter()
+        filter.narrow(from: .day(start: day))
+        filter.narrow(to: .day(start: day))
+        #expect(filter == Store.SearchFilter(from: day, before: day.addingTimeInterval(86_400)))
+        filter = Store.SearchFilter()
+        filter.narrow(to: .instant(day))
+        #expect(filter == Store.SearchFilter(to: day), "an instant stays the inclusive bound")
+    }
+
     /// 🔍 bm25 ties are common, and ORDER BY rank alone left them arbitrary — so the same offset
     /// could point at a different post on the next page even with nothing written in between.
     @Test("equal-ranked hits come back in one deterministic order")

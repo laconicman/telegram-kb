@@ -1,5 +1,5 @@
 diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index ec5566b..fa6cb09 100644
+index f855014..95568db 100644
 --- a/Sources/TelegramKBMCP/ToolHandler.swift
 +++ b/Sources/TelegramKBMCP/ToolHandler.swift
 @@ -128,18 +128,6 @@ public enum TGKBServer {
@@ -18,6 +18,6 @@ index ec5566b..fa6cb09 100644
 -                an identifier containing it, put it in quotes.
 -                """)
 -        }
-         var filter = Store.SearchFilter()
-         if let channel = try args.string("channel") {
-             // The record emits `@username`; accept the bare form too — a model that drops the
+         let filter = try filter(args)
+         let mode = try args.enumerated("mode", as: Store.SearchMode.self) ?? .both
+         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
