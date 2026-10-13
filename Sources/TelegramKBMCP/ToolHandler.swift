@@ -25,11 +25,12 @@ import TelegramKBStore
 /// a re-implementation.
 public enum TGKBServer {
 
-    /// The server identity clients see at `initialize`.
-    public static let version = "0.1.0"
-
     /// Builds the `Server` with `tools/list` and `tools/call` wired to this store.
-    public static func makeServer(store: Store) async throws -> Server {
+    ///
+    /// - Parameter version: what clients see as `serverInfo.version` — the binary's
+    ///   `BuildVersion.string`, which its build generates, so `initialize` names the commit that
+    ///   answers.
+    public static func makeServer(store: Store, version: String) async throws -> Server {
         let server = Server(
             name: "tgkb-mcp",
             version: version,

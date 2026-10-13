@@ -20,8 +20,9 @@ func fail(_ message: String) -> Never {
 
 func usage() -> Never {
     FileHandle.standardError.write(Data("""
-        usage: tgkb-mcp [--db <path>]
-          --db   SQLite store (default: \(Store.defaultPath))
+        usage: tgkb-mcp [--db <path>] [--version]
+          --db        SQLite store (default: \(Store.defaultPath))
+          --version   Print the build's version, as `tgkb --version` does, and exit.
         Serves the MCP protocol on stdin/stdout. See Design § "MCP tool surface".
         """.utf8))
     exit(2)
@@ -36,6 +37,11 @@ while let arg = argv.popFirst() {
     case "--db":
         guard let value = argv.popFirst() else { usage() }
         databasePath = value
+    case "--version":
+        // The one stdout write here, and a safe one: it exits before any transport exists, so
+        // there is no protocol stream to corrupt yet.
+        print(BuildVersion.string)
+        exit(0)
     case "-h", "--help":
         usage()
     default:
@@ -50,10 +56,10 @@ do {
     fail("cannot open \(databasePath): \(error). Sync first — tgkb sync @channel.")
 }
 
-logger.info("tgkb-mcp \(TGKBServer.version) serving \(databasePath)")
+logger.info("tgkb-mcp \(BuildVersion.string) serving \(databasePath)")
 let server: Server
 do {
-    server = try await TGKBServer.makeServer(store: store)
+    server = try await TGKBServer.makeServer(store: store, version: BuildVersion.string)
 } catch {
     fail("cannot read \(databasePath): \(error)")
 }

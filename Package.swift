@@ -75,16 +75,23 @@ let package = Package(
             "TelegramKBIngest", "TelegramKBStore", "TelegramKBSync",
             .target(name: "TelegramKBIngestTDLib", condition: .when(traits: ["TDLib"])),
             .product(name: "ArgumentParser", package: "swift-argument-parser"),
-        ]),
+        ], plugins: ["StampVersion"]),
 
         // Hard invariant, stated positively: the transitive target closure of `tgkb-mcp` must
         // be exactly {TelegramKBMCP, TelegramKBStore, TelegramKBModel}. An allowlist fails
         // loudly on any addition; a check for the *absence* of TelegramKBIngestTDLib would
         // pass for the wrong reasons as the graph grows. Enforced by Scripts/check-invariants.sh.
+        // StampVersion is not in that closure: a build-tool plugin runs at build time and links
+        // nothing, and the script allowlists it separately, so a second plugin still fails.
         .executableTarget(name: "tgkb-mcp", dependencies: [
             "TelegramKBMCP", "TelegramKBStore",
             .product(name: "Logging", package: "swift-log"),
-        ]),
+        ], plugins: ["StampVersion"]),
+
+        // Generates `BuildVersion.string` — `0.1.0+<commit>[-dirty]` — into both executables, so
+        // they report one version, and every build says which commit it is (#12). See
+        // <doc:Design> "Every build says which commit it is".
+        .plugin(name: "StampVersion", capability: .buildTool()),
 
         // Runs Spec/url-canonical/fixtures.json — the co-owned seam contract with `artanl`.
         .testTarget(

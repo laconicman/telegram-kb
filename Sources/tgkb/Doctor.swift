@@ -26,6 +26,8 @@ struct Doctor: AsyncParsableCommand {
     /// - Returns: `false` if any store check failed. Every early return is a failure; reaching
     ///   the end means every check passed.
     private func reportStore(at path: String) throws -> Bool {
+        // First, so a pasted report says which build wrote it.
+        print("tgkb \(BuildVersion.string)")
         print("store: \(path)")
 
         // Checked explicitly because SQLite's own error names the DATABASE as read-only when in
