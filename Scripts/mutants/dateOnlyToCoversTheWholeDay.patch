@@ -1,13 +1,13 @@
-diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
-index 50544ca..a6b18a6 100644
---- a/Sources/TelegramKBMCP/ToolHandler.swift
-+++ b/Sources/TelegramKBMCP/ToolHandler.swift
-@@ -106,7 +106,7 @@ public enum TGKBServer {
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index e5ce794..bc57793 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -84,7 +84,7 @@ extension Store {
+         public mutating func narrow(to bound: DateBound) {
+             switch bound {
+             case .instant(let d): to = d
+-            case .day(start: let d): before = d.addingTimeInterval(86_400)
++            case .day(start: let d): to = d.addingTimeInterval(86_400)
+             }
          }
-         switch try args.date("to") {
-         case .instant(let d)?: filter.to = d
--        case .day(start: let d)?: filter.before = d.addingTimeInterval(86_400)
-+        case .day(start: let d)?: filter.to = d.addingTimeInterval(86_400)
-         case nil: break
-         }
-         let mode = try args.enumerated("mode", as: Store.SearchMode.self) ?? .both
+ 

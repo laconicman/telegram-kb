@@ -140,27 +140,7 @@ public enum TGKBServer {
                 an identifier containing it, put it in quotes.
                 """)
         }
-        var filter = Store.SearchFilter()
-        if let channel = try args.string("channel") {
-            // The record emits `@username`; accept the bare form too — a model that drops the
-            // sigil means the same channel, and refusing would only force a retry.
-            filter.channel = String(channel.drop(while: { $0 == "@" })).lowercased()
-        }
-        if let kind = try args.string("kind") {
-            guard let k = PostKind(rawValue: kind) else {
-                throw ToolInputError("kind must be one of \(TGKBTools.postKinds.joined(separator: ", "))")
-            }
-            filter.kind = k
-        }
-        switch try args.date("from") {
-        case .instant(let d)?, .day(start: let d)?: filter.from = d
-        case nil: break
-        }
-        switch try args.date("to") {
-        case .instant(let d)?: filter.to = d
-        case .day(start: let d)?: filter.before = d.addingTimeInterval(86_400)
-        case nil: break
-        }
+        let filter = try filter(args)
         let mode = try args.enumerated("mode", as: Store.SearchMode.self) ?? .both
         let limit = try args.int("limit", default: TGKBTools.defaultLimit, clampedTo: TGKBTools.maxLimit)
         let cursor = try args.string("cursor")
@@ -178,6 +158,26 @@ public enum TGKBServer {
             content: [.text(text: render(posts, total: results.total, nextCursor: results.nextCursor),
                             annotations: nil, _meta: nil)],
             structuredContent: output)
+    }
+
+    /// The filter `channel`, `kind`, `from` and `to` describe, built through the grammar
+    /// `tgkb query` shares — `Store.SearchFilter` and `PostKind` — so the two binaries build equal
+    /// filters from equal strings, and accept each other's cursors.
+    static func filter(_ args: Args) throws -> Store.SearchFilter {
+        var filter = Store.SearchFilter()
+        // The record emits `@username`; the filter drops the sigil, so a model that passes it
+        // back and one that leaves it off mean the same channel — refusing either would only
+        // force a retry.
+        filter.channel = try args.string("channel")
+        if let kind = try args.string("kind") {
+            guard let k = PostKind(rawValue: kind) else {
+                throw ToolInputError("kind must be one of \(TGKBTools.postKinds.joined(separator: ", "))")
+            }
+            filter.kind = k
+        }
+        if let from = try args.date("from") { filter.narrow(from: from) }
+        if let to = try args.date("to") { filter.narrow(to: to) }
+        return filter
     }
 
     // MARK: - tgkb_find_links
@@ -218,7 +218,7 @@ public enum TGKBServer {
         try args.expecting(["post"])
         try Task.checkCancellation()
         let ref = try args.require("post")
-        guard let id = parsePostRef(ref) else {
+        guard let id = Post.ID(reference: ref) else {
             throw ToolInputError("post must be @channel/id or https://t.me/channel/id — got \(ref.debugDescription)")
         }
         guard let post = try store.post(id) else {
@@ -230,22 +230,6 @@ public enum TGKBServer {
         return try CallTool.Result(
             content: [.text(text: render(post), annotations: nil, _meta: nil)],
             structuredContent: PostDetail(post))
-    }
-
-    /// `@channel/id`, `channel/id`, `t.me/channel/id`, `https://t.me/channel/id` — the literal
-    /// the records emit, plus the paste-friendly forms.
-    static func parsePostRef(_ text: String) -> Post.ID? {
-        var s = text.trimmingCharacters(in: .whitespaces)
-        for prefix in ["https://t.me/", "http://t.me/", "t.me/"] where s.hasPrefix(prefix) {
-            s = String(s.dropFirst(prefix.count))
-        }
-        if s.hasPrefix("@") { s.removeFirst() }
-        let parts = s.split(separator: "/", omittingEmptySubsequences: false)
-        // `Channel.isUsername`, not merely non-empty: `@bad name/1` is a malformed reference, and
-        // saying so tells the model to fix the reference rather than that the post is missing.
-        guard parts.count == 2, let id = Int(parts[1]), id > 0, Channel.isUsername(String(parts[0]))
-        else { return nil }
-        return Post.ID(channelUsername: parts[0].lowercased(), messageID: id)
     }
 
     // MARK: - Text renderings for clients that show only `content`
@@ -389,26 +373,14 @@ struct Args {
         return v
     }
 
-    /// A date argument as written: an instant, or a whole calendar day.
-    enum DateArg: Equatable {
-        case instant(Date)
-        /// `YYYY-MM-DD` — which a model produces constantly. The caller decides what "the day"
-        /// means for its bound: its first instant as a lower bound, and *everything before the
-        /// next day* as an upper one. The day's "last instant" is not a representable date, and
-        /// any approximation of it excludes the posts stamped after it.
-        case day(start: Date)
-    }
-
-    /// ISO-8601 with or without fractional seconds — the store keeps dates to the millisecond,
-    /// so a bound must be expressible at that precision — or a bare `YYYY-MM-DD`.
-    func date(_ key: String) throws -> DateArg? {
+    /// A date argument: ISO-8601, or `YYYY-MM-DD` — which a model produces constantly — for a
+    /// whole UTC day. Parsed by `Store.SearchFilter.DateBound`, the grammar `tgkb query` shares;
+    /// what the day means on each side of a range is ``Store/SearchFilter``'s to decide.
+    func date(_ key: String) throws -> Store.SearchFilter.DateBound? {
         guard let s = try string(key) else { return nil }
-        if let d = try? Self.iso.parse(s) { return .instant(d) }
-        if let d = try? Self.isoFractional.parse(s) { return .instant(d) }
-        if s.count == 10, let start = try? Self.iso.parse(s + "T00:00:00Z") { return .day(start: start) }
-        throw ToolInputError("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
+        guard let bound = Store.SearchFilter.DateBound(parsing: s) else {
+            throw ToolInputError("\(key) must be ISO-8601 or YYYY-MM-DD — got \(s.debugDescription)")
+        }
+        return bound
     }
-
-    static let iso = Date.ISO8601FormatStyle()
-    static let isoFractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 }
