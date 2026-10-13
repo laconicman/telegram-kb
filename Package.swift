@@ -117,5 +117,18 @@ let package = Package(
                 .product(name: "MCP", package: "swift-sdk"),
             ]
         ),
+        // Pins the two binaries' argument grammar to each other: the same strings through `tgkb`
+        // and through the MCP handler must build the same filter and post id, or a cursor from one
+        // binary is refused by the other (<doc:Design> "One argument grammar for both binaries").
+        // Imports the `tgkb` executable target, which SwiftPM allows a test to do; a test target
+        // is outside `tgkb-mcp`'s closure.
+        .testTarget(
+            name: "tgkbTests",
+            dependencies: [
+                "tgkb", "TelegramKBMCP",
+                .product(name: "MCP", package: "swift-sdk"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
+        ),
     ]
 )

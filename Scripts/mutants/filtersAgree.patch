@@ -1,0 +1,17 @@
+diff --git a/Sources/tgkb/Query.swift b/Sources/tgkb/Query.swift
+index e130423..d95ef18 100644
+--- a/Sources/tgkb/Query.swift
++++ b/Sources/tgkb/Query.swift
+@@ -56,7 +56,11 @@ struct Query: AsyncParsableCommand {
+     var filter: Store.SearchFilter {
+         var filter = Store.SearchFilter(channel: channel, kind: kind)
+         if let from { filter.narrow(from: from) }
+-        if let to { filter.narrow(to: to) }
++        switch to {
++        case .instant(let d)?: filter.to = d
++        case .day(start: let d)?: filter.to = d.addingTimeInterval(86_400)
++        case nil: break
++        }
+         return filter
+     }
+ 

@@ -9,14 +9,15 @@ import TelegramKBStore
 /// config points at becomes the real one, and the invariant that `tgkb-mcp` links nothing it
 /// does not need would survive only as documentation. See `Design`.
 ///
-/// `query` is not the same case and belongs here: it needs only the store, and it is how the
-/// golden-query evals run without an MCP client in the loop.
+/// `query`, `links` and `show` are not the same case and belong here: each needs only the store,
+/// one per `tgkb-mcp` tool, so retrieval can be exercised — and the golden-query evals run —
+/// without an MCP client in the loop. They use the library; they do not duplicate the product.
 @main
 struct TGKB: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "tgkb",
         abstract: "Build and query a searchable knowledge base from Telegram channels.",
-        subcommands: [Sync.self, Import.self, Query.self, Doctor.self])
+        subcommands: [Sync.self, Import.self, Query.self, Links.self, Show.self, Doctor.self])
 }
 
 /// Options every subcommand shares.
