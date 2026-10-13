@@ -100,6 +100,25 @@ struct ModelTests {
         #expect(p.totalReactions == 25)
     }
 
+    /// The reference grammar is the surface a model types against most, and `tgkb show` takes the
+    /// same strings — pin its accepted forms. Moved from `TGKBServer.parsePostRef`, which both
+    /// binaries now share as `Post.ID(reference:)`.
+    @Test("a post reference accepts the emitted literal and the pasteable forms")
+    func postRefParsing() throws {
+        let expected = Post.ID(channelUsername: "iosgr", messageID: 123)
+        #expect(Post.ID(reference: "@iosgr/123") == expected)
+        #expect(Post.ID(reference: "iosgr/123") == expected)
+        #expect(Post.ID(reference: "https://t.me/iosgr/123") == expected)
+        #expect(Post.ID(reference: "t.me/IOSGR/123") == expected,
+                "usernames fold — the store key is lowercased")
+        #expect(Post.ID(reference: "iosgr") == nil)
+        #expect(Post.ID(reference: "iosgr/-3") == nil)
+        #expect(Post.ID(reference: "@/123") == nil)
+        #expect(Post.ID(reference: "@bad name/1") == nil,
+                "not a username — a malformed reference, so the caller fixes it rather than a missing post")
+        #expect(Post.ID(reference: "t.me/iosgr?x/1") == nil)
+    }
+
     @Test("every post yields a citable t.me permalink")
     func permalink() {
         let p = Post(id: .init(channelUsername: "iosgr", messageID: 4744), date: .init(),

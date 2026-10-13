@@ -11,10 +11,10 @@ extension Store {
     /// would promise results the page can never return, which is the failure `total` exists to
     /// prevent.
     public struct SearchFilter: Equatable, Sendable {
-        /// Channel username, without the `@`. Compared lowercased, as everything else here is —
-        /// on assignment too, not only in the initialiser, or `filter.channel = "IOSDev"` would
-        /// silently match nothing against a store that holds usernames folded.
-        public var channel: String? { didSet { channel = channel?.lowercased() } }
+        /// Channel username, folded by ``folded(_:)`` — on assignment too, not only in the
+        /// initialiser, or `filter.channel = "IOSDev"` would silently match nothing against a store
+        /// that holds usernames folded.
+        public var channel: String? { didSet { channel = channel.map(Self.folded) } }
         public var kind: PostKind?
         /// Inclusive bounds on the post's own date, not on when it was crawled.
         public var from: Date?
@@ -26,7 +26,8 @@ extension Store {
 
         public init(channel: String? = nil, kind: PostKind? = nil, from: Date? = nil, to: Date? = nil,
                     before: Date? = nil) {
-            self.channel = channel.map { $0.lowercased() }
+            // `didSet` does not run in an initialiser, so the fold is applied here as well.
+            self.channel = channel.map(Self.folded)
             self.kind = kind
             self.from = from
             self.to = to
@@ -35,6 +36,56 @@ extension Store {
 
         public var isEmpty: Bool {
             channel == nil && kind == nil && from == nil && to == nil && before == nil
+        }
+
+        /// `@IOSDev` → `iosdev`: lowercased, as everything else here is, and without the `@` that
+        /// records emit — a caller passing one back means that channel. Every leading `@`, as
+        /// `tgkb_search_posts` always dropped them; no username can contain one.
+        static func folded(_ channel: String) -> String {
+            String(channel.drop(while: { $0 == "@" })).lowercased()
+        }
+
+        /// A date bound as a person or a model writes it: an instant, or a whole calendar day.
+        ///
+        /// One definition for both binaries, so `tgkb query --to` and `tgkb_search_posts`' `to`
+        /// build the same filter from the same string — and so accept each other's cursors, whose
+        /// fingerprint covers the filter (Design § *One argument grammar for both binaries*).
+        public enum DateBound: Equatable, Sendable {
+            case instant(Date)
+            /// `YYYY-MM-DD`, a whole UTC day. What "the day" means depends on the side it bounds —
+            /// see ``SearchFilter/narrow(from:)`` and ``SearchFilter/narrow(to:)``.
+            case day(start: Date)
+
+            /// ISO-8601 with or without fractional seconds — the store keeps dates to the
+            /// millisecond, so a bound must be expressible at that precision — or a bare
+            /// `YYYY-MM-DD`. `nil` for anything else: each surface words its own refusal.
+            public init?(parsing text: String) {
+                if let d = try? Self.iso.parse(text) { self = .instant(d); return }
+                if let d = try? Self.isoFractional.parse(text) { self = .instant(d); return }
+                guard text.count == 10, let start = try? Self.iso.parse(text + "T00:00:00Z")
+                else { return nil }
+                self = .day(start: start)
+            }
+
+            static let iso = Date.ISO8601FormatStyle()
+            static let isoFractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        }
+
+        /// Posts on or after `bound`: an instant as given, a day from its first instant.
+        public mutating func narrow(from bound: DateBound) {
+            switch bound {
+            case .instant(let d), .day(start: let d): from = d
+            }
+        }
+
+        /// Posts on or before `bound`: an instant inclusively, a day as *everything before the next
+        /// one* — `before`, not `to` at the day's "last" instant, which is not a representable
+        /// date: any approximation of it excludes the posts stamped after it.
+        public mutating func narrow(to bound: DateBound) {
+            switch bound {
+            case .instant(let d): to = d
+            case .day(start: let d): before = d.addingTimeInterval(86_400)
+            }
         }
 
         /// `(join, where, arguments)` — empty strings when nothing is filtered, so an unfiltered

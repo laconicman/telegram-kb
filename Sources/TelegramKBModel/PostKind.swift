@@ -4,7 +4,11 @@ import Foundation
 ///
 /// Deliberately separate from how it arrived — a forwarded video album replying to something is
 /// all four at once, so the modifiers live on ``Post`` rather than being folded in here.
-public enum PostKind: String, Codable, Hashable, Sendable {
+///
+/// `CaseIterable` because two surfaces list the kinds — `tgkb_search_posts`' schema and
+/// `tgkb query --kind`'s help — and both derive the list from here. Declaration order is the
+/// order a client sees in the schema's `enum`.
+public enum PostKind: String, Codable, Hashable, Sendable, CaseIterable {
     case text, photo, album, video, videoNote, audio, voice
     case document, poll, sticker, location, giveaway
     /// The source rendered something we do not recognise. Distinct from `formatSource == .absent`,

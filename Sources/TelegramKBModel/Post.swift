@@ -85,6 +85,28 @@ public struct Post: Codable, Hashable, Sendable, Identifiable {
     public var permalink: String { "https://t.me/\(id.channelUsername)/\(id.messageID)" }
 }
 
+extension Post.ID {
+    /// A post as a person or a tool names it: `@channel/id` — the literal search records emit —
+    /// or the pasteable `channel/id`, `t.me/channel/id` and `https://t.me/channel/id`. The channel
+    /// folds to lowercase, as the store keys it.
+    ///
+    /// One definition for both binaries, so `tgkb show` and `tgkb_get_post` accept exactly the
+    /// same strings (`Design` § *One argument grammar for both binaries*).
+    public init?(reference text: String) {
+        var s = text.trimmingCharacters(in: .whitespaces)
+        for prefix in ["https://t.me/", "http://t.me/", "t.me/"] where s.hasPrefix(prefix) {
+            s = String(s.dropFirst(prefix.count))
+        }
+        if s.hasPrefix("@") { s.removeFirst() }
+        let parts = s.split(separator: "/", omittingEmptySubsequences: false)
+        // `Channel.isUsername`, not merely non-empty: `@bad name/1` is a malformed reference, and
+        // saying so tells the caller to fix the reference rather than that the post is missing.
+        guard parts.count == 2, let id = Int(parts[1]), id > 0, Channel.isUsername(String(parts[0]))
+        else { return nil }
+        self.init(channelUsername: parts[0].lowercased(), messageID: id)
+    }
+}
+
 /// A view count, which the web preview renders **abbreviated and lossy** ("1.4K", "1.67K").
 ///
 /// The flag exists so a web-sourced approximation is never silently compared against an exact

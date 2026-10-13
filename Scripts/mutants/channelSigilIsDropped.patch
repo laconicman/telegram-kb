@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/SearchFilter.swift b/Sources/TelegramKBStore/SearchFilter.swift
+index e5ce794..d41e35f 100644
+--- a/Sources/TelegramKBStore/SearchFilter.swift
++++ b/Sources/TelegramKBStore/SearchFilter.swift
+@@ -42,7 +42,7 @@ extension Store {
+         /// records emit — a caller passing one back means that channel. Every leading `@`, as
+         /// `tgkb_search_posts` always dropped them; no username can contain one.
+         static func folded(_ channel: String) -> String {
+-            String(channel.drop(while: { $0 == "@" })).lowercased()
++            channel.lowercased()
+         }
+ 
+         /// A date bound as a person or a model writes it: an instant, or a whole calendar day.
