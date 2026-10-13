@@ -47,6 +47,7 @@ Swift 6.1+ toolchain. Development uses Swift 6.3 with strict concurrency.
 
 ```bash
 swift build -c release
+.build/release/tgkb --version                     # 0.1.0+<commit>, and -dirty if the tree had changes
 .build/release/tgkb sync iosgr prefire_ios        # first run backfills; later runs are incremental
 .build/release/tgkb query навигация               # word hits first, then substring-only hits
 .build/release/tgkb query '"адаптивная вёрстка"'   # quoted: that word order only
@@ -73,6 +74,10 @@ To ask a Claude client, register the read-only server — here with Claude Code:
 claude mcp add tgkb -- "$PWD/.build/release/tgkb-mcp"   # append --db <path> for another store
 ```
 
+Every build is stamped with the commit it was built from, so `tgkb --version`, `tgkb-mcp
+--version`, the server's `serverInfo` and `tgkb doctor` say which code is running (`Design`,
+*Every build says which commit it is*).
+
 `tgkb-mcp` never writes, so it cannot migrate a store an older `tgkb` wrote. After upgrading, run
 a `tgkb sync` first: the writer migrates the store when it opens it.
 
@@ -96,7 +101,8 @@ download the binary artifact. This was verified, not assumed; see
 ```bash
 swift build                      # no TDLib, no artifact download
 swift build --traits TDLib       # adds the TDLib ingestion source
-./Scripts/check-invariants.sh    # tgkb-mcp depends on exactly Model + Store + MCP, and no TDLib
+./Scripts/check-invariants.sh    # tgkb-mcp depends on exactly Model + Store + MCP, and no TDLib;
+                                 # both binaries report the one version this build stamped
 ```
 
 ## Repository map

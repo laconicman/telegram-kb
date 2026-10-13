@@ -592,8 +592,8 @@ details the spec-level decisions left open:
 - **Server assembly lives in the library** (`TGKBServer.makeServer`), so `TelegramKBMCPTests`
   drives the real `Server` and a real `Client` over `InMemoryTransport.createConnectedPair` —
   protocol framing included — rather than a re-implementation. `tgkb-mcp` itself is ~50 lines:
-  stderr logging bootstrap, a hand-rolled `--db` flag (ArgumentParser would widen the
-  allowlisted closure for one option), `openForReading` — a reader never migrates.
+  stderr logging bootstrap, hand-rolled `--db` and `--version` flags (ArgumentParser would widen
+  the allowlisted closure for two options), `openForReading` — a reader never migrates.
 - **End of input ends the server; in-flight requests are not drained.** At EOF the SDK's stdio
   read loop finishes its stream, `Server.waitUntilCompleted()` returns, and `main` exits — while
   each request runs in an unstructured task that nothing awaits (`Server.swift`, 0.12.1). So a
@@ -681,6 +681,55 @@ in the MCP handler (§ *MCP tool surface*): a person at a terminal is not a mode
 boolean syntax. The rendering stays per surface too. A terminal gets text; a client gets
 `structuredContent`. `tgkb query --quiet` keeps its exact output, because `Scripts/run-evals.sh`
 parses it.
+
+## Every build says which commit it is
+
+**Decision.** Both binaries report one version string: the package version, then `+` and the
+short hash of the commit the tree was built from, with `-dirty` when the tree had uncommitted or
+untracked changes. That gives `0.1.0+539cf51` or `0.1.0+539cf51-dirty`, and `0.1.0+unknown`
+without git. `tgkb --version`, `tgkb-mcp --version`, `serverInfo.version` at `initialize` and the
+first line of `tgkb doctor` all print it. Binaries are installed by building from `main`, so until
+this, nothing on the machine recorded which commit was running, and an import, a sync or an MCP
+answer could not be traced to the code that produced it (#12).
+
+**How: a build-tool plugin that generates source.** `StampVersion`'s prebuild command runs the
+system `git` and writes `enum BuildVersion { static let string = "…" }` into each executable
+target. Prebuild commands run before every build, so an incremental build picks up a new commit or
+an edit — under `swift build`, `swift run` and `-c release` alike. The file is rewritten only when
+the string changes, so an unchanged tree does not recompile. This was verified on Swift 6.4 in a
+git worktree, whose `.git` points outside the package: the plugin sandbox allows reads anywhere
+(`Sources/Basics/Sandbox.swift` in SwiftPM, per DeepWiki at `af38fe0d`). `GIT_OPTIONAL_LOCKS=0`
+stops `git status` from attempting the index refresh the sandbox would refuse. Untracked files
+count as changes, because SwiftPM compiles every source file under a target, tracked or not. The
+package version is `StampVersion.packageVersion`, the one place to change it.
+
+**Why not the alternatives.**
+
+- **The manifest's `Context.gitInformation`.** It has the commit and the dirty flag, but no way
+  into Swift source: `SwiftSetting.define` takes no value, and a `CSetting` value would need a C
+  target in `tgkb-mcp`'s closure. It is also computed when the manifest is evaluated, and that
+  evaluation is cached, so a commit that leaves `Package.swift` alone need not refresh it.
+- **An install script that stamps a Mach-O section** (`-Xlinker -sectcreate`, read back with
+  `getsectiondata`). It needs no package-graph change, but only the script's builds would be
+  stamped; every other build would say `unstamped`, and the reader is macOS-only.
+- **A source file the install step writes.** Swift cannot include a file conditionally, so a build
+  that skipped the step would have no fallback.
+
+**The cost: the invariant script now tells plugins from linked targets.** The repo owner accepted
+it on 2026-10-13. `swift package describe` lists a build-tool plugin among a target's
+`target_dependencies`, so `StampVersion` appears in `tgkb-mcp`'s walk. A plugin links nothing,
+and this one's whole output is one string literal, so `Scripts/check-invariants.sh` now sorts the
+walk by target type. The linked closure is still exactly `{TelegramKBMCP, TelegramKBStore,
+TelegramKBModel}`. Build plugins get an allowlist of their own, `{StampVersion}`, and a second
+plugin still fails loudly; that was checked by adding one. A toolchain whose `describe` leaves
+plugins out of the walk passes this half, since losing `StampVersion` would break the build first. The same script requires that
+the two binaries print one string and that the string names the tree it just built.
+`serverInfo.version` is the string `tgkb-mcp`'s `main` passes to `TGKBServer.makeServer`, and a
+test pins that the server sends what it was given.
+
+**Not done: recording the version in the store.** #12 suggested stamping each `sync` or `import`
+with the writer's version. That would be a schema change in Track A, and nothing would read it
+yet.
 
 ## OPEN — where does TDLib live once MCP needs it? *(unanswered, deliberately)*
 
