@@ -74,8 +74,11 @@ echo "== build version =="
 # names this tree: the package version, HEAD's short hash, and -dirty when anything is uncommitted —
 # so before a commit, -dirty is expected, and outside a git checkout, unknown. `serverInfo.version`
 # is the same string, passed in by tgkb-mcp's main and pinned by the `serverInfoNamesTheBuild` test.
-# The suffix is computed as the plugin computes it; keep the two in step.
-if commit=$(git rev-parse --short HEAD 2>/dev/null); then
+# The suffix is computed as the plugin computes it, git believed only when its worktree root is this
+# package; keep the two in step.
+top=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [ -n "$top" ] && [ "$(cd "$top" && pwd -P)" = "$(pwd -P)" ] \
+   && commit=$(git rev-parse --short HEAD 2>/dev/null); then
   tree="$commit$([ -n "$(git status --porcelain | head -n 1)" ] && echo -dirty)"
 else
   tree=unknown

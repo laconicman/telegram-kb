@@ -686,8 +686,10 @@ parses it.
 
 **Decision.** Both binaries report one version string: the package version, then `+` and the
 short hash of the commit the tree was built from, with `-dirty` when the tree had uncommitted or
-untracked changes. That gives `0.1.0+539cf51` or `0.1.0+539cf51-dirty`, and `0.1.0+unknown`
-without git. `tgkb --version`, `tgkb-mcp --version`, `serverInfo.version` at `initialize` and the
+untracked changes. That gives `0.1.0+539cf51` or `0.1.0+539cf51-dirty`. It gives
+`0.1.0+unknown` without git, and when the package is not the root of its own repository. An
+unpacked archive inside some other checkout would otherwise stamp that checkout's commit, because
+`git -C` walks up to the nearest repository (Devin Review, #19). `tgkb --version`, `tgkb-mcp --version`, `serverInfo.version` at `initialize` and the
 first line of `tgkb doctor` all print it. Binaries are installed by building from `main`, so until
 this, nothing on the machine recorded which commit was running, and an import, a sync or an MCP
 answer could not be traced to the code that produced it (#12).
