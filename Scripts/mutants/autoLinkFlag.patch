@@ -1,13 +1,13 @@
 diff --git a/Sources/TelegramKBModel/PostText.swift b/Sources/TelegramKBModel/PostText.swift
-index 61e7681..fb43b42 100644
+index 58c22cc..294188e 100644
 --- a/Sources/TelegramKBModel/PostText.swift
 +++ b/Sources/TelegramKBModel/PostText.swift
-@@ -80,7 +80,7 @@ public struct PostText: Hashable, Sendable {
-               !entity.text.contains("://"),
+@@ -91,7 +91,7 @@ public struct PostText: Hashable, Sendable {
+               !Self.hasLeadingScheme(entity.text),
                let target = URLCanonicaliser.canonicalise(href)
          else { return false }
 -        return URLCanonicaliser.canonicalise("https://" + entity.text) == target
 +        return true
      }
  
-     /// Only an absolute `http(s)` address is a link — from the text and from a preview alike.
+     /// Whether the visible text opens with a URI scheme — `https://x` typed out is a

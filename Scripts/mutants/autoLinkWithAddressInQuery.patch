@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBModel/PostText.swift b/Sources/TelegramKBModel/PostText.swift
+index 58c22cc..a6c3600 100644
+--- a/Sources/TelegramKBModel/PostText.swift
++++ b/Sources/TelegramKBModel/PostText.swift
+@@ -88,7 +88,7 @@ public struct PostText: Hashable, Sendable {
+     /// which is why a TDLib source sets the flag from the entity type instead (`TD-26`).
+     static func isAutoLink(of entity: TextEntity) -> Bool {
+         guard case .textURL(let href) = entity.type,
+-              !Self.hasLeadingScheme(entity.text),
++              !entity.text.contains("://"),
+               let target = URLCanonicaliser.canonicalise(href)
+         else { return false }
+         return URLCanonicaliser.canonicalise("https://" + entity.text) == target
