@@ -1378,6 +1378,13 @@ extension StoreTests {
                 try db.execute(sql: "INSERT INTO ftsMap (rowid, channelUsername, messageID) VALUES (1, 'iosgr', 7)")
                 try db.execute(sql: "INSERT INTO postFTS (rowid, content) VALUES (1, 'навигация в swiftui')")
                 try db.execute(sql: "INSERT INTO postTrigram (rowid, content) VALUES (1, 'навигация в swiftui')")
+                // A link row too: v4's rebuild calls loadPost, whose `SELECT *` reads
+                // `link.isAutoLink` — a column this schema does not have yet. GRDB answers
+                // nil for the missing name, and the flag must come out unknown, not crash.
+                try db.execute(sql: """
+                    INSERT INTO link (channelUsername, messageID, urlRaw, urlCanonical, canonicalSpecVersion)
+                    VALUES ('iosgr', 7, 'http://build.sh/', 'https://build.sh', 3)
+                    """)
             }
         }
         let store = try Store.openForWriting(at: path)   // runs v4 then v5 over real rows
@@ -1386,6 +1393,9 @@ extension StoreTests {
         #expect(try store.dbPool.read { db in
             try Int.fetchOne(db, sql: "SELECT generation FROM indexState WHERE id = 1") } ?? 0 > 0,
                 "the rebuild recorded its writes in the generation")
+        #expect(try store.post(.init(channelUsername: "iosgr", messageID: 7))?.links
+                .map(\.isAutoLink) == [nil],
+                "a link read mid-migration sees no flag column and answers unknown")
     }
 
     /// � The v3 test crosses v6 too, but REVIEW.md asks for the *previous populated* schema:

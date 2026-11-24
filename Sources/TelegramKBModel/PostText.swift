@@ -23,11 +23,19 @@ public struct PostText: Hashable, Sendable {
         }
 
         var links: [LinkRef] = []
-        var seen = Set<String>()
+        var indexByURL: [String: Int] = [:]
         for entity in formatted.entities {
-            guard let url = Self.linkTarget(of: entity), Self.isWebURL(url),
-                  seen.insert(url).inserted else { continue }
-            links.append(LinkRef(urlRaw: url, isAutoLink: Self.isAutoLink(of: entity)))
+            guard let url = Self.linkTarget(of: entity), Self.isWebURL(url) else { continue }
+            let autoLink = Self.isAutoLink(of: entity)
+            // Links dedup by URL, first occurrence kept — but the flag upgrades: any
+            // bare-address showing means the source linkified the address, whatever the
+            // other showings of it looked like.
+            if let i = indexByURL[url] {
+                if autoLink { links[i].isAutoLink = true }
+                continue
+            }
+            indexByURL[url] = links.count
+            links.append(LinkRef(urlRaw: url, isAutoLink: autoLink))
         }
         // The one scheme check for a preview: a card for a `tg:` or relative address is no link.
         if let webPage, Self.isWebURL(webPage.url) {
@@ -73,8 +81,10 @@ public struct PostText: Hashable, Sendable {
     /// tracking-parameter-insensitive too — accepted, since it lands in the same
     /// false-positive class as the hidden-link residue below. A hidden link whose text
     /// reads like its own address compares equal as well; that residue is accepted
-    /// (issue #13). `.url` and `.mention` are `false`: their visible text carries the
-    /// scheme or is not an address at all.
+    /// (issue #13). `.url` and `.mention` are `false`: for the HTML sources `.url` always
+    /// shows the full address, and a mention's text is not an address. A TDLib `url`
+    /// entity can cover schemeless text — an auto-link the entity type names outright —
+    /// which is why a TDLib source sets the flag from the entity type instead (`TD-26`).
     static func isAutoLink(of entity: TextEntity) -> Bool {
         guard case .textURL(let href) = entity.type,
               !entity.text.contains("://"),

@@ -40,16 +40,16 @@ struct PostTextTests {
                 "no bare address in everyKind — and PostText never leaves the flag undecided")
     }
 
-    @Test("a link repeated in the text is recorded once — flag included, from the first")
+    @Test("a link repeated in the text is recorded once — and any bare-address showing flags it")
     func linksAreUnique() {
         let text = FormattedText(text: "…", entities: [
-            TextEntity(.textURL(href: "https://example.com/"), text: "example.com"),
             TextEntity(.url, text: "https://example.com/"),
+            TextEntity(.textURL(href: "https://example.com/"), text: "example.com"),
         ])
         let links = PostText(text, webPage: nil, observedAt: Self.seen).links
         #expect(links.map(\.urlRaw) == ["https://example.com/"])
         #expect(links.first?.isAutoLink == true,
-                "the first entity's flag survives; the repeat contributes nothing")
+                "the typed-URL showing came first, but the bare-address one still happened")
     }
 
     /// Issue #13: Telegram auto-links plain text ending in a TLD, so `build.sh` becomes a link
