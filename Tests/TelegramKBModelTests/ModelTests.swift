@@ -61,6 +61,16 @@ struct ModelTests {
         #expect(link.urlRaw == "mailto:a@b.com")
     }
 
+    /// `isAutoLink` arrived with schema `v7`; a `LinkRef` encoded before it must still decode —
+    /// the flag reads as "unknown", not "no" (`LinkRef/isAutoLink`).
+    @Test("a LinkRef encoded before isAutoLink existed still decodes, flag unknown")
+    func linkRefDecodesWithoutAutoLink() throws {
+        let json = #"{"urlRaw":"https://example.com/","urlCanonical":"https://example.com","canonicalSpecVersion":3}"#
+            .data(using: .utf8)!
+        let link = try JSONDecoder().decode(LinkRef.self, from: json)
+        #expect(link.isAutoLink == nil)
+    }
+
     @Test("effectiveURL prefers a resolution and falls back to the canonical form")
     func effectiveURLJoinKey() {
         let canon = "https://clck.ru/33ABCD"

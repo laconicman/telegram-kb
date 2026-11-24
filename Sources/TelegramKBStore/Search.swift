@@ -255,6 +255,9 @@ extension Store {
         public var urlRaw: String
         /// Its canonical form (`NULL` when the raw string was not canonicalisable).
         public var urlCanonical: String?
+        /// Whether the post showed the bare address for the source to linkify — `nil` on
+        /// rows written before schema `v7` (see ``LinkRef/isAutoLink``).
+        public var isAutoLink: Bool?
         /// `COALESCE(resolvedCanonical, urlCanonical)` — where the link actually leads.
         public var effectiveURL: String?
     }
@@ -325,7 +328,7 @@ extension Store {
 
         let hits = try LinkHit.fetchAll(db, sql: """
             SELECT l.channelUsername AS cu, l.messageID AS mid,
-                   l.urlRaw, l.urlCanonical,
+                   l.urlRaw, l.urlCanonical, l.isAutoLink,
                    COALESCE(r.resolvedCanonical, l.urlCanonical) AS eff
             FROM link l LEFT JOIN urlResolution r ON r.urlCanonical = l.urlCanonical
             WHERE \(predicate)
@@ -358,7 +361,7 @@ extension Store.LinkHit: FetchableRecord {
     public init(row: Row) {
         self.init(id: Post.ID(channelUsername: row["cu"], messageID: row["mid"]),
                   urlRaw: row["urlRaw"], urlCanonical: row["urlCanonical"],
-                  effectiveURL: row["eff"])
+                  isAutoLink: row["isAutoLink"], effectiveURL: row["eff"])
     }
 }
 
@@ -386,7 +389,7 @@ extension Store {
             sql: "SELECT * FROM link WHERE channelUsername = ? AND messageID = ?",
             arguments: [id.channelUsername, id.messageID]
         ).map { r -> LinkRef in
-            var l = LinkRef(urlRaw: r["urlRaw"])
+            var l = LinkRef(urlRaw: r["urlRaw"], isAutoLink: r["isAutoLink"])
             if let observed: Date = r["previewObservedAt"] {
                 l.preview = LinkPreview(siteName: r["previewSite"], title: r["previewTitle"],
                                         description: r["previewDescription"],

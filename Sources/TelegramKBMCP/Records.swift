@@ -74,6 +74,10 @@ struct LinkHitRecord: Codable, Sendable, Equatable {
     var url_canonical: String?
     /// Where the link actually leads — the recorded resolution, else the canonical form.
     var resolved_url: String?
+    /// The post showed the bare address for the source to linkify (`build.sh`, not
+    /// `https://build.sh`) — issue #13; absent on rows older than schema `v7`, like every
+    /// optional here (synthesized Codable omits nil rather than writing null).
+    var is_auto_link: Bool?
     var snippet: String
     var link: String
 }
@@ -98,6 +102,10 @@ struct PostDetail: Codable, Sendable, Equatable {
     struct LinkRecord: Codable, Sendable, Equatable {
         var url_raw: String
         var url_canonical: String?
+        /// The post showed the bare address for the source to linkify (`build.sh`, not
+        /// `https://build.sh`) — issue #13; absent on rows older than schema `v7`, like every
+        /// optional here (synthesized Codable omits nil rather than writing null).
+        var is_auto_link: Bool?
         /// Telegram's own preview of the link — a snapshot it took, not a live read.
         struct Preview: Codable, Sendable, Equatable {
             var site_name: String?
@@ -172,6 +180,7 @@ struct PostDetail: Codable, Sendable, Equatable {
         hashtags = p.hashtags
         links = p.links.map { l in
             LinkRecord(url_raw: l.urlRaw, url_canonical: l.urlCanonical,
+                       is_auto_link: l.isAutoLink,
                        preview: l.preview.map {
                            .init(site_name: $0.siteName, title: $0.title,
                                  description: $0.description, resolved_url: $0.resolvedURL,

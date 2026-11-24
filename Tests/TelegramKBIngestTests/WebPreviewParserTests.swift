@@ -174,6 +174,26 @@ extension WebPreviewParserTests {
 }
 
 extension WebPreviewParserTests {
+    /// Issue #13 end-to-end on the web source: `t.me/s` writes a bare `build.sh` as an anchor
+    /// whose text is the address minus the scheme the page added — `PostText` flags it, while
+    /// the hidden link beside it stays `false`.
+    @Test("a bare address the page linkified is flagged isAutoLink; a hidden link is not")
+    func autoLinkFlagFromMarkup() throws {
+        let block = #"""
+        <div class="tgme_widget_message" data-post="swiftui_dev/99999">
+          <div class="tgme_widget_message_text js-message_text" dir="auto">Run <a href="https://build.sh/" target="_blank" rel="noopener">build.sh</a> first, then read <a href="https://example.org/docs" target="_blank" rel="noopener" onclick="return confirm('Open this link?\n\n'+this.href);">the docs</a></div>
+          <a class="tgme_widget_message_date" href="https://t.me/swiftui_dev/99999"><time datetime="2026-01-01T00:00:00+00:00" class="time">00:00</time></a>
+        </div>
+        """#
+        let html = try Self.html("swiftui_dev").replacingOccurrences(of: "<body", with: "<body>\(block)<div hidden")
+        let post = try #require(try WebPreviewParser.page(html: html).posts.first { $0.id.messageID == 99999 })
+        let flags = Dictionary(uniqueKeysWithValues: post.links.map { ($0.urlRaw, $0.isAutoLink) })
+        #expect(flags["https://build.sh/"] == .some(true))
+        #expect(flags["https://example.org/docs"] == .some(false))
+    }
+}
+
+extension WebPreviewParserTests {
     /// 🔍 The first decodable `data-view` was trusted whatever channel its block belonged to.
     @Test("a foreign message block cannot supply the channel's identity")
     func rawChannelIDIgnoresForeignBlocks() throws {

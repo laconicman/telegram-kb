@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBModel/PostText.swift b/Sources/TelegramKBModel/PostText.swift
+index 58c22cc..294188e 100644
+--- a/Sources/TelegramKBModel/PostText.swift
++++ b/Sources/TelegramKBModel/PostText.swift
+@@ -91,7 +91,7 @@ public struct PostText: Hashable, Sendable {
+               !Self.hasLeadingScheme(entity.text),
+               let target = URLCanonicaliser.canonicalise(href)
+         else { return false }
+-        return URLCanonicaliser.canonicalise("https://" + entity.text) == target
++        return true
+     }
+ 
+     /// Whether the visible text opens with a URI scheme — `https://x` typed out is a

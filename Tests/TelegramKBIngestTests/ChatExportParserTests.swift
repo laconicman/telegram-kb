@@ -94,6 +94,31 @@ struct ChatExportParserTests {
         #expect(links[0].urlCanonical == links[1].urlCanonical)
     }
 
+    /// Issue #13 on the export source: tdesktop's `SafeMessageHref` prepends a scheme to a
+    /// bare address, so `build.sh` arrives as the same `.textURL` shape the web produces —
+    /// `PostText` flags it identically, and the hidden link beside it stays `false`.
+    @Test("a bare address in an export is flagged isAutoLink too")
+    func autoLinkFlagFromExport() throws {
+        let html = #"""
+        <html><body><div class="page_body chat_page"><div class="history">
+        <div class="message default clearfix" id="message30">
+        <div class="body">
+        <div class="pull_right date details" title="3 April 2023, 13:30:00">13:30</div>
+        <div class="from_name">KB Test</div>
+        <div class="text">
+        Run <a href="https://build.sh/">build.sh</a> first, then read <a href="https://example.org/docs">the docs</a>
+        </div>
+        </div>
+        </div>
+        </div></div></body></html>
+        """#
+        let post = try #require(try ChatExportParser.parse(pages: [html], channel: "kbtest",
+                                                         timeZone: Self.moscow).posts.first)
+        let flags = Dictionary(uniqueKeysWithValues: post.links.map { ($0.urlRaw, $0.isAutoLink) })
+        #expect(flags["https://build.sh/"] == .some(true))
+        #expect(flags["https://example.org/docs"] == .some(false))
+    }
+
     @Test("a poll's options lose their leading dash, and its total is read")
     func poll() throws {
         let post = try Self.post(14)

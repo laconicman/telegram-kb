@@ -303,11 +303,12 @@ public struct Store: Sendable {
             try db.execute(sql: """
                 INSERT INTO link (channelUsername, messageID, urlRaw, urlCanonical,
                                   canonicalSpecVersion, previewSite, previewTitle,
-                                  previewDescription, previewResolvedURL, previewObservedAt)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
+                                  previewDescription, previewResolvedURL, previewObservedAt,
+                                  isAutoLink)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
                 """, arguments: [cu, mid, l.urlRaw, l.urlCanonical, l.canonicalSpecVersion,
                                  l.preview?.siteName, l.preview?.title, l.preview?.description,
-                                 l.preview?.resolvedURL, l.preview?.observedAt])
+                                 l.preview?.resolvedURL, l.preview?.observedAt, l.isAutoLink])
         }
         if let p = post.poll {
             let optionsJSON = String(data: try JSONEncoder().encode(p.options), encoding: .utf8) ?? "[]"

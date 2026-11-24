@@ -893,6 +893,13 @@ top of it. Three consequences that make this more than pedantry:
 `url_canonical` is therefore a **derived column with a spec version recorded beside it**, so a
 spec bump is a recompute over `url_raw` rather than a migration that loses information.
 
+The link row also records **how the address appeared**: `isAutoLink` is true when the post showed
+the bare address — `build.sh`, `example.com` — for the source to linkify, rather than prose over
+the link or the full address with its scheme (issue #13; `PostText` decides at ingest, a TDLib
+source from the entity type). It is a source-derived fact beside `url_raw`, not a canonicalisation
+input: `url_canonical`, the `artanl` join and `effective_url` are untouched. Nullable, and NULL on
+rows older than schema `v7` — the anchor text was never stored, so the flag is not backfillable.
+
 **Rejected: storing only the canonical form.** Smaller, and it makes the spec unrevisable.
 **Rejected: canonicalising at query time only.** It would make the join key non-indexable, which
 defeats the seam.

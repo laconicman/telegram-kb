@@ -26,7 +26,8 @@ struct MCPServerTests {
                  date: Date(timeIntervalSince1970: 1_700_000_001),
                  kind: .text, formatSource: .web, mediaCount: 1,
                  text: "Вёрстка в SwiftUI и немного про clck",
-                 links: [LinkRef(urlRaw: "https://clck.ru/33ABCD")],
+                 // Bare `clck.ru/33ABCD` shown, scheme-added href stored — an auto-link (issue #13).
+                 links: [LinkRef(urlRaw: "https://clck.ru/33ABCD", isAutoLink: true)],
                  reactions: [Reaction(emoji: "👍", count: 5)]),
             Post(id: .init(channelUsername: "iosgr", messageID: 2),
                  date: Date(timeIntervalSince1970: 1_700_000_002),
@@ -259,6 +260,9 @@ struct MCPServerTests {
         #expect(link.url_raw == "https://clck.ru/33ABCD")
         #expect(link.url_canonical == canonical)
         #expect(link.resolved_url == "https://habr.com/ru/post/1")
+        #expect(link.is_auto_link == true, "the bare-address flag reaches the record (issue #13)")
+        #expect(try Self.text(result).contains("(auto-linked)"),
+                "and the text rendering marks it for clients that show only content")
     }
 
     /// 🔴 `tgkb_find_links` clamped `limit` to 100 and had no cursor, so the 101st match was unreachable
@@ -642,6 +646,7 @@ struct MCPServerTests {
         #expect(detail.text.contains("Вёрстка"))
         #expect(detail.reactions == [.init(emoji: "👍", count: 5, is_paid: false)])
         #expect(detail.links.first?.url_canonical == URLCanonicaliser.canonicalise("https://clck.ru/33ABCD"))
+        #expect(detail.links.first?.is_auto_link == true)
         #expect(detail.link == "https://t.me/iosgr/1")
 
         // The t.me form parses to the same post.

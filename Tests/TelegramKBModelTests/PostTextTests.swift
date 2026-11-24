@@ -36,15 +36,67 @@ struct PostTextTests {
         #expect(fields.links.map(\.urlRaw)
                 == ["https://t.me/kb_author", "https://example.com/notes/", "https://example.org/docs"])
         #expect(fields.links.allSatisfy { $0.preview == nil })
+        #expect(fields.links.allSatisfy { $0.isAutoLink == false },
+                "no bare address in everyKind — and PostText never leaves the flag undecided")
     }
 
-    @Test("a link repeated in the text is recorded once")
+    @Test("a link repeated in the text is recorded once — and any bare-address showing flags it")
     func linksAreUnique() {
         let text = FormattedText(text: "…", entities: [
             TextEntity(.url, text: "https://example.com/"),
-            TextEntity(.textURL(href: "https://example.com/"), text: "again"),
+            TextEntity(.textURL(href: "https://example.com/"), text: "example.com"),
         ])
-        #expect(PostText(text, webPage: nil, observedAt: Self.seen).links.map(\.urlRaw) == ["https://example.com/"])
+        let links = PostText(text, webPage: nil, observedAt: Self.seen).links
+        #expect(links.map(\.urlRaw) == ["https://example.com/"])
+        #expect(links.first?.isAutoLink == true,
+                "the typed-URL showing came first, but the bare-address one still happened")
+    }
+
+    /// Issue #13: Telegram auto-links plain text ending in a TLD, so `build.sh` becomes a link
+    /// to `http://build.sh` — `.sh` is a TLD. The flag records the shape the markup carries —
+    /// covered text vs `href` — so a consumer never has to guess from the URL's suffix.
+    @Test("isAutoLink marks the bare address, not a hidden link, a typed URL, or a mention")
+    func autoLinkFlag() {
+        let text = FormattedText(text: "…", entities: [
+            // What the renderers write for a bare address: the shown text minus the scheme
+            // they added — http or https, trailing slash or not.
+            TextEntity(.textURL(href: "http://build.sh/"), text: "build.sh"),
+            TextEntity(.textURL(href: "https://apivalidator.ru/"), text: "apivalidator.ru"),
+            // A genuine hidden link — prose over the href.
+            TextEntity(.textURL(href: "https://example.org/docs"), text: "the docs"),
+            // The full address typed with its scheme is a deliberate share, not an auto-link.
+            TextEntity(.url, text: "https://example.com/notes/"),
+            TextEntity(.mention(username: "kb_author"), text: "@kb_author"),
+            // A hidden link whose text reads like its own address flags the same — the
+            // accepted residue. The tracking parameter is why the canonical forms meet.
+            TextEntity(.textURL(href: "https://example.com/page?utm_source=tg"), text: "example.com/page"),
+        ])
+        let fields = PostText(text, webPage: nil, observedAt: Self.seen)
+        #expect(fields.links.map(\.isAutoLink) == [true, true, false, false, false, true])
+    }
+
+    /// A `.textURL` whose covered text carries its own scheme — `[http://a.com](https://b.com)`
+    /// — was typed or hidden, never a bare address the source linkified.
+    @Test("a text URL showing a full address is not an auto-link")
+    func autoLinkWithSchemeInText() {
+        let text = FormattedText(text: "…", entities: [
+            TextEntity(.textURL(href: "https://example.com/"), text: "http://example.com"),
+        ])
+        #expect(PostText(text, webPage: nil, observedAt: Self.seen).links.first?.isAutoLink == false)
+    }
+
+    /// Devin Review, PR #20: a `://` later in the text — an absolute URL in the query — does
+    /// not make the shown address scheme-ful. Only a scheme at the head does; a port's colon
+    /// is not one either.
+    @Test("a bare address with an absolute URL in its query is still an auto-link")
+    func autoLinkWithAddressInQuery() {
+        let text = FormattedText(text: "…", entities: [
+            TextEntity(.textURL(href: "https://example.com/login?next=https://example.org/home"),
+                       text: "example.com/login?next=https://example.org/home"),
+            TextEntity(.textURL(href: "https://example.com:8080/x"), text: "example.com:8080/x"),
+        ])
+        #expect(PostText(text, webPage: nil, observedAt: Self.seen).links.map(\.isAutoLink)
+                == [true, true])
     }
 
     @Test("a text URL to anything but a web address is not a link")
@@ -70,6 +122,8 @@ struct PostTextTests {
         let fields = PostText(Self.everyKind, webPage: page, observedAt: Self.seen)
         #expect(fields.links.map(\.urlRaw).last == "https://example.net/")
         #expect(fields.links.last?.preview?.title == "Elsewhere")
+        #expect(fields.links.last?.isAutoLink == false,
+                "a preview's address is no link the text made — false, not unknown")
     }
 
     /// 🔴 The web parser kept a preview whatever its address — an empty `href` became a link `""` —
