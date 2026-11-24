@@ -34,16 +34,24 @@ struct Links: AsyncParsableCommand {
         let byID = Dictionary(found.posts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for hit in results.hits {
             guard let post = byID[hit.id] else { continue }
-            print("\(post.date.formatted(.iso8601.year().month().day()))  \(post.permalink)")
-            var line = "    \(hit.urlRaw)"
-            if hit.isAutoLink == true { line += "  (auto-linked)" }
-            if let resolved = hit.effectiveURL, resolved != hit.urlRaw { line += "  →  \(resolved)" }
-            print(line)
-            // What the post said about the link — a body often says "статья" over its URL.
-            let snippet = Query.snippet(post.text.isEmpty ? (post.poll?.question ?? "") : post.text)
-            if !snippet.isEmpty { print("    \(snippet)") }
+            print(Self.render(post: post, hit: hit))
         }
         print("\n" + PageOptions.footer(results.hits.count, of: results.total, noun: "post",
                                         nextCursor: results.nextCursor))
+    }
+
+    /// One hit's block — the post's date and permalink, the URL as written with its
+    /// `(auto-linked)` mark and resolved target, then the post's own words about it.
+    /// Extracted so the marker is testable, the same reason `Show.render` exists.
+    static func render(post: Post, hit: Store.LinkHit) -> String {
+        var lines = ["\(post.date.formatted(.iso8601.year().month().day()))  \(post.permalink)"]
+        var line = "    \(hit.urlRaw)"
+        if hit.isAutoLink == true { line += "  (auto-linked)" }
+        if let resolved = hit.effectiveURL, resolved != hit.urlRaw { line += "  →  \(resolved)" }
+        lines.append(line)
+        // What the post said about the link — a body often says "статья" over its URL.
+        let snippet = Query.snippet(post.text.isEmpty ? (post.poll?.question ?? "") : post.text)
+        if !snippet.isEmpty { lines.append("    \(snippet)") }
+        return lines.joined(separator: "\n")
     }
 }

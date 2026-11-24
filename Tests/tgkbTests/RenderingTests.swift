@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import TelegramKBModel
+@testable import TelegramKBStore
 @testable import tgkb
 
 /// What `show`, `query` and `links` print — the parts a reader at a terminal has no other way to see.
@@ -48,6 +49,29 @@ struct RenderingTests {
             #expect(text.contains(line))
         }
         #expect(!text.contains("no text"), "a poll is not an empty post")
+    }
+
+    /// Devin Review, PR #20: `show`'s marker was tested but `links`' own rendering was not —
+    /// the two mark `(auto-linked)` in separate code paths.
+    @Test("links marks a bare-address hit beside its URL, resolved target and snippet")
+    func linksMarksAutoLinkedHit() {
+        let post = Post(id: .init(channelUsername: "iosgr", messageID: 7),
+                        date: Date(timeIntervalSince1970: 1_700_000_007),
+                        kind: .text, formatSource: .web, mediaCount: 0,
+                        text: "собралось через build.sh")
+        let hit = Store.LinkHit(id: post.id, urlRaw: "http://build.sh/",
+                                urlCanonical: "https://build.sh", isAutoLink: true,
+                                effectiveURL: "https://build.sh")
+        let text = Links.render(post: post, hit: hit)
+        #expect(text.contains("http://build.sh/  (auto-linked)  →  https://build.sh"),
+                "the bare-address mark, then where the link actually leads")
+        #expect(text.contains("собралось через build.sh"), "the post's own words about the link")
+
+        let plain = Store.LinkHit(id: post.id, urlRaw: "https://example.com/",
+                                  urlCanonical: "https://example.com", isAutoLink: false,
+                                  effectiveURL: "https://example.com")
+        #expect(!Links.render(post: post, hit: plain).contains("auto-linked"),
+                "a known non-auto-link is not marked")
     }
 
     /// The store decides whether a walk continues. A last page smaller than `total` is the end,
