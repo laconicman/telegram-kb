@@ -1,9 +1,9 @@
 diff --git a/Sources/TelegramKBModel/PostText.swift b/Sources/TelegramKBModel/PostText.swift
-index 61e7681..a457c6c 100644
+index a2a838d..36a853b 100644
 --- a/Sources/TelegramKBModel/PostText.swift
 +++ b/Sources/TelegramKBModel/PostText.swift
-@@ -30,7 +30,7 @@ public struct PostText: Hashable, Sendable {
-             links.append(LinkRef(urlRaw: url, isAutoLink: Self.isAutoLink(of: entity)))
+@@ -38,7 +38,7 @@ public struct PostText: Hashable, Sendable {
+             links.append(LinkRef(urlRaw: url, isAutoLink: autoLink))
          }
          // The one scheme check for a preview: a card for a `tg:` or relative address is no link.
 -        if let webPage, Self.isWebURL(webPage.url) {

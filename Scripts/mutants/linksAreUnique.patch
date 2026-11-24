@@ -1,0 +1,16 @@
+diff --git a/Sources/TelegramKBModel/PostText.swift b/Sources/TelegramKBModel/PostText.swift
+index a2a838d..d70990f 100644
+--- a/Sources/TelegramKBModel/PostText.swift
++++ b/Sources/TelegramKBModel/PostText.swift
+@@ -30,10 +30,7 @@ public struct PostText: Hashable, Sendable {
+             // Links dedup by URL, first occurrence kept — but the flag upgrades: any
+             // bare-address showing means the source linkified the address, whatever the
+             // other showings of it looked like.
+-            if let i = indexByURL[url] {
+-                if autoLink { links[i].isAutoLink = true }
+-                continue
+-            }
++            if indexByURL[url] != nil { continue }
+             indexByURL[url] = links.count
+             links.append(LinkRef(urlRaw: url, isAutoLink: autoLink))
+         }
