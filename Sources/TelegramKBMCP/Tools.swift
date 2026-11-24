@@ -100,8 +100,10 @@ enum TGKBTools {
             find example.com's articles; to search by site or topic, use tgkb_search_posts, which \
             indexes link-preview titles. Each record: the post, its date, the URL as written \
             (url_raw), its canonical form (url_canonical, the join key), where it leads \
-            (resolved_url), a snippet and the post's t.me link. `total` counts every match; pass \
-            next_cursor back as `cursor` for the next page.
+            (resolved_url), whether the post showed the bare address for the source to \
+            linkify (is_auto_link — `build.sh`, not `https://build.sh`; null on rows older \
+            than schema v7), a snippet and the post's t.me link. `total` counts every match; \
+            pass next_cursor back as `cursor` for the next page.
             """,
         inputSchema: .object([
             "type": "object",

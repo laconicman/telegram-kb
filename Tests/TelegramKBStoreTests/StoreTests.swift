@@ -210,6 +210,28 @@ struct StoreTests {
         #expect(try store.links(to: "ftp://files.example.com/x").hits.map(\.id.messageID) == [4])
     }
 
+    /// Issue #13's flag is a stored column, not a derivation: `true`, `false` and `nil`
+    /// ("unknown", as every pre-v7 row reads) are three distinct values that must each
+    /// survive the write/read — and reach `links(to:)` hits, not just `post(_:)`.
+    @Test("isAutoLink round-trips through the link table, nil included")
+    func autoLinkFlagRoundTrips() throws {
+        let (store, _) = try Self.seeded()
+        try store.upsert(posts: [Self.post(7, "смесь флагов", links: [
+            LinkRef(urlRaw: "http://build.sh/", isAutoLink: true),
+            LinkRef(urlRaw: "https://example.com/x", isAutoLink: false),
+            LinkRef(urlRaw: "https://example.org/y"),
+        ])])
+        let loaded = try #require(try store.post(.init(channelUsername: "iosgr", messageID: 7)))
+        let flags = Dictionary(uniqueKeysWithValues: loaded.links.map { ($0.urlRaw, $0.isAutoLink) })
+        #expect(flags["http://build.sh/"] == .some(true))
+        #expect(flags["https://example.com/x"] == .some(false))
+        #expect(flags["https://example.org/y"] == .some(nil),
+                "NULL reads back as nil — unknown, not 'no'")
+
+        let hit = try #require(try store.links(to: "http://build.sh/").hits.first)
+        #expect(hit.isAutoLink == true, "LinkHit carries the flag to tgkb_find_links")
+    }
+
     /// 🔴 The page and its posts came from two `dbPool.read`s, so a sync committing between them
     /// paired one snapshot's hits, total and cursor with another's bodies. The hydrated forms
     /// read both in one snapshot; this pins that they carry the same page, post for hit.
@@ -1659,5 +1681,37 @@ extension StoreTests {
         #expect(error?.session is SessionFailed, "the session's own error is the one to act on")
         #expect(error?.failures.map { $0.cleanup } == [.leaseRelease(channel: "iosgr")])
         #expect(error?.failures.first?.error is DatabaseError, "and the release's failure is named")
+    }
+}
+
+/// Issue #13.
+extension StoreTests {
+
+    /// The flag is nullable because the anchor text was never stored: a store that predates
+    /// `v7` upgrades cleanly, and its links read `nil` — "unknown", not "no". Rows pick the
+    /// flag up only as syncs rewrite them.
+    @Test("a populated store from before v7 upgrades, its links reading unknown")
+    func populatedV6StoreUpgrades() throws {
+        let path = Self.tempPath()
+        do {
+            let queue = try DatabaseQueue(path: path)
+            try Schema.migrator.migrate(queue, upTo: "v6-channel-lease")
+            try queue.write { db in
+                // What v6-era code wrote: a channel, a post, and a link with no flag column.
+                try db.execute(sql: "INSERT INTO channel (username, rawChannelID, reachability) VALUES ('iosgr', 1, 'webPreview')")
+                try db.execute(sql: """
+                    INSERT INTO post (channelUsername, messageID, date, kind, formatSource, text)
+                    VALUES ('iosgr', 7, ?, 'text', 'web', 'сборка упала')
+                    """, arguments: [Date()])
+                try db.execute(sql: """
+                    INSERT INTO link (channelUsername, messageID, urlRaw, urlCanonical, canonicalSpecVersion)
+                    VALUES ('iosgr', 7, 'http://build.sh/', 'https://build.sh', 3)
+                    """)
+            }
+        }
+        let store = try Store.openForWriting(at: path)   // runs v7 over real rows
+        let post = try #require(try store.post(.init(channelUsername: "iosgr", messageID: 7)))
+        #expect(post.links.map(\.isAutoLink) == [nil],
+                "the anchor text was never stored, so the flag cannot be recomputed")
     }
 }

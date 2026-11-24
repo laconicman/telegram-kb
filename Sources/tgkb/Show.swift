@@ -55,7 +55,7 @@ struct Show: AsyncParsableCommand {
         if !p.links.isEmpty {
             lines += ["", "Links:"]
             for link in p.links {
-                lines.append("  • \(link.urlRaw)")
+                lines.append("  • \(link.urlRaw)\(link.isAutoLink == true ? "  (auto-linked)" : "")")
                 guard let preview = link.preview else { continue }
                 let heading = [preview.siteName, preview.title].compactMap { $0 }
                 if !heading.isEmpty { lines.append("      \(heading.joined(separator: " — "))") }

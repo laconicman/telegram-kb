@@ -18,7 +18,8 @@ struct RenderingTests {
             links: [LinkRef(urlRaw: "https://clck.ru/33ABCD",
                             preview: LinkPreview(siteName: "Example", title: "Заголовок статьи",
                                                  description: "Описание статьи",
-                                                 observedAt: Date(timeIntervalSince1970: 0)))],
+                                                 observedAt: Date(timeIntervalSince1970: 0)),
+                            isAutoLink: true)],
             reactions: [Reaction(emoji: "👍", count: 5), Reaction(emoji: nil, count: 2, isPaid: true)])
         let text = Show.render(post)
 
@@ -27,7 +28,8 @@ struct RenderingTests {
         #expect(text.contains("2023-11-14T23:59:59.500Z"),
                 "the precision the store keeps, so the date works as an inclusive --to")
         #expect(text.contains("by Автор"))
-        #expect(text.contains("https://clck.ru/33ABCD"))
+        #expect(text.contains("https://clck.ru/33ABCD  (auto-linked)"),
+                "the bare-address flag is marked beside the URL (issue #13)")
         #expect(text.contains("Example — Заголовок статьи"))
         #expect(text.contains("Описание статьи"))
         #expect(text.contains("Forwarded from https://t.me/origin/3"))

@@ -201,6 +201,7 @@ public enum TGKBServer {
                 url_raw: hit.urlRaw,
                 url_canonical: hit.urlCanonical,
                 resolved_url: hit.effectiveURL,
+                is_auto_link: hit.isAutoLink,
                 snippet: post.map { PostSummary.snippet($0.text.isEmpty ? ($0.poll?.question ?? "") : $0.text) } ?? "",
                 link: "https://t.me/\(hit.id.channelUsername)/\(hit.id.messageID)")
         }
@@ -261,6 +262,7 @@ public enum TGKBServer {
         guard !links.isEmpty else { return foot }
         return links.map {
             var line = "\($0.date.prefix(10))  \($0.link)\n    \($0.url_raw)"
+            if $0.is_auto_link == true { line += "  (auto-linked)" }
             if let resolved = $0.resolved_url, resolved != $0.url_raw {
                 line += "  →  \(resolved)"
             }
@@ -303,7 +305,8 @@ public enum TGKBServer {
         if !p.links.isEmpty {
             lines.append("Links:")
             lines.append(contentsOf: p.links.map { link in
-                "  • \(link.urlRaw)" + (link.preview?.title.map { " — \($0)" } ?? "")
+                "  • \(link.urlRaw)\(link.isAutoLink == true ? "  (auto-linked)" : "")"
+                    + (link.preview?.title.map { " — \($0)" } ?? "")
             })
         }
         return lines.joined(separator: "\n")

@@ -28,7 +28,9 @@ enum EntityMarkup {
     /// - An anchor showing exactly its own address is a URL.
     /// - Anything else is a text URL. A bare address written without a scheme lands here too: both
     ///   renderers link `example.com` to an address with one (tdesktop's `SafeMessageHref` prepends
-    ///   `https://`), so the markup cannot tell it from a hidden link. It yields the same link.
+    ///   `https://`), so the markup cannot tell it from a hidden link — nor a hidden link whose text
+    ///   reads like its own address from a real auto-link. It yields the same link; `PostText`
+    ///   flags the bare-address shape as `isAutoLink` for what the markup can support (issue #13).
     ///
     /// Each case yields `href` itself as its link (``PostText``), so the address stored is the
     /// markup's, byte for byte.

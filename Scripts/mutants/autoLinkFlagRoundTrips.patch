@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBStore/Store.swift b/Sources/TelegramKBStore/Store.swift
+index f5b2cd7..05e2f61 100644
+--- a/Sources/TelegramKBStore/Store.swift
++++ b/Sources/TelegramKBStore/Store.swift
+@@ -308,7 +308,7 @@ public struct Store: Sendable {
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                 """, arguments: [cu, mid, l.urlRaw, l.urlCanonical, l.canonicalSpecVersion,
+                                  l.preview?.siteName, l.preview?.title, l.preview?.description,
+-                                 l.preview?.resolvedURL, l.preview?.observedAt, l.isAutoLink])
++                                 l.preview?.resolvedURL, l.preview?.observedAt, nil])
+         }
+         if let p = post.poll {
+             let optionsJSON = String(data: try JSONEncoder().encode(p.options), encoding: .utf8) ?? "[]"

@@ -22,11 +22,28 @@ public struct LinkRef: Codable, Hashable, Sendable {
     /// Link-preview metadata, as Telegram resolved it. See ``LinkPreview``.
     public var preview: LinkPreview?
 
-    public init(urlRaw: String, preview: LinkPreview? = nil) {
+    /// Whether the visible text was the bare address — `example.com`, `build.sh` — for
+    /// the source to linkify, rather than prose over the link or the full address typed
+    /// with its scheme.
+    ///
+    /// Telegram auto-links plain text ending in a TLD, so `build.sh` becomes a link to
+    /// `http://build.sh` because `.sh` is one (issue #13). ``PostText`` recognises the
+    /// shape in both HTML sources by comparing the anchor text with the `href` through
+    /// ``URLCanonicaliser``; a hidden link whose text happens to read like its own
+    /// address is indistinguishable and flagged the same — rare, and accepted. A TDLib
+    /// source sets it from the entity type instead.
+    ///
+    /// `nil` only where no source recorded it: rows written before schema `v7`. The
+    /// anchor text was never stored, so the flag is not backfillable — rows pick it up
+    /// as syncs rewrite them.
+    public var isAutoLink: Bool?
+
+    public init(urlRaw: String, preview: LinkPreview? = nil, isAutoLink: Bool? = nil) {
         self.urlRaw = urlRaw
         self.urlCanonical = URLCanonicaliser.canonicalise(urlRaw)
         self.canonicalSpecVersion = URLCanonicaliser.specVersion
         self.preview = preview
+        self.isAutoLink = isAutoLink
     }
 }
 

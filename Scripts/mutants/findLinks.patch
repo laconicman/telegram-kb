@@ -1,0 +1,13 @@
+diff --git a/Sources/TelegramKBMCP/ToolHandler.swift b/Sources/TelegramKBMCP/ToolHandler.swift
+index 94fffab..a2ae2d0 100644
+--- a/Sources/TelegramKBMCP/ToolHandler.swift
++++ b/Sources/TelegramKBMCP/ToolHandler.swift
+@@ -201,7 +201,7 @@ public enum TGKBServer {
+                 url_raw: hit.urlRaw,
+                 url_canonical: hit.urlCanonical,
+                 resolved_url: hit.effectiveURL,
+-                is_auto_link: hit.isAutoLink,
++                is_auto_link: nil,
+                 snippet: post.map { PostSummary.snippet($0.text.isEmpty ? ($0.poll?.question ?? "") : $0.text) } ?? "",
+                 link: "https://t.me/\(hit.id.channelUsername)/\(hit.id.messageID)")
+         }

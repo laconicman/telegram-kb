@@ -199,6 +199,19 @@ public enum Schema {
             }
         }
 
+        m.registerMigration("v7-link-is-auto") { db in
+            // Whether the post showed the bare address for the source to linkify —
+            // `build.sh`, `Console.app` — rather than prose over the link or a full
+            // address with its scheme (issue #13; ``PostText`` decides it at ingest).
+            //
+            // Nullable, and NULL is not backfillable: `urlRaw` keeps the href but the
+            // anchor text was never stored, so rows written before this column stay
+            // NULL — "unknown", not "no". They pick the flag up as syncs rewrite them.
+            try db.alter(table: "link") { t in
+                t.add(column: "isAutoLink", .boolean)
+            }
+        }
+
         return m
     }
 }

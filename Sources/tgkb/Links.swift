@@ -36,6 +36,7 @@ struct Links: AsyncParsableCommand {
             guard let post = byID[hit.id] else { continue }
             print("\(post.date.formatted(.iso8601.year().month().day()))  \(post.permalink)")
             var line = "    \(hit.urlRaw)"
+            if hit.isAutoLink == true { line += "  (auto-linked)" }
             if let resolved = hit.effectiveURL, resolved != hit.urlRaw { line += "  →  \(resolved)" }
             print(line)
             // What the post said about the link — a body often says "статья" over its URL.

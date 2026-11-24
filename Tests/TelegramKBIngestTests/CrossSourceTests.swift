@@ -30,6 +30,9 @@ struct CrossSourceTests {
         var text: String
         var hashtags: [String]
         var links: [String]
+        /// `urlRaw`s the source must flag `isAutoLink` — the bare addresses it linkified
+        /// (issue #13). Every other link must read `false`, never `nil`: `PostText` decides.
+        var autoLinks: [String] = []
         var preview: WebPage
         var testDescription: String { "message \(id)" }
     }
@@ -51,6 +54,15 @@ struct CrossSourceTests {
                  hashtags: ["release"],
                  links: ["https://example.net/talk"],
                  preview: WebPage(url: "https://example.net/talk", siteName: "Example Video", title: "The talk")),
+        // File names ending in TLDs — `build.sh`, `README.md` — auto-linked by the source.
+        // The href spellings are this fixture's; the flag is what must agree across sources.
+        Expected(id: 12,
+                 text: "The build broke — check build.sh and README.md, or read the guide",
+                 hashtags: [],
+                 links: ["https://build.sh/", "https://readme.md/", "https://example.org/guide"],
+                 autoLinks: ["https://build.sh/", "https://readme.md/"],
+                 preview: WebPage(url: "https://example.org/guide", siteName: "Example",
+                                  title: "The build guide", description: "How to get the build green again")),
     ]
 
     @Test("t.me/s and a chat export derive the same text, hashtags and links", arguments: messages)
@@ -66,6 +78,10 @@ struct CrossSourceTests {
             #expect(WebPage(url: preview.resolvedURL ?? "", siteName: preview.siteName, title: preview.title,
                             description: preview.description) == message.preview, "\(source)")
             #expect(post.links.filter { $0.preview != nil }.count == 1, "\(source): one preview, on one link")
+            for link in post.links {
+                #expect(link.isAutoLink == message.autoLinks.contains(link.urlRaw),
+                        "\(source): \(link.urlRaw)")
+            }
         }
 
         // The same claim, stated source against source. A preview's `observedAt` is the one field

@@ -628,10 +628,13 @@ synthetic message rendered both ways, and by the mutants `crossSourceFieldsAgree
   stored rows, so it is its own decision and change (<doc:Roadmap>).
 - **Entities carry their covered text, not offsets.** When offsets come, they count UTF-16 code
   units, as TDLib's do.
-- **A bare URL written without a scheme reads as a text URL.** Both renderers link `example.com` to
-  an address with a scheme (tdesktop's `SafeMessageHref` prepends `https://`), so the markup cannot
-  tell it from a hidden link. The link recorded is the same either way; a TDLib source will need a
-  rule for a schemeless `url` entity, whose covered text has no scheme.
+- **A bare URL written without a scheme reads as a text URL — flagged, residue accepted.** Both
+  renderers link `example.com` to an address with a scheme (tdesktop's `SafeMessageHref` prepends
+  `https://`), so the markup cannot tell it from a hidden link — and cannot tell a hidden link
+  whose text happens to read like its own address from a real auto-link (issue #13). `PostText`
+  sets `LinkRef.isAutoLink` by comparing the covered text with the `href` through
+  `URLCanonicaliser`; rows predating schema `v7` read `NULL`, the anchor text never stored, and a
+  TDLib source will set it from the entity type instead.
 - **The web's cashtag rule is unobserved.** It reads `?q=%24…`, as PR #3 recorded. On 2026-09-28
   no live page had such a link: 32 cashtags across 18 pages were plain text, as `t.me` writes an
   email address. Harmless: no field derives from a cashtag.
