@@ -69,7 +69,8 @@ public struct PostText: Hashable, Sendable {
 
     /// Whether the entity's visible text was the bare address — `build.sh`, `example.com` —
     /// for the source to have linkified, rather than prose over the link (`the docs`) or
-    /// the full address typed with its scheme.
+    /// the full address typed with its scheme. "With its scheme" means a scheme at the
+    /// head: `example.com/?u=https://x` is still a bare address — its `://` is in the query.
     ///
     /// The markup cannot say it outright: both HTML renderers prepend a scheme to an
     /// address written without one, so a bare `build.sh` lands in `.textURL` beside a
@@ -87,10 +88,22 @@ public struct PostText: Hashable, Sendable {
     /// which is why a TDLib source sets the flag from the entity type instead (`TD-26`).
     static func isAutoLink(of entity: TextEntity) -> Bool {
         guard case .textURL(let href) = entity.type,
-              !entity.text.contains("://"),
+              !Self.hasLeadingScheme(entity.text),
               let target = URLCanonicaliser.canonicalise(href)
         else { return false }
         return URLCanonicaliser.canonicalise("https://" + entity.text) == target
+    }
+
+    /// Whether the visible text opens with a URI scheme — `https://x` typed out is a
+    /// deliberate share, while `x.test/?u=https://y` is still a bare address: its `://`
+    /// sits in the query, not at the head. A scheme is `ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`
+    /// followed by `://` (RFC 3986).
+    static func hasLeadingScheme(_ text: String) -> Bool {
+        guard let colon = text.firstIndex(of: ":") else { return false }
+        let scheme = text[..<colon]
+        return scheme.first?.isLetter == true
+            && scheme.allSatisfy { $0.isLetter || $0.isNumber || $0 == "+" || $0 == "-" || $0 == "." }
+            && text[text.index(after: colon)...].hasPrefix("//")
     }
 
     /// Only an absolute `http(s)` address is a link — from the text and from a preview alike.

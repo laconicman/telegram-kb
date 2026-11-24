@@ -85,6 +85,20 @@ struct PostTextTests {
         #expect(PostText(text, webPage: nil, observedAt: Self.seen).links.first?.isAutoLink == false)
     }
 
+    /// Devin Review, PR #20: a `://` later in the text — an absolute URL in the query — does
+    /// not make the shown address scheme-ful. Only a scheme at the head does; a port's colon
+    /// is not one either.
+    @Test("a bare address with an absolute URL in its query is still an auto-link")
+    func autoLinkWithAddressInQuery() {
+        let text = FormattedText(text: "…", entities: [
+            TextEntity(.textURL(href: "https://example.com/login?next=https://example.org/home"),
+                       text: "example.com/login?next=https://example.org/home"),
+            TextEntity(.textURL(href: "https://example.com:8080/x"), text: "example.com:8080/x"),
+        ])
+        #expect(PostText(text, webPage: nil, observedAt: Self.seen).links.map(\.isAutoLink)
+                == [true, true])
+    }
+
     @Test("a text URL to anything but a web address is not a link")
     func nonWebTextURLIsNotALink() {
         let text = FormattedText(text: "…", entities: [TextEntity(.textURL(href: "tg://resolve?domain=x"), text: "x")])
