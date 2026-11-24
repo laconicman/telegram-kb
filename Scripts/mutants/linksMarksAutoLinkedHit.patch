@@ -1,0 +1,12 @@
+diff --git a/Sources/tgkb/Links.swift b/Sources/tgkb/Links.swift
+index 94e7d90..27e1f01 100644
+--- a/Sources/tgkb/Links.swift
++++ b/Sources/tgkb/Links.swift
+@@ -46,7 +46,6 @@ struct Links: AsyncParsableCommand {
+     static func render(post: Post, hit: Store.LinkHit) -> String {
+         var lines = ["\(post.date.formatted(.iso8601.year().month().day()))  \(post.permalink)"]
+         var line = "    \(hit.urlRaw)"
+-        if hit.isAutoLink == true { line += "  (auto-linked)" }
+         if let resolved = hit.effectiveURL, resolved != hit.urlRaw { line += "  →  \(resolved)" }
+         lines.append(line)
+         // What the post said about the link — a body often says "статья" over its URL.
